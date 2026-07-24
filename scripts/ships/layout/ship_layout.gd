@@ -5,6 +5,42 @@ extends Resource
 @export var core_placement_id: String = ""
 
 
+func total_mass() -> float:
+	var total: float = 0.0
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			total += module_type.mass_contribution
+	return total
+
+
+func total_max_health() -> float:
+	var total: float = 0.0
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			total += module_type.health_contribution
+	return total
+
+
+func total_thrust() -> float:
+	var total: float = 0.0
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			total += module_type.thrust_contribution
+	return total
+
+
+func get_thruster_placements() -> Array[ModulePlacement]:
+	var thrusters: Array[ModulePlacement] = []
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null and module_type.thrust_contribution > 0.0:
+			thrusters.append(placement)
+	return thrusters
+
+
 func get_placement_at(hex_coord: Vector2i) -> ModulePlacement:
 	for placement in placements:
 		if hex_coord in get_occupied_cells(placement):

@@ -5,8 +5,6 @@ signal hex_clicked(hex_coord: Vector2i)
 signal hex_hovered(hex_coord: Vector2i)
 signal hover_exited
 
-const SQRT3: float = 1.7320508
-
 @export var cell_size: float = 32.0
 @export var radius: int = 2
 
@@ -121,14 +119,12 @@ func _all_coords_in_radius() -> Array[Vector2i]:
 
 
 func _axial_to_pixel(hex_coord: Vector2i) -> Vector2:
-	var x: float = cell_size * (SQRT3 * hex_coord.x + SQRT3 * 0.5 * hex_coord.y)
-	var y: float = cell_size * (1.5 * hex_coord.y)
-	return _center + Vector2(x, y)
+	return _center + HexUtils.axial_to_pixel(hex_coord, cell_size)
 
 
 func _pixel_to_axial(pixel: Vector2) -> Vector2i:
 	var local: Vector2 = pixel - _center
-	var qf: float = (SQRT3 / 3.0 * local.x - 1.0 / 3.0 * local.y) / cell_size
+	var qf: float = (HexUtils.SQRT3 / 3.0 * local.x - 1.0 / 3.0 * local.y) / cell_size
 	var rf: float = (2.0 / 3.0 * local.y) / cell_size
 	return _hex_round(qf, rf)
 
@@ -157,8 +153,4 @@ func _hex_round(qf: float, rf: float) -> Vector2i:
 
 
 func _hex_corners(center: Vector2) -> PackedVector2Array:
-	var corners := PackedVector2Array()
-	for i in 6:
-		var angle: float = deg_to_rad(60.0 * i - 30.0)
-		corners.append(center + Vector2(cos(angle), sin(angle)) * cell_size)
-	return corners
+	return HexUtils.hex_corners(center, cell_size)

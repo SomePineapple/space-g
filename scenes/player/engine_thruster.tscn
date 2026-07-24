@@ -1,0 +1,99 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://drgl1buv07a47" path="res://scenes/player/engine_particle_glow.tres" id="1_glow"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_main"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_main"]
+offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
+colors = PackedColorArray(1, 1, 0.9, 1, 1, 0.6, 0.1, 1, 0.8, 0.1, 0.05, 0.7, 0.2, 0.05, 0.05, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_main"]
+gradient = SubResource("Gradient_main")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_main"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(-1, 0, 0)
+spread = 12.0
+initial_velocity_min = 60.0
+initial_velocity_max = 100.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.8
+scale_max = 1.4
+color_ramp = SubResource("GradientTexture1D_main")
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_soft"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_soft"]
+offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
+colors = PackedColorArray(1, 1, 0.9, 1, 1, 0.6, 0.1, 1, 0.8, 0.1, 0.05, 0.7, 0.2, 0.05, 0.05, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_soft"]
+gradient = SubResource("Gradient_soft")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_soft"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(-1, 0, 0)
+spread = 20.0
+initial_velocity_min = 30.0
+initial_velocity_max = 55.0
+gravity = Vector3(0, 0, 0)
+scale_min = 1.2
+scale_max = 2.0
+color_ramp = SubResource("GradientTexture1D_soft")
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_normal"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_normal"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.9098039, 0.9647059, 1, 1, 0.49803922, 0.78431374, 1, 0.8, 0.22745098, 0.5529412, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_normal"]
+gradient = SubResource("Gradient_normal")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_normal"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(-1, 0, 0)
+spread = 6.0
+initial_velocity_min = 90.0
+initial_velocity_max = 130.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.35
+scale_max = 0.6
+color_ramp = SubResource("GradientTexture1D_normal")
+
+[node name="EngineThruster" type="Node2D"]
+
+[node name="Particles" type="GPUParticles2D" parent="."]
+material = SubResource("CanvasItemMaterial_main")
+emitting = false
+amount = 32
+texture = ExtResource("1_glow")
+lifetime = 0.4
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_main")
+
+[node name="ParticlesSoft" type="GPUParticles2D" parent="."]
+modulate = Color(1, 0.6, 0.3, 0.5)
+material = SubResource("CanvasItemMaterial_soft")
+emitting = false
+amount = 20
+texture = ExtResource("1_glow")
+lifetime = 0.6
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_soft")
+
+[node name="ParticlesNormal" type="GPUParticles2D" parent="."]
+material = SubResource("CanvasItemMaterial_normal")
+emitting = false
+amount = 24
+texture = ExtResource("1_glow")
+lifetime = 0.45
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_normal")

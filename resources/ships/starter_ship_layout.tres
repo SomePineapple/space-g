@@ -1,16 +1,32 @@
-[gd_resource type="Resource" script_class="ShipLayout" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="ShipLayout" format=3 uid="uid://bnsult1sy6r8y"]
 
-[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="1_layout"]
-[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="2_placement"]
+[ext_resource type="Script" uid="uid://dvxmcqefbs8g8" path="res://scripts/ships/layout/ship_layout.gd" id="1_layout"]
+[ext_resource type="Script" uid="uid://b6qe4yx2c6t2d" path="res://scripts/ships/modules/module_placement.gd" id="2_placement"]
 
 [sub_resource type="Resource" id="Resource_core"]
 script = ExtResource("2_placement")
 placement_id = "core"
 module_type_id = "command_core"
-hex_coord = Vector2i(0, 0)
-rotation_steps = 0
+
+[sub_resource type="Resource" id="Resource_hull_a"]
+script = ExtResource("2_placement")
+placement_id = "hull_a"
+module_type_id = "hull"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_hull_b"]
+script = ExtResource("2_placement")
+placement_id = "hull_b"
+module_type_id = "hull"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_engine"]
+script = ExtResource("2_placement")
+placement_id = "engine_a"
+module_type_id = "engine"
+hex_coord = Vector2i(0, 1)
 
 [resource]
 script = ExtResource("1_layout")
-placements = Array[ModulePlacement]([SubResource("Resource_core")])
+placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_hull_a"), SubResource("Resource_hull_b"), SubResource("Resource_engine")])
 core_placement_id = "core"

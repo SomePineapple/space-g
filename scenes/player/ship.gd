@@ -15,35 +15,70 @@ extends CharacterBody2D
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
 @export var hit_flash_color: Color = Color(1, 1, 1, 1)
 @export var hit_flash_duration: float = 0.12
+@export var ship_layout: ShipLayout = preload("res://resources/ships/starter_ship_layout.tres")
+@export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
+@export var reverse_thrust_ratio: float = 0.2
+@export var speed_per_acceleration: float = 1.0
+@export var reverse_speed_ratio: float = 0.35
 
 var _thrust_input: float = 0.0
 var _turn_input: float = 0.0
 var _boost_active: bool = false
-var _base_sprite_modulate: Color
+var _base_hull_modulate: Color
 var _flash_tween: Tween
+var _thrusters: Array[Node2D] = []
 
-@onready var _engine_particles: GPUParticles2D = $EngineParticles
-@onready var _engine_particles_soft: GPUParticles2D = $EngineParticlesSoft
-@onready var _engine_particles_normal: GPUParticles2D = $EngineParticlesNormal
 @onready var _weapon: Weapon = $Weapon
 @onready var _missile_launcher: MissileLauncher = $MissileLauncher
 @onready var _health: Health = $Health
-@onready var _ship_sprite: Sprite2D = $ShipSprite
+@onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
 @onready var _inventory: Inventory = $Inventory
 
 
 func _ready() -> void:
+	_apply_ship_layout()
 	_health.destroyed.connect(_on_destroyed)
 	_health.health_changed.connect(_on_health_changed)
-	_base_sprite_modulate = _ship_sprite.modulate
+	_base_hull_modulate = _hull_renderer.modulate
+
+
+func _apply_ship_layout() -> void:
+	if ship_layout == null:
+		return
+	mass = ship_layout.total_mass()
+	_health.configure(ship_layout.total_max_health())
+	_hull_renderer.set_layout(ship_layout)
+	_apply_layout_thrust()
+	_spawn_thrusters()
+
+
+func _apply_layout_thrust() -> void:
+	thrust_force = ship_layout.total_thrust()
+	reverse_thrust_force = thrust_force * reverse_thrust_ratio
+
+	var acceleration_estimate: float = (thrust_force / mass) if mass > 0.0 else 0.0
+	max_speed = acceleration_estimate * speed_per_acceleration
+	reverse_max_speed = max_speed * reverse_speed_ratio
+
+
+func _spawn_thrusters() -> void:
+	for thruster in _thrusters:
+		thruster.queue_free()
+	_thrusters.clear()
+
+	for placement in ship_layout.get_thruster_placements():
+		var thruster: Node2D = engine_thruster_scene.instantiate()
+		add_child(thruster)
+		thruster.position = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+		_thrusters.append(thruster)
 
 
 func _on_health_changed(_current: float, _max: float) -> void:
 	if _flash_tween:
 		_flash_tween.kill()
-	_ship_sprite.modulate = hit_flash_color
+	_hull_renderer.modulate = hit_flash_color
 	_flash_tween = create_tween()
-	_flash_tween.tween_property(_ship_sprite, "modulate", _base_sprite_modulate, hit_flash_duration)
+	_flash_tween.tween_property(_hull_renderer, "modulate", _base_hull_modulate, hit_flash_duration)
 
 
 func fire_primary() -> void:
@@ -130,21 +165,17 @@ func _physics_process(delta: float) -> void:
 
 	if _thrust_input != 0.0:
 		var thrust: float = thrust_force if _thrust_input > 0.0 else reverse_thrust_force
-		var current_max_speed: float = max_speed
 		if _boost_active and _thrust_input > 0.0:
 			thrust *= boost_multiplier
-			current_max_speed *= boost_multiplier
 		var acceleration: float = thrust / mass
 		velocity += transform.x * _thrust_input * acceleration * delta
-
-		if _thrust_input > 0.0:
-			velocity = velocity.limit_length(current_max_speed)
-		else:
-			var forward_speed: float = velocity.dot(transform.x)
-			if forward_speed < -reverse_max_speed:
-				velocity -= transform.x * (forward_speed + reverse_max_speed)
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, drag * max_speed * delta)
+
+	var speed_cap: float = max_speed * boost_multiplier if _boost_active else max_speed
+	if velocity.dot(transform.x) < 0.0:
+		speed_cap = reverse_max_speed
+	velocity = velocity.limit_length(speed_cap)
 
 	move_and_slide()
 	_update_engine_particles()
@@ -154,10 +185,15 @@ func _update_engine_particles() -> void:
 	var thrusting_forward: bool = _thrust_input > 0.0
 	var boosting: bool = thrusting_forward and _boost_active
 
-	_engine_particles.emitting = boosting
-	_engine_particles.amount_ratio = 1.0
+	for thruster in _thrusters:
+		var particles: GPUParticles2D = thruster.get_node("Particles")
+		var particles_soft: GPUParticles2D = thruster.get_node("ParticlesSoft")
+		var particles_normal: GPUParticles2D = thruster.get_node("ParticlesNormal")
 
-	_engine_particles_soft.emitting = boosting
-	_engine_particles_soft.amount_ratio = 1.0
+		particles.emitting = boosting
+		particles.amount_ratio = 1.0
 
-	_engine_particles_normal.emitting = thrusting_forward and not boosting
+		particles_soft.emitting = boosting
+		particles_soft.amount_ratio = 1.0
+
+		particles_normal.emitting = thrusting_forward and not boosting

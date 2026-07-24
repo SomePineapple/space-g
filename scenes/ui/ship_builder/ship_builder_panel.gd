@@ -11,6 +11,7 @@ var _has_hover: bool = false
 var _last_hover_hex: Vector2i = Vector2i.ZERO
 
 var _status_label: Label
+var _stats_label: Label
 var _grid: HexGridControl
 var _palette_buttons: Dictionary = {}
 
@@ -41,8 +42,13 @@ func _build_ui() -> void:
 	_status_label.text = "Select a module type, then click an adjacent cell."
 	panel.add_child(_status_label)
 
+	_stats_label = Label.new()
+	_stats_label.position = Vector2(0, 24)
+	_stats_label.size = Vector2(GRID_PIXEL_SIZE, 20)
+	panel.add_child(_stats_label)
+
 	var palette := HBoxContainer.new()
-	palette.position = Vector2(0, 30)
+	palette.position = Vector2(0, 48)
 	panel.add_child(palette)
 
 	for module_type in ModuleCatalog.get_all():
@@ -54,7 +60,7 @@ func _build_ui() -> void:
 		_palette_buttons[module_type.id] = button
 
 	_grid = HexGridControl.new()
-	_grid.position = Vector2(0, 70)
+	_grid.position = Vector2(0, 88)
 	_grid.size = Vector2(GRID_PIXEL_SIZE, GRID_PIXEL_SIZE)
 	_grid.layout = working_layout
 	_grid.hex_clicked.connect(_on_hex_clicked)
@@ -63,7 +69,7 @@ func _build_ui() -> void:
 	panel.add_child(_grid)
 
 	var actions := HBoxContainer.new()
-	actions.position = Vector2(0, 70 + GRID_PIXEL_SIZE + 10)
+	actions.position = Vector2(0, 88 + GRID_PIXEL_SIZE + 10)
 	panel.add_child(actions)
 
 	var rotate_button := Button.new()
@@ -151,7 +157,7 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 	working_layout.place(_selected_type_id, hex_coord, _pending_rotation)
 	_status_label.text = "Placed %s." % ModuleCatalog.get_by_id(_selected_type_id).display_name
 	_pending_rotation = 0
-	_grid.refresh()
+	_refresh()
 	_grid.clear_preview()
 
 
@@ -183,7 +189,7 @@ func _rotate_selected_placement() -> void:
 
 	working_layout.rotate(_grid.selected_placement_id, 1)
 	_status_label.text = "Rotated."
-	_grid.refresh()
+	_refresh()
 
 
 func _fits_in_bounds(cells: Array[Vector2i]) -> bool:
@@ -206,11 +212,12 @@ func _on_remove_pressed() -> void:
 	working_layout.remove(_grid.selected_placement_id)
 	_grid.selected_placement_id = ""
 	_status_label.text = "Removed."
-	_grid.refresh()
+	_refresh()
 
 
 func _refresh() -> void:
 	_grid.refresh()
+	_stats_label.text = "Max Health: %d   Mass: %.2f" % [working_layout.total_max_health(), working_layout.total_mass()]
 
 
 func _on_validate_pressed() -> void:

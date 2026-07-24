@@ -1,114 +1,21 @@
 [gd_scene format=3 uid="uid://caj1515ndce58"]
 
 [ext_resource type="Script" uid="uid://sv6hu5moclpv" path="res://scenes/player/ship.gd" id="1_yie7n"]
-[ext_resource type="Texture2D" uid="uid://drgl1buv07a47" path="res://scenes/player/engine_particle_glow.tres" id="3_ogdcu"]
 [ext_resource type="Script" uid="uid://84jwqbwaq2n5" path="res://scenes/player/weapon.gd" id="4_tjbcf"]
 [ext_resource type="PackedScene" uid="uid://b4megoah7coiw" path="res://scenes/world/projectile.tscn" id="5_31xff"]
 [ext_resource type="Script" uid="uid://buf5gncgijvbx" path="res://scenes/player/missile_launcher.gd" id="6_2ko6j"]
 [ext_resource type="PackedScene" uid="uid://cm52u8mn5o4v7" path="res://scenes/world/missile.tscn" id="7_7a2ln"]
 [ext_resource type="Script" uid="uid://bh6o2tkx0yeqs" path="res://scenes/player/health.gd" id="8_5lh7k"]
-[ext_resource type="Texture2D" uid="uid://djiyxo30i28jo" path="res://art/ships/ship_v1_alpha.png" id="8_7a2ln"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout_renderer.gd" id="8_hullrend"]
 [ext_resource type="Script" uid="uid://ctj5a3nvasdd1" path="res://scenes/player/tractor_beam.gd" id="9_tf6ds"]
 [ext_resource type="Script" uid="uid://c44i8af67y8yp" path="res://scenes/player/inventory.gd" id="10_lrwcl"]
 [ext_resource type="Script" path="res://scenes/player/upgrade_manager.gd" id="11_lrwcl"]
 
-[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_ubi8f"]
-blend_mode = 1
-
-[sub_resource type="Gradient" id="Gradient_yie7n"]
-offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
-colors = PackedColorArray(1, 1, 0.9, 1, 1, 0.6, 0.1, 1, 0.8, 0.1, 0.05, 0.7, 0.2, 0.05, 0.05, 0)
-
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_ogdcu"]
-gradient = SubResource("Gradient_yie7n")
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_ubi8f"]
-emission_shape = 1
-emission_sphere_radius = 0.3
-direction = Vector3(-1, 0, 0)
-spread = 12.0
-initial_velocity_min = 60.0
-initial_velocity_max = 100.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.8
-scale_max = 1.4
-color_ramp = SubResource("GradientTexture1D_ogdcu")
-
-[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_ogdcu"]
-blend_mode = 1
-
-[sub_resource type="Gradient" id="Gradient_ubi8f"]
-offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
-colors = PackedColorArray(1, 1, 0.9, 1, 1, 0.6, 0.1, 1, 0.8, 0.1, 0.05, 0.7, 0.2, 0.05, 0.05, 0)
-
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_tjbcf"]
-gradient = SubResource("Gradient_ubi8f")
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_31xff"]
-emission_shape = 1
-emission_sphere_radius = 0.3
-direction = Vector3(-1, 0, 0)
-spread = 20.0
-initial_velocity_min = 30.0
-initial_velocity_max = 55.0
-gravity = Vector3(0, 0, 0)
-scale_min = 1.2
-scale_max = 2.0
-color_ramp = SubResource("GradientTexture1D_tjbcf")
-
-[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_7a2ln"]
-blend_mode = 1
-
-[sub_resource type="Gradient" id="Gradient_5lh7k"]
-offsets = PackedFloat32Array(0, 0.5, 1)
-colors = PackedColorArray(0.9098039, 0.9647059, 1, 1, 0.49803922, 0.78431374, 1, 0.8, 0.22745098, 0.5529412, 1, 0)
-
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_tf6ds"]
-gradient = SubResource("Gradient_5lh7k")
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_lrwcl"]
-emission_shape = 1
-emission_sphere_radius = 0.3
-direction = Vector3(-1, 0, 0)
-spread = 6.0
-initial_velocity_min = 90.0
-initial_velocity_max = 130.0
-gravity = Vector3(0, 0, 0)
-scale_min = 0.35
-scale_max = 0.6
-color_ramp = SubResource("GradientTexture1D_tf6ds")
-
 [node name="Ship" type="CharacterBody2D" unique_id=236908416]
 script = ExtResource("1_yie7n")
 
-[node name="ShipVisual" type="Polygon2D" parent="." unique_id=715418957]
-visible = false
-color = Color(0.31, 0.82, 1, 1)
-polygon = PackedVector2Array(24, 0, -16, 14, -16, -14)
-
 [node name="CollisionShape" type="CollisionPolygon2D" parent="." unique_id=514144342]
 polygon = PackedVector2Array(45, 0, -30, 26, -30, -26)
-
-[node name="EngineParticles" type="GPUParticles2D" parent="." unique_id=273345208]
-material = SubResource("CanvasItemMaterial_ubi8f")
-position = Vector2(-30, 0)
-emitting = false
-amount = 32
-texture = ExtResource("3_ogdcu")
-lifetime = 0.4
-preprocess = 0.5
-process_material = SubResource("ParticleProcessMaterial_ubi8f")
-
-[node name="EngineParticlesSoft" type="GPUParticles2D" parent="." unique_id=301066744]
-modulate = Color(1, 0.6, 0.3, 0.5)
-material = SubResource("CanvasItemMaterial_ogdcu")
-position = Vector2(-30, 0)
-emitting = false
-amount = 20
-texture = ExtResource("3_ogdcu")
-lifetime = 0.6
-preprocess = 0.5
-process_material = SubResource("ParticleProcessMaterial_31xff")
 
 [node name="Weapon" type="Node2D" parent="." unique_id=1366409888]
 script = ExtResource("4_tjbcf")
@@ -129,23 +36,12 @@ projectile_damage = 40.0
 [node name="Muzzle" type="Marker2D" parent="MissileLauncher" unique_id=664787242]
 position = Vector2(0, 36)
 
-[node name="ShipSprite" type="Sprite2D" parent="." unique_id=513162172]
+[node name="HullRenderer" type="Node2D" parent="." unique_id=513162172]
 rotation = 1.5707964
-scale = Vector2(0.06, 0.06)
-texture = ExtResource("8_7a2ln")
+script = ExtResource("8_hullrend")
 
 [node name="Health" type="Node" parent="." unique_id=546496258]
 script = ExtResource("8_5lh7k")
-
-[node name="EngineParticlesNormal" type="GPUParticles2D" parent="." unique_id=533764381]
-material = SubResource("CanvasItemMaterial_7a2ln")
-position = Vector2(-30, 0)
-emitting = false
-amount = 24
-texture = ExtResource("3_ogdcu")
-lifetime = 0.45
-preprocess = 0.5
-process_material = SubResource("ParticleProcessMaterial_lrwcl")
 
 [node name="TractorBeam" type="Node2D" parent="." unique_id=2091864127]
 script = ExtResource("9_tf6ds")
