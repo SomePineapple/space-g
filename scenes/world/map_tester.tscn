@@ -45,8 +45,8 @@ texture = ExtResource("1_aa3bo")
 [node name="DeepStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=714656584]
 motion_scale = Vector2(0.05, 0.05)
 script = ExtResource("1_5ji64")
-star_count = 220
-field_size = Vector2(1400, 1400)
+star_count = 800
+field_size = Vector2(3500, 2000)
 min_star_size = 0.5
 max_star_size = 0.9
 min_brightness = 0.15
@@ -57,7 +57,8 @@ flicker_chance = 0.12
 [node name="FarStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=340800296]
 motion_scale = Vector2(0.2, 0.2)
 script = ExtResource("1_5ji64")
-star_count = 160
+star_count = 1000
+field_size = Vector2(3500, 2000)
 max_star_size = 1.3
 max_brightness = 0.6
 flicker_chance = 0.1
@@ -65,8 +66,8 @@ flicker_chance = 0.1
 [node name="MidStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=842272817]
 motion_scale = Vector2(0.35, 0.35)
 script = ExtResource("1_5ji64")
-star_count = 90
-field_size = Vector2(900, 900)
+star_count = 750
+field_size = Vector2(3500, 2000)
 max_star_size = 1.7
 min_brightness = 0.45
 max_brightness = 1.2
@@ -76,8 +77,8 @@ flicker_chance = 0.04
 [node name="NearStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=891177311]
 motion_scale = Vector2(0.5, 0.5)
 script = ExtResource("1_5ji64")
-star_count = 60
-field_size = Vector2(768, 768)
+star_count = 650
+field_size = Vector2(3500, 2000)
 max_star_size = 2.5
 max_brightness = 1.8
 random_seed = 2

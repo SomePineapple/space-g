@@ -14,9 +14,6 @@
 [node name="Ship" type="CharacterBody2D" unique_id=236908416]
 script = ExtResource("1_yie7n")
 
-[node name="CollisionShape" type="CollisionPolygon2D" parent="." unique_id=514144342]
-polygon = PackedVector2Array(45, 0, -30, 26, -30, -26)
-
 [node name="Weapon" type="Node2D" parent="." unique_id=1366409888]
 script = ExtResource("4_tjbcf")
 projectile_scene = ExtResource("5_31xff")

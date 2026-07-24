@@ -1,6 +1,8 @@
 class_name Ship
 extends CharacterBody2D
 
+signal layout_applied
+
 @export var thrust_force: float = 600.0
 @export var reverse_thrust_force: float = 120.0
 @export var max_speed: float = 400.0
@@ -27,6 +29,7 @@ var _boost_active: bool = false
 var _base_hull_modulate: Color
 var _flash_tween: Tween
 var _thrusters: Array[Node2D] = []
+var _collision_shapes: Array[CollisionPolygon2D] = []
 
 @onready var _weapon: Weapon = $Weapon
 @onready var _missile_launcher: MissileLauncher = $MissileLauncher
@@ -42,6 +45,11 @@ func _ready() -> void:
 	_base_hull_modulate = _hull_renderer.modulate
 
 
+func apply_layout(new_layout: ShipLayout) -> void:
+	ship_layout = new_layout
+	_apply_ship_layout()
+
+
 func _apply_ship_layout() -> void:
 	if ship_layout == null:
 		return
@@ -50,6 +58,34 @@ func _apply_ship_layout() -> void:
 	_hull_renderer.set_layout(ship_layout)
 	_apply_layout_thrust()
 	_spawn_thrusters()
+	_spawn_collision_shapes()
+	layout_applied.emit()
+
+
+func get_layout_extent() -> float:
+	if ship_layout == null:
+		return 0.0
+
+	var max_distance: float = 0.0
+	for placement in ship_layout.placements:
+		for cell in ship_layout.get_occupied_cells(placement):
+			var local_pos: Vector2 = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+			max_distance = maxf(max_distance, local_pos.length() + _hull_renderer.cell_size)
+	return max_distance
+
+
+func _spawn_collision_shapes() -> void:
+	for shape in _collision_shapes:
+		shape.queue_free()
+	_collision_shapes.clear()
+
+	for placement in ship_layout.placements:
+		for cell in ship_layout.get_occupied_cells(placement):
+			var shape := CollisionPolygon2D.new()
+			shape.polygon = HexUtils.hex_corners(Vector2.ZERO, _hull_renderer.cell_size)
+			shape.position = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+			add_child(shape)
+			_collision_shapes.append(shape)
 
 
 func _apply_layout_thrust() -> void:
@@ -165,17 +201,26 @@ func _physics_process(delta: float) -> void:
 
 	if _thrust_input != 0.0:
 		var thrust: float = thrust_force if _thrust_input > 0.0 else reverse_thrust_force
+		var current_max_speed: float = max_speed
 		if _boost_active and _thrust_input > 0.0:
 			thrust *= boost_multiplier
+			current_max_speed *= boost_multiplier
 		var acceleration: float = thrust / mass
 		velocity += transform.x * _thrust_input * acceleration * delta
+
+		if _thrust_input > 0.0:
+			velocity = velocity.limit_length(current_max_speed)
+		else:
+			var forward_speed: float = velocity.dot(transform.x)
+			if forward_speed < -reverse_max_speed:
+				velocity -= transform.x * (forward_speed + reverse_max_speed)
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, drag * max_speed * delta)
 
-	var speed_cap: float = max_speed * boost_multiplier if _boost_active else max_speed
-	if velocity.dot(transform.x) < 0.0:
-		speed_cap = reverse_max_speed
-	velocity = velocity.limit_length(speed_cap)
+	# Generous absolute safety net (not a directional cap) so nothing — e.g.
+	# weapon recoil stacking — can send velocity unbounded; normal flight,
+	# including turning around while carrying momentum, never reaches it.
+	velocity = velocity.limit_length(max_speed * boost_multiplier)
 
 	move_and_slide()
 	_update_engine_particles()

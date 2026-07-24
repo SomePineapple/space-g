@@ -16,6 +16,7 @@ func _ready() -> void:
 func configure(max_health_value: float) -> void:
 	max_health = max_health_value
 	current_health = max_health_value
+	health_changed.emit(current_health, max_health)
 
 
 func take_damage(amount: float) -> void:

@@ -1,6 +1,10 @@
 extends CanvasLayer
 
-const GRID_PIXEL_SIZE: float = 340.0
+const GRID_COLS: int = 20
+const GRID_ROWS: int = 10
+const GRID_CELL_SIZE: float = 14.0
+const GRID_PIXEL_WIDTH: float = 640.0
+const GRID_PIXEL_HEIGHT: float = 260.0
 
 var template_layout: ShipLayout
 var working_layout: ShipLayout
@@ -29,6 +33,22 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_builder"):
 		visible = not visible
+		if not visible:
+			_apply_to_player_ship()
+
+
+func _apply_to_player_ship() -> void:
+	var players: Array = get_tree().get_nodes_in_group("player_ship")
+	if players.is_empty():
+		return
+
+	var issues: Array[String] = working_layout.validate_layout()
+	if not issues.is_empty():
+		_status_label.text = "Cannot apply to ship: %s" % "; ".join(issues)
+		return
+
+	players[0].apply_layout(working_layout.duplicate(true))
+	_status_label.text = "Applied to ship."
 
 
 func _build_ui() -> void:
@@ -38,13 +58,13 @@ func _build_ui() -> void:
 
 	_status_label = Label.new()
 	_status_label.position = Vector2(0, 0)
-	_status_label.size = Vector2(GRID_PIXEL_SIZE, 24)
+	_status_label.size = Vector2(GRID_PIXEL_WIDTH, 24)
 	_status_label.text = "Select a module type, then click an adjacent cell."
 	panel.add_child(_status_label)
 
 	_stats_label = Label.new()
 	_stats_label.position = Vector2(0, 24)
-	_stats_label.size = Vector2(GRID_PIXEL_SIZE, 20)
+	_stats_label.size = Vector2(GRID_PIXEL_WIDTH, 20)
 	panel.add_child(_stats_label)
 
 	var palette := HBoxContainer.new()
@@ -61,7 +81,10 @@ func _build_ui() -> void:
 
 	_grid = HexGridControl.new()
 	_grid.position = Vector2(0, 88)
-	_grid.size = Vector2(GRID_PIXEL_SIZE, GRID_PIXEL_SIZE)
+	_grid.size = Vector2(GRID_PIXEL_WIDTH, GRID_PIXEL_HEIGHT)
+	_grid.cell_size = GRID_CELL_SIZE
+	_grid.grid_width = GRID_COLS
+	_grid.grid_height = GRID_ROWS
 	_grid.layout = working_layout
 	_grid.hex_clicked.connect(_on_hex_clicked)
 	_grid.hex_hovered.connect(_on_hex_hovered)
@@ -69,7 +92,7 @@ func _build_ui() -> void:
 	panel.add_child(_grid)
 
 	var actions := HBoxContainer.new()
-	actions.position = Vector2(0, 88 + GRID_PIXEL_SIZE + 10)
+	actions.position = Vector2(0, 88 + GRID_PIXEL_HEIGHT + 10)
 	panel.add_child(actions)
 
 	var rotate_button := Button.new()
@@ -194,7 +217,7 @@ func _rotate_selected_placement() -> void:
 
 func _fits_in_bounds(cells: Array[Vector2i]) -> bool:
 	for cell in cells:
-		if not _grid.is_in_radius(cell):
+		if not _grid.is_in_bounds(cell):
 			return false
 	return true
 

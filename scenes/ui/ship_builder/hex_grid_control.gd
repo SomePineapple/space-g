@@ -6,7 +6,8 @@ signal hex_hovered(hex_coord: Vector2i)
 signal hover_exited
 
 @export var cell_size: float = 32.0
-@export var radius: int = 2
+@export var grid_width: int = 20
+@export var grid_height: int = 10
 
 var layout: ShipLayout
 var selected_placement_id: String = ""
@@ -24,7 +25,7 @@ func _ready() -> void:
 func _draw() -> void:
 	var occupant_by_cell: Dictionary = _build_occupant_lookup()
 
-	for hex_coord in _all_coords_in_radius():
+	for hex_coord in _all_coords_in_bounds():
 		var placement: ModulePlacement = occupant_by_cell.get(hex_coord)
 		var fill_color: Color = Color(0.15, 0.16, 0.18, 1.0)
 		if placement != null:
@@ -73,11 +74,11 @@ func _build_occupant_lookup() -> Dictionary:
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var hex_coord: Vector2i = _pixel_to_axial(event.position)
-		if is_in_radius(hex_coord):
+		if is_in_bounds(hex_coord):
 			hex_clicked.emit(hex_coord)
 	elif event is InputEventMouseMotion:
 		var hex_coord: Vector2i = _pixel_to_axial(event.position)
-		if is_in_radius(hex_coord):
+		if is_in_bounds(hex_coord):
 			hex_hovered.emit(hex_coord)
 		else:
 			hover_exited.emit()
@@ -103,17 +104,19 @@ func refresh() -> void:
 	queue_redraw()
 
 
-func is_in_radius(hex_coord: Vector2i) -> bool:
-	var s: int = -hex_coord.x - hex_coord.y
-	return maxi(absi(hex_coord.x), maxi(absi(hex_coord.y), absi(s))) <= radius
+func is_in_bounds(hex_coord: Vector2i) -> bool:
+	var q_min: int = -grid_width / 2
+	var r_min: int = -grid_height / 2
+	return hex_coord.x >= q_min and hex_coord.x < q_min + grid_width \
+		and hex_coord.y >= r_min and hex_coord.y < r_min + grid_height
 
 
-func _all_coords_in_radius() -> Array[Vector2i]:
+func _all_coords_in_bounds() -> Array[Vector2i]:
 	var coords: Array[Vector2i] = []
-	for q in range(-radius, radius + 1):
-		var r_min: int = maxi(-radius, -q - radius)
-		var r_max: int = mini(radius, -q + radius)
-		for r in range(r_min, r_max + 1):
+	var q_min: int = -grid_width / 2
+	var r_min: int = -grid_height / 2
+	for q in range(q_min, q_min + grid_width):
+		for r in range(r_min, r_min + grid_height):
 			coords.append(Vector2i(q, r))
 	return coords
 
