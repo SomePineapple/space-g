@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://cm5q1ttarc2ny"]
+
+[ext_resource type="Script" path="res://scenes/world/salvage.gd" id="1_is166"]
+[ext_resource type="Texture2D" uid="uid://drgl1buv07a47" path="res://scenes/player/engine_particle_glow.tres" id="2_fmdgh"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_6erbx"]
+radius = 16.0
+
+[node name="Salvage" type="Area2D" unique_id=315963228]
+script = ExtResource("1_is166")
+
+[node name="Collision" type="CollisionShape2D" parent="." unique_id=776854371]
+shape = SubResource("CircleShape2D_6erbx")
+
+[node name="Visual" type="Sprite2D" parent="." unique_id=1734231607]
+modulate = Color(0.75, 0.8, 0.85, 1)
+scale = Vector2(1.2, 1.2)
+texture = ExtResource("2_fmdgh")

@@ -10,3 +10,9 @@ func _physics_process(_delta: float) -> void:
 	ship.set_thrust_input(thrust)
 	ship.set_turn_input(turn)
 	ship.set_boost_input(Input.is_action_pressed("boost"))
+
+	if Input.is_action_pressed("fire_primary"):
+		ship.fire_primary()
+
+	if Input.is_action_just_pressed("fire_secondary"):
+		ship.fire_secondary()

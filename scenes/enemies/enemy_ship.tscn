@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://18mfhgsadwk1"]
+
+[ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="1_ship"]
+[ext_resource type="Texture2D" uid="uid://bxll8gujae1wv" path="res://art/ships/pirate_v1.png" id="2_0wb5s"]
+[ext_resource type="Script" uid="uid://chxoet6gde4yb" path="res://scenes/enemies/ai_input.gd" id="2_ai"]
+
+[node name="EnemyShip" unique_id=690453083 instance=ExtResource("1_ship")]
+
+[node name="ShipSprite" parent="." index="6" unique_id=513162172]
+rotation = 0.0
+texture = ExtResource("2_0wb5s")
+
+[node name="AIInput" type="Node" parent="." index="7" unique_id=1895802172]
+script = ExtResource("2_ai")

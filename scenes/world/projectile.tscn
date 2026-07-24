@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://b4megoah7coiw"]
+
+[ext_resource type="Script" uid="uid://bou0ihvxcteh6" path="res://scenes/world/projectile.gd" id="1_jveri"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_dmo7y"]
+radius = 3.0
+
+[node name="Projectile" type="Area2D" unique_id=1253589394]
+script = ExtResource("1_jveri")
+
+[node name="Visual" type="Polygon2D" parent="." unique_id=1923175295]
+color = Color(1, 0.3, 0.3, 1)
+polygon = PackedVector2Array(10, 0, -8, -2.5, -8, 2.5)
+
+[node name="Collision" type="CollisionShape2D" parent="." unique_id=421659573]
+shape = SubResource("CircleShape2D_dmo7y")

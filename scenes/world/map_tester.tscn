@@ -2,11 +2,45 @@
 
 [ext_resource type="Script" uid="uid://g4010rlocqis" path="res://scenes/world/starfield_layer.gd" id="1_5ji64"]
 [ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="1_a385b"]
+[ext_resource type="Texture2D" uid="uid://crv7raqboncmr" path="res://art/backgrounds/bg_space.png" id="1_aa3bo"]
 [ext_resource type="PackedScene" uid="uid://cd0ebuq2rwalp" path="res://scenes/world/asteroid.tscn" id="3_obean"]
+[ext_resource type="Script" uid="uid://cs8kwphh2annm" path="res://scenes/player/ship_input.gd" id="4_ppnaw"]
+[ext_resource type="Script" uid="uid://8u7j81y053pb" path="res://scenes/player/camera_shake.gd" id="5_fqjfb"]
+[ext_resource type="PackedScene" uid="uid://b1u7j380lkpgc" path="res://scenes/ui/hud.tscn" id="8_0o3hu"]
+[ext_resource type="PackedScene" uid="uid://b5udl06fbo3cy" path="res://scenes/ui/upgrade_panel.tscn" id="9_gc6po"]
+[ext_resource type="PackedScene" uid="uid://c8k2f6qh1w3xa" path="res://scenes/ui/ship_builder/ship_builder_panel.tscn" id="10_ja1me"]
+[ext_resource type="Script" uid="uid://bl25agppsdxej" path="res://scenes/world/enemy_spawner.gd" id="10_ojmk8"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
+sky_top_color = Color(0.38, 0.45, 0.55, 1)
+sky_horizon_color = Color(0.65, 0.67, 0.7, 1)
+ground_bottom_color = Color(0.2, 0.17, 0.13, 1)
+ground_horizon_color = Color(0.65, 0.67, 0.7, 1)
+
+[sub_resource type="Sky" id="Sky_ppnaw"]
+sky_material = SubResource("ProceduralSkyMaterial_aa3bo")
+
+[sub_resource type="Environment" id="Environment_u02ng"]
+background_mode = 3
+sky = SubResource("Sky_ppnaw")
+ambient_light_source = 3
+glow_enabled = true
+glow_intensity = 1.5
+glow_strength = 1.2
+glow_bloom = 0.2
+glow_blend_mode = 0
 
 [node name="Map Tester" type="Node2D" unique_id=870821353]
 
 [node name="SpaceBackground" type="ParallaxBackground" parent="." unique_id=1392821850]
+
+[node name="DeepBackground" type="ParallaxLayer" parent="SpaceBackground" unique_id=2103100617]
+motion_scale = Vector2(0.02, 0.02)
+motion_mirroring = Vector2(13376, 7528)
+
+[node name="Image" type="Sprite2D" parent="SpaceBackground/DeepBackground" unique_id=567037291]
+scale = Vector2(2, 2)
+texture = ExtResource("1_aa3bo")
 
 [node name="DeepStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=714656584]
 motion_scale = Vector2(0.05, 0.05)
@@ -18,6 +52,7 @@ max_star_size = 0.9
 min_brightness = 0.15
 max_brightness = 0.35
 random_seed = 3
+flicker_chance = 0.12
 
 [node name="FarStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=340800296]
 motion_scale = Vector2(0.2, 0.2)
@@ -25,6 +60,7 @@ script = ExtResource("1_5ji64")
 star_count = 160
 max_star_size = 1.3
 max_brightness = 0.6
+flicker_chance = 0.1
 
 [node name="MidStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=842272817]
 motion_scale = Vector2(0.35, 0.35)
@@ -33,8 +69,9 @@ star_count = 90
 field_size = Vector2(900, 900)
 max_star_size = 1.7
 min_brightness = 0.45
-max_brightness = 0.8
+max_brightness = 1.2
 random_seed = 4
+flicker_chance = 0.04
 
 [node name="NearStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=891177311]
 motion_scale = Vector2(0.5, 0.5)
@@ -42,9 +79,19 @@ script = ExtResource("1_5ji64")
 star_count = 60
 field_size = Vector2(768, 768)
 max_star_size = 2.5
+max_brightness = 1.8
 random_seed = 2
 
-[node name="Ship" parent="." unique_id=236908416 instance=ExtResource("1_a385b")]
+[node name="Ship" parent="." unique_id=236908416 groups=["player_ship"] instance=ExtResource("1_a385b")]
+drops_salvage = false
+
+[node name="PlayerInput" type="Node" parent="Ship" unique_id=1134164487]
+script = ExtResource("4_ppnaw")
+
+[node name="ShipCamera" type="Camera2D" parent="Ship" unique_id=1620230392]
+process_callback = 0
+position_smoothing_enabled = true
+script = ExtResource("5_fqjfb")
 
 [node name="Asteroid1" parent="." unique_id=1234967092 instance=ExtResource("3_obean")]
 position = Vector2(300, -220)
@@ -77,3 +124,15 @@ random_seed = 77
 [node name="Asteroid8" parent="." unique_id=69543643 instance=ExtResource("3_obean")]
 position = Vector2(-850, 350)
 random_seed = 88
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1721072127]
+environment = SubResource("Environment_u02ng")
+
+[node name="HUD" parent="." unique_id=309546132 instance=ExtResource("8_0o3hu")]
+
+[node name="UpgradePanel" parent="." unique_id=1122649445 instance=ExtResource("9_gc6po")]
+
+[node name="ShipBuilderPanel" parent="." unique_id=-523937815 instance=ExtResource("10_ja1me")]
+
+[node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
+script = ExtResource("10_ojmk8")

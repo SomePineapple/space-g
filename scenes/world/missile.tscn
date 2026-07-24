@@ -1,0 +1,49 @@
+[gd_scene format=3 uid="uid://cm52u8mn5o4v7"]
+
+[ext_resource type="Script" uid="uid://cjskb16hv8kyj" path="res://scenes/world/missile.gd" id="1_if18y"]
+[ext_resource type="Texture2D" uid="uid://drgl1buv07a47" path="res://scenes/player/engine_particle_glow.tres" id="2_s7luu"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_s7luu"]
+radius = 4.0
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_nkpds"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_e71tf"]
+offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
+colors = PackedColorArray(1, 1, 0.9, 1, 1, 0.6, 0.1, 1, 0.8, 0.1, 0.05, 0.7, 0.2, 0.05, 0.05, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_wdbm6"]
+gradient = SubResource("Gradient_e71tf")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_idmm1"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(-1, 0, 0)
+spread = 8.0
+initial_velocity_min = 20.0
+initial_velocity_max = 40.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.5
+color_ramp = SubResource("GradientTexture1D_wdbm6")
+
+[node name="Missile" type="Area2D" unique_id=1691725785]
+script = ExtResource("1_if18y")
+explosion_scale = 1.6
+color = Color(1, 0.6, 0.15, 1)
+
+[node name="Visual" type="Polygon2D" parent="." unique_id=792069694]
+color = Color(1, 0.6, 0.15, 1)
+polygon = PackedVector2Array(12, 0, -6, -4, -10, 0, -6, 4)
+
+[node name="Collision" type="CollisionShape2D" parent="." unique_id=1435139195]
+shape = SubResource("CircleShape2D_s7luu")
+
+[node name="Trail" type="GPUParticles2D" parent="." unique_id=718944176]
+material = SubResource("CanvasItemMaterial_nkpds")
+position = Vector2(-10, 0)
+amount = 16
+texture = ExtResource("2_s7luu")
+lifetime = 0.35
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_idmm1")

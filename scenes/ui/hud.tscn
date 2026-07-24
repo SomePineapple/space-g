@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://b1u7j380lkpgc"]
+
+[ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_0mwgc"]
+
+[node name="HUD" type="CanvasLayer" unique_id=309546132]
+script = ExtResource("1_0mwgc")
+
+[node name="SalvageLabel" type="Label" parent="." unique_id=610305732]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 21.0
+offset_bottom = 43.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 22
+text = "Salvage: 0"

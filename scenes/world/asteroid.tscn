@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cd0ebuq2rwalp"]
 
 [ext_resource type="Script" uid="uid://b81vidk5xaf6p" path="res://scenes/world/asteroid.gd" id="1_rtc2x"]
+[ext_resource type="Script" uid="uid://bh6o2tkx0yeqs" path="res://scenes/player/health.gd" id="2_4jlyq"]
 
 [node name="Asteroid" type="StaticBody2D" unique_id=1234967092]
 script = ExtResource("1_rtc2x")
@@ -8,3 +9,7 @@ script = ExtResource("1_rtc2x")
 [node name="Visual" type="Polygon2D" parent="." unique_id=1218366823]
 
 [node name="Collision" type="CollisionPolygon2D" parent="." unique_id=1134007503]
+
+[node name="Health" type="Node" parent="." unique_id=1395964923]
+script = ExtResource("2_4jlyq")
+max_health = 40.0

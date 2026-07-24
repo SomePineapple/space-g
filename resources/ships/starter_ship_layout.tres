@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShipLayout" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="1_layout"]
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="2_placement"]
+
+[sub_resource type="Resource" id="Resource_core"]
+script = ExtResource("2_placement")
+placement_id = "core"
+module_type_id = "command_core"
+hex_coord = Vector2i(0, 0)
+rotation_steps = 0
+
+[resource]
+script = ExtResource("1_layout")
+placements = Array[ModulePlacement]([SubResource("Resource_core")])
+core_placement_id = "core"

@@ -1,0 +1,38 @@
+[gd_scene format=3 uid="uid://cmycfts12fybr"]
+
+[ext_resource type="Script" uid="uid://cf71q11lpydl6" path="res://scenes/world/explosion.gd" id="1_54i5x"]
+[ext_resource type="Texture2D" uid="uid://drgl1buv07a47" path="res://scenes/player/engine_particle_glow.tres" id="2_ba7ib"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_v4o6j"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_54i5x"]
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_ba7ib"]
+gradient = SubResource("Gradient_54i5x")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_ntacb"]
+particle_flag_inherit_emitter_scale = true
+emission_shape = 1
+emission_sphere_radius = 0.1
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 60.0
+initial_velocity_max = 180.0
+gravity = Vector3(0, -4, 0)
+scale_max = 2.2
+color_ramp = SubResource("GradientTexture1D_ba7ib")
+
+[node name="Explosion" type="Node2D" unique_id=1990932960]
+script = ExtResource("1_54i5x")
+
+[node name="Burst" type="GPUParticles2D" parent="." unique_id=2099947867]
+material = SubResource("CanvasItemMaterial_v4o6j")
+emitting = false
+amount = 40
+texture = ExtResource("2_ba7ib")
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+process_material = SubResource("ParticleProcessMaterial_ntacb")

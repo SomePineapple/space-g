@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b5udl06fbo3cy"]
+
+[ext_resource type="Script" path="res://scenes/ui/upgrade_panel.gd" id="1_r60ue"]
+
+[node name="UpgradePanel" type="CanvasLayer" unique_id=1122649445]
+script = ExtResource("1_r60ue")

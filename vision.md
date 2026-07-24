@@ -362,3 +362,53 @@ The ship should become the physical record of their journey.
 # Guiding Principle
 
 > **"If a player screenshots their ship after twenty hours, another player should be able to guess the story of their adventure."**
+
+## Long-Term Crew Vision
+
+The immediate game is a single-player, ship-focused space exploration experience built around:
+
+* enjoyable piloting
+* modular ship construction
+* tactical combat
+* salvage
+* exploration
+* technology discovery
+
+These systems must succeed independently before crew management or multiplayer is developed.
+
+Long term, the same ship may be operable by either one player or several players working together.
+
+A future crew layer could introduce responsibilities such as:
+
+* Helm and navigation
+* Weapons and targeting
+* Engineering and power management
+* Shields and damage control
+* Scanning, salvage and ship operations
+
+In single-player, these systems should remain manageable by one person through automation, shortcuts, AI assistance and clear interfaces.
+
+In multiplayer, responsibilities may be divided in two ways:
+
+1. Players pilot separate ships within the same universe.
+2. Multiple players operate different stations aboard one shared ship.
+
+This is an end-state direction, not a requirement for the initial game.
+
+No system should be made more complicated solely to support hypothetical multiplayer. Crew-operable systems should first improve the single-player experience.
+
+The current development priority remains:
+
+> Build the strongest possible single-player modular space exploration game first.
+
+## Architectural Implication
+
+The game should remain ship-centric rather than player-centric.
+
+Where practical, ship capabilities should be represented as independently operable systems or stations. Control of those systems may eventually be assigned to:
+
+* the primary local player
+* AI assistance
+* another local or networked player
+
+This should influence clean system boundaries, but must not introduce premature networking, crew simulation or multiplayer-specific complexity.

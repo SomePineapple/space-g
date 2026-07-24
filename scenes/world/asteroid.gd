@@ -6,9 +6,13 @@ extends StaticBody2D
 @export var point_count: int = 9
 @export var irregularity: float = 0.35
 @export var random_seed: int = 1
+@export var explosion_scene: PackedScene = preload("res://scenes/world/explosion.tscn")
+@export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
+@export var destruction_explosion_scale: float = 1.2
 
 @onready var _visual: Polygon2D = $Visual
 @onready var _collision: CollisionPolygon2D = $Collision
+@onready var _health: Health = $Health
 
 
 func _ready() -> void:
@@ -27,3 +31,33 @@ func _ready() -> void:
 
 	var shade: float = rng.randf_range(0.35, 0.55)
 	_visual.color = Color(shade, shade * 0.95, shade * 0.9)
+
+	_health.destroyed.connect(_on_destroyed)
+
+
+func take_damage(amount: float) -> void:
+	_health.take_damage(amount)
+
+
+func _on_destroyed() -> void:
+	var explosion: Explosion = explosion_scene.instantiate()
+	get_tree().current_scene.add_child(explosion)
+	explosion.global_position = global_position
+	explosion.effect_scale = destruction_explosion_scale
+
+	var salvage: Salvage = salvage_scene.instantiate()
+	salvage.rarity = _roll_ore_rarity()
+	get_tree().current_scene.add_child(salvage)
+	salvage.global_position = global_position
+
+	queue_free()
+
+
+func _roll_ore_rarity() -> Salvage.Rarity:
+	var roll: float = randf()
+	if roll < 0.7:
+		return Salvage.Rarity.COMMON
+	elif roll < 0.95:
+		return Salvage.Rarity.ELECTRONICS
+	else:
+		return Salvage.Rarity.ENERGY

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c8k2f6qh1w3xa"]
+
+[ext_resource type="Script" path="res://scenes/ui/ship_builder/ship_builder_panel.gd" id="1_sbp01"]
+
+[node name="ShipBuilderPanel" type="CanvasLayer" unique_id=3771029481]
+script = ExtResource("1_sbp01")
