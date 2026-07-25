@@ -19,6 +19,7 @@ signal layout_applied
 @export var hit_flash_duration: float = 0.12
 @export var ship_layout: ShipLayout = preload("res://resources/ships/starter_ship_layout.tres")
 @export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
+@export var hardpoint_gun_scene: PackedScene = preload("res://scenes/player/hardpoint_gun.tscn")
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
@@ -30,8 +31,11 @@ var _base_hull_modulate: Color
 var _flash_tween: Tween
 var _thrusters: Array[Node2D] = []
 var _collision_shapes: Array[CollisionPolygon2D] = []
+var _hardpoint_guns: Array[HardpointGun] = []
+var _weapon_upgrade_modifiers: Dictionary = {}
+var _aim_target: Vector2 = Vector2.ZERO
+var _has_aim_target: bool = false
 
-@onready var _weapon: Weapon = $Weapon
 @onready var _missile_launcher: MissileLauncher = $MissileLauncher
 @onready var _health: Health = $Health
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
@@ -59,6 +63,7 @@ func _apply_ship_layout() -> void:
 	_apply_layout_thrust()
 	_spawn_thrusters()
 	_spawn_collision_shapes()
+	_spawn_hardpoint_guns()
 	layout_applied.emit()
 
 
@@ -109,6 +114,36 @@ func _spawn_thrusters() -> void:
 		_thrusters.append(thruster)
 
 
+func _spawn_hardpoint_guns() -> void:
+	for gun in _hardpoint_guns:
+		gun.queue_free()
+	_hardpoint_guns.clear()
+
+	for placement in ship_layout.get_weapon_hardpoint_placements():
+		var gun: HardpointGun = hardpoint_gun_scene.instantiate()
+		add_child(gun)
+		gun.position = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+		gun.set_cell_size(_hull_renderer.cell_size)
+		gun.setup(self)
+		for property_name in _weapon_upgrade_modifiers:
+			gun.set(property_name, gun.get(property_name) + _weapon_upgrade_modifiers[property_name])
+		_hardpoint_guns.append(gun)
+
+
+## Routes "Weapon" upgrade-tree modifiers to every mounted hardpoint gun
+## instead of a single fixed node, and remembers them so a ship rebuild
+## (e.g. from the builder) reapplies purchased upgrades to the new guns.
+func apply_weapon_modifier(property_name: String, delta: float) -> void:
+	_weapon_upgrade_modifiers[property_name] = _weapon_upgrade_modifiers.get(property_name, 0.0) + delta
+	for gun in _hardpoint_guns:
+		gun.set(property_name, gun.get(property_name) + delta)
+
+
+func set_aim_target(target: Vector2) -> void:
+	_aim_target = target
+	_has_aim_target = true
+
+
 func _on_health_changed(_current: float, _max: float) -> void:
 	if _flash_tween:
 		_flash_tween.kill()
@@ -118,7 +153,8 @@ func _on_health_changed(_current: float, _max: float) -> void:
 
 
 func fire_primary() -> void:
-	_weapon.fire()
+	for gun in _hardpoint_guns:
+		gun.fire()
 
 
 func fire_secondary() -> void:
@@ -224,6 +260,15 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_engine_particles()
+	_update_hardpoint_aim()
+
+
+func _update_hardpoint_aim() -> void:
+	if _hardpoint_guns.is_empty():
+		return
+	var aim_target: Vector2 = _aim_target if _has_aim_target else global_position + transform.x * 1000.0
+	for gun in _hardpoint_guns:
+		gun.aim_at(aim_target)
 
 
 func _update_engine_particles() -> void:

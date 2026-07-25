@@ -19,6 +19,7 @@ func _physics_process(_delta: float) -> void:
 	var distance: float = to_player.length()
 	var angle_diff: float = wrapf(to_player.angle() - ship.rotation, -PI, PI)
 
+	ship.set_aim_target(player.global_position)
 	ship.set_turn_input(clampf(angle_diff * turn_response, -1.0, 1.0))
 	ship.set_thrust_input(1.0 if distance > keep_distance else 0.0)
 

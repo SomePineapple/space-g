@@ -10,6 +10,7 @@ func _physics_process(_delta: float) -> void:
 	ship.set_thrust_input(thrust)
 	ship.set_turn_input(turn)
 	ship.set_boost_input(Input.is_action_pressed("boost"))
+	ship.set_aim_target(ship.get_global_mouse_position())
 
 	if Input.is_action_pressed("fire_primary"):
 		ship.fire_primary()
