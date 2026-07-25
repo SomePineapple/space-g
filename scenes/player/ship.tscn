@@ -1,8 +1,6 @@
 [gd_scene format=3 uid="uid://caj1515ndce58"]
 
 [ext_resource type="Script" uid="uid://sv6hu5moclpv" path="res://scenes/player/ship.gd" id="1_yie7n"]
-[ext_resource type="Script" uid="uid://buf5gncgijvbx" path="res://scenes/player/missile_launcher.gd" id="6_2ko6j"]
-[ext_resource type="PackedScene" uid="uid://cm52u8mn5o4v7" path="res://scenes/world/missile.tscn" id="7_7a2ln"]
 [ext_resource type="Script" uid="uid://bh6o2tkx0yeqs" path="res://scenes/player/health.gd" id="8_5lh7k"]
 [ext_resource type="Script" path="res://scripts/ships/layout/ship_layout_renderer.gd" id="8_hullrend"]
 [ext_resource type="Script" uid="uid://ctj5a3nvasdd1" path="res://scenes/player/tractor_beam.gd" id="9_tf6ds"]
@@ -11,18 +9,6 @@
 
 [node name="Ship" type="CharacterBody2D" unique_id=236908416]
 script = ExtResource("1_yie7n")
-
-[node name="MissileLauncher" type="Node2D" parent="." unique_id=1819097405]
-script = ExtResource("6_2ko6j")
-projectile_scene = ExtResource("7_7a2ln")
-fire_rate = 1.0
-projectile_speed = 450.0
-recoil_force = 150.0
-projectile_color = Color(1, 0.6, 0.15, 1)
-projectile_damage = 40.0
-
-[node name="Muzzle" type="Marker2D" parent="MissileLauncher" unique_id=664787242]
-position = Vector2(0, 36)
 
 [node name="HullRenderer" type="Node2D" parent="." unique_id=513162172]
 rotation = 1.5707964

@@ -57,6 +57,11 @@ func _apply_modifiers(data: UpgradeNode) -> void:
 			_ship.apply_weapon_modifier(property_name, data.modifiers[property_name])
 		return
 
+	if data.target_node_path == "MissileLauncher":
+		for property_name in data.modifiers:
+			_ship.apply_missile_modifier(property_name, data.modifiers[property_name])
+		return
+
 	var target: Node = _ship if data.target_node_path == "" else _ship.get_node(data.target_node_path)
 	for property_name in data.modifiers:
 		var delta: float = data.modifiers[property_name]

@@ -49,6 +49,14 @@ func get_weapon_hardpoint_placements() -> Array[ModulePlacement]:
 	return hardpoints
 
 
+func get_missile_hardpoint_placements() -> Array[ModulePlacement]:
+	var hardpoints: Array[ModulePlacement] = []
+	for placement in placements:
+		if placement.module_type_id == ModuleCatalog.MISSILE_HARDPOINT_TYPE_ID:
+			hardpoints.append(placement)
+	return hardpoints
+
+
 func get_placement_at(hex_coord: Vector2i) -> ModulePlacement:
 	for placement in placements:
 		if hex_coord in get_occupied_cells(placement):

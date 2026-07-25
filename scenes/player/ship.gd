@@ -20,6 +20,7 @@ signal layout_applied
 @export var ship_layout: ShipLayout = preload("res://resources/ships/starter_ship_layout.tres")
 @export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
 @export var hardpoint_gun_scene: PackedScene = preload("res://scenes/player/hardpoint_gun.tscn")
+@export var hardpoint_missile_launcher_scene: PackedScene = preload("res://scenes/player/hardpoint_missile_launcher.tscn")
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
@@ -32,11 +33,12 @@ var _flash_tween: Tween
 var _thrusters: Array[Node2D] = []
 var _collision_shapes: Array[CollisionPolygon2D] = []
 var _hardpoint_guns: Array[HardpointGun] = []
+var _missile_launchers: Array[HardpointMissileLauncher] = []
 var _weapon_upgrade_modifiers: Dictionary = {}
+var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 
-@onready var _missile_launcher: MissileLauncher = $MissileLauncher
 @onready var _health: Health = $Health
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
 @onready var _inventory: Inventory = $Inventory
@@ -64,6 +66,7 @@ func _apply_ship_layout() -> void:
 	_spawn_thrusters()
 	_spawn_collision_shapes()
 	_spawn_hardpoint_guns()
+	_spawn_missile_launchers()
 	layout_applied.emit()
 
 
@@ -130,6 +133,22 @@ func _spawn_hardpoint_guns() -> void:
 		_hardpoint_guns.append(gun)
 
 
+func _spawn_missile_launchers() -> void:
+	for launcher in _missile_launchers:
+		launcher.queue_free()
+	_missile_launchers.clear()
+
+	for placement in ship_layout.get_missile_hardpoint_placements():
+		var launcher: HardpointMissileLauncher = hardpoint_missile_launcher_scene.instantiate()
+		add_child(launcher)
+		launcher.position = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+		launcher.set_cell_size(_hull_renderer.cell_size)
+		launcher.setup(self)
+		for property_name in _missile_upgrade_modifiers:
+			launcher.set(property_name, launcher.get(property_name) + _missile_upgrade_modifiers[property_name])
+		_missile_launchers.append(launcher)
+
+
 ## Routes "Weapon" upgrade-tree modifiers to every mounted hardpoint gun
 ## instead of a single fixed node, and remembers them so a ship rebuild
 ## (e.g. from the builder) reapplies purchased upgrades to the new guns.
@@ -139,9 +158,20 @@ func apply_weapon_modifier(property_name: String, delta: float) -> void:
 		gun.set(property_name, gun.get(property_name) + delta)
 
 
+## Same as apply_weapon_modifier(), for "MissileLauncher" upgrade-tree entries.
+func apply_missile_modifier(property_name: String, delta: float) -> void:
+	_missile_upgrade_modifiers[property_name] = _missile_upgrade_modifiers.get(property_name, 0.0) + delta
+	for launcher in _missile_launchers:
+		launcher.set(property_name, launcher.get(property_name) + delta)
+
+
 func set_aim_target(target: Vector2) -> void:
 	_aim_target = target
 	_has_aim_target = true
+
+
+func get_aim_target() -> Vector2:
+	return _aim_target if _has_aim_target else global_position + transform.x * 1000.0
 
 
 func _on_health_changed(_current: float, _max: float) -> void:
@@ -158,7 +188,8 @@ func fire_primary() -> void:
 
 
 func fire_secondary() -> void:
-	_missile_launcher.fire()
+	for launcher in _missile_launchers:
+		launcher.fire()
 
 
 func take_damage(amount: float) -> void:
@@ -264,11 +295,13 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_hardpoint_aim() -> void:
-	if _hardpoint_guns.is_empty():
+	if _hardpoint_guns.is_empty() and _missile_launchers.is_empty():
 		return
-	var aim_target: Vector2 = _aim_target if _has_aim_target else global_position + transform.x * 1000.0
+	var aim_target: Vector2 = get_aim_target()
 	for gun in _hardpoint_guns:
 		gun.aim_at(aim_target)
+	for launcher in _missile_launchers:
+		launcher.aim_at(aim_target)
 
 
 func _update_engine_particles() -> void:

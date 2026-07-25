@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/player/hardpoint_missile_launcher.gd" id="1_launcher"]
+
+[node name="HardpointMissileLauncher" type="Node2D"]
+script = ExtResource("1_launcher")
+
+[node name="Barrel" type="Polygon2D" parent="."]
+color = Color(1, 0.6, 0.15, 1)
+
+[node name="Muzzle" type="Marker2D" parent="."]

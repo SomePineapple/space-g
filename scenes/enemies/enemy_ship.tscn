@@ -5,5 +5,5 @@
 
 [node name="EnemyShip" unique_id=690453083 instance=ExtResource("1_ship")]
 
-[node name="AIInput" type="Node" parent="." index="6" unique_id=1895802172]
+[node name="AIInput" type="Node" parent="." index="5" unique_id=1895802172]
 script = ExtResource("2_ai")
