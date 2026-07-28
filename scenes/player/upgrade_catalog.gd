@@ -19,11 +19,11 @@ static func get_all() -> Array[UpgradeNode]:
 		{"projectile_damage": 12.0, "fire_rate": 1.5}))
 
 	nodes.append(_make("missile_lvl_1", "Missile Rack I", "missiles", 30, [], "MissileLauncher",
-		{"projectile_damage": 15.0, "fire_rate": 0.3}))
+		{"projectile_damage": 15.0, "fire_rate": 0.3, "ignition_delay": -0.15}))
 	nodes.append(_make("missile_lvl_2", "Missile Rack II", "missiles", 70, ["missile_lvl_1"], "MissileLauncher",
-		{"projectile_damage": 20.0, "projectile_speed": 100.0}))
+		{"projectile_damage": 20.0, "projectile_speed": 100.0, "ignition_delay": -0.2}))
 	nodes.append(_make("missile_lvl_3", "Missile Rack III", "missiles", 130, ["missile_lvl_2"], "MissileLauncher",
-		{"projectile_damage": 25.0, "recoil_force": -30.0}))
+		{"projectile_damage": 25.0, "creep_acceleration": 30.0, "ignition_delay": -0.25}))
 
 	return nodes
 

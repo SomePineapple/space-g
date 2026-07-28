@@ -20,6 +20,10 @@ var _preview_valid: bool = true
 func _ready() -> void:
 	_center = size * 0.5
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Hex art is authored at a much higher resolution than it renders at in
+	# the builder preview, so mipmapped filtering is needed to avoid
+	# minification aliasing.
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 
 func _draw() -> void:
@@ -28,13 +32,18 @@ func _draw() -> void:
 	for hex_coord in _all_coords_in_bounds():
 		var placement: ModulePlacement = occupant_by_cell.get(hex_coord)
 		var fill_color: Color = Color(0.15, 0.16, 0.18, 1.0)
+		var hex_texture: Texture2D = null
 		if placement != null:
 			var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 			if module_type != null:
 				fill_color = module_type.color
+				hex_texture = module_type.hex_texture
 
 		var corners: PackedVector2Array = _hex_corners(_axial_to_pixel(hex_coord))
-		draw_colored_polygon(corners, fill_color)
+		if hex_texture != null:
+			draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners(), hex_texture)
+		else:
+			draw_colored_polygon(corners, fill_color)
 
 		var outline_color: Color = Color(0.9, 0.9, 0.9, 0.9) if placement != null and placement.placement_id == selected_placement_id else Color(0.4, 0.4, 0.45, 0.8)
 		for i in corners.size():

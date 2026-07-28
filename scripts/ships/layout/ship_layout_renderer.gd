@@ -10,6 +10,12 @@ extends Node2D
 const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.07, 0.9)
 
 
+func _ready() -> void:
+	# Hex art is authored at a much higher resolution than it renders at in
+	# game, so mipmapped filtering is needed to avoid minification aliasing.
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+
 func set_layout(new_layout: ShipLayout) -> void:
 	ship_layout = new_layout
 	queue_redraw()
@@ -26,6 +32,9 @@ func _draw() -> void:
 
 		for cell in ship_layout.get_occupied_cells(placement):
 			var corners: PackedVector2Array = HexUtils.hex_corners(HexUtils.axial_to_pixel(cell, cell_size), cell_size)
-			draw_colored_polygon(corners, module_type.color)
+			if module_type.hex_texture != null:
+				draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners(), module_type.hex_texture)
+			else:
+				draw_colored_polygon(corners, module_type.color)
 			for i in corners.size():
 				draw_line(corners[i], corners[(i + 1) % corners.size()], OUTLINE_COLOR, 2.0)

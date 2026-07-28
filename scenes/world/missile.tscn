@@ -42,7 +42,7 @@ shape = SubResource("CircleShape2D_s7luu")
 [node name="Trail" type="GPUParticles2D" parent="." unique_id=718944176]
 material = SubResource("CanvasItemMaterial_nkpds")
 position = Vector2(-10, 0)
-amount = 16
+amount = 24
 texture = ExtResource("2_s7luu")
 lifetime = 0.35
 preprocess = 0.5

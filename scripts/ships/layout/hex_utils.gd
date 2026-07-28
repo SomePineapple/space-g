@@ -23,6 +23,17 @@ static func hex_corners(center: Vector2, cell_size: float) -> PackedVector2Array
 	return corners
 
 
+## Normalised (0-1) UV coordinates matching hex_corners' vertex order, for
+## sampling a square hex-tile texture generated with a small margin around
+## the hex silhouette (as produced by art/reference/hex_module.png).
+static func hex_uv_corners(uv_radius: float = 0.49) -> PackedVector2Array:
+	var uvs := PackedVector2Array()
+	for i in 6:
+		var angle: float = deg_to_rad(60.0 * i - 30.0)
+		uvs.append(Vector2(0.5, 0.5) + Vector2(cos(angle), sin(angle)) * uv_radius)
+	return uvs
+
+
 static func rotate(coord: Vector2i, steps: int) -> Vector2i:
 	var x: int = coord.x
 	var z: int = coord.y
