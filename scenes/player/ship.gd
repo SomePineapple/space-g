@@ -204,7 +204,15 @@ func apply_impulse(impulse: Vector2) -> void:
 	velocity += impulse / mass
 
 
+## Deferred as a whole: this fires from within the physics engine's
+## collision query flush (via Projectile's body_entered signal), and both
+## adding the Salvage Area2D to the tree and freeing this body would
+## otherwise touch physics server shape state mid-flush.
 func _on_destroyed() -> void:
+	_finish_destruction.call_deferred()
+
+
+func _finish_destruction() -> void:
 	var explosion: Explosion = explosion_scene.instantiate()
 	get_tree().current_scene.add_child(explosion)
 	explosion.global_position = global_position

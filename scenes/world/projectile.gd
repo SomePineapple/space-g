@@ -53,4 +53,7 @@ func _destroy() -> void:
 	get_tree().current_scene.add_child(explosion)
 	explosion.global_position = global_position
 
-	queue_free()
+	# Deferred: this runs from within the physics engine's collision query
+	# flush (_on_body_entered), where freeing a CollisionObject2D
+	# synchronously triggers a physics server error.
+	queue_free.call_deferred()
