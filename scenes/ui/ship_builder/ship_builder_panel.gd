@@ -6,6 +6,8 @@ const GRID_CELL_SIZE: float = 14.0
 const GRID_PIXEL_WIDTH: float = 640.0
 const GRID_PIXEL_HEIGHT: float = 260.0
 
+const SAVE_DIRECTORY: String = "user://ships"
+
 var template_layout: ShipLayout
 var working_layout: ShipLayout
 
@@ -18,6 +20,7 @@ var _status_label: Label
 var _stats_label: Label
 var _grid: HexGridControl
 var _palette_buttons: Dictionary = {}
+var _save_name_edit: LineEdit
 
 
 func _ready() -> void:
@@ -109,6 +112,22 @@ func _build_ui() -> void:
 	validate_button.text = "Validate Layout"
 	validate_button.pressed.connect(_on_validate_pressed)
 	actions.add_child(validate_button)
+
+	_save_name_edit = LineEdit.new()
+	_save_name_edit.placeholder_text = "ship name"
+	_save_name_edit.text = "my_ship"
+	_save_name_edit.custom_minimum_size = Vector2(120, 0)
+	actions.add_child(_save_name_edit)
+
+	var save_button := Button.new()
+	save_button.text = "Save"
+	save_button.pressed.connect(_on_save_pressed)
+	actions.add_child(save_button)
+
+	var load_button := Button.new()
+	load_button.text = "Load"
+	load_button.pressed.connect(_on_load_pressed)
+	actions.add_child(load_button)
 
 
 func _on_palette_pressed(module_type_id: String) -> void:
@@ -249,3 +268,45 @@ func _on_validate_pressed() -> void:
 		_status_label.text = "Layout OK."
 	else:
 		_status_label.text = "Issues: %s" % "; ".join(issues)
+
+
+func _on_save_pressed() -> void:
+	var save_path: String = _get_save_path()
+	DirAccess.make_dir_recursive_absolute(SAVE_DIRECTORY)
+
+	var error: Error = ResourceSaver.save(working_layout, save_path)
+	if error != OK:
+		_status_label.text = "Save failed (error %d)." % error
+		return
+	_status_label.text = "Saved to %s." % save_path
+
+
+func _on_load_pressed() -> void:
+	var save_path: String = _get_save_path()
+	if not FileAccess.file_exists(save_path):
+		_status_label.text = "No saved ship named '%s'." % _save_name_edit.text
+		return
+
+	var loaded: ShipLayout = ResourceLoader.load(save_path, "ShipLayout", ResourceLoader.CACHE_MODE_REPLACE)
+	if loaded == null:
+		_status_label.text = "Load failed."
+		return
+
+	working_layout = loaded.duplicate(true)
+	_grid.layout = working_layout
+	_grid.selected_placement_id = ""
+	_selected_type_id = ""
+	for id in _palette_buttons:
+		_palette_buttons[id].button_pressed = false
+	_status_label.text = "Loaded '%s'." % _save_name_edit.text
+	_refresh()
+
+
+func _get_save_path() -> String:
+	var sanitized: String = ""
+	for character in _save_name_edit.text:
+		if character.is_valid_identifier() or character == "-":
+			sanitized += character
+	if sanitized.is_empty():
+		sanitized = "ship"
+	return "%s/%s.tres" % [SAVE_DIRECTORY, sanitized]
