@@ -6,6 +6,10 @@ const COLUMN_SPACING: float = 30.0
 const ROW_SPACING: float = 50.0
 const HEADER_HEIGHT: float = 30.0
 
+## Only lets the upgrade panel open near the region's home base marker,
+## matching the ship builder's gating.
+@export var home_base_range: float = 300.0
+
 var _ship: Ship
 var _manager: UpgradeManager
 var _buttons: Dictionary = {}
@@ -28,8 +32,22 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_upgrades"):
-		visible = not visible
+	if not event.is_action_pressed("toggle_upgrades"):
+		return
+
+	if visible:
+		visible = false
+		return
+
+	if _is_near_home_base():
+		visible = true
+
+
+func _is_near_home_base() -> bool:
+	var home_bases: Array = get_tree().get_nodes_in_group("home_base")
+	if _ship == null or home_bases.is_empty():
+		return false
+	return _ship.global_position.distance_to(home_bases[0].global_position) <= home_base_range
 
 
 func _build_ui() -> void:

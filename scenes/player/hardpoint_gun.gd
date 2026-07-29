@@ -19,7 +19,7 @@ const TIER_DAMAGE_MULTIPLIER: Array[float] = [1.0, 1.0, 1.8, 2.8]
 const TIER_FIRE_RATE_MULTIPLIER: Array[float] = [1.0, 1.0, 0.8, 0.6]
 const TIER_RECOIL_MULTIPLIER: Array[float] = [1.0, 1.0, 1.5, 2.2]
 const TIER_VISUAL_SCALE: Array[float] = [1.0, 1.0, 1.4, 1.8]
-const TIER_PROJECTILE_SCALE_MULTIPLIER: Array[float] = [1.0, 1.0, 1.2, 1.5]
+const TIER_PROJECTILE_SCALE_MULTIPLIER: Array[float] = [1.0, 1.0, 1.4, 2.0]
 
 ## Scales the spawned projectile's whole node (visual and collision shape
 ## alike, since both are sized relative to this transform), so bigger-tier
@@ -89,6 +89,9 @@ func fire() -> Projectile:
 	projectile.color = projectile_color
 	projectile.damage = projectile_damage
 	projectile.scale = Vector2.ONE * projectile_scale
+	# Bigger-tier projectiles should leave a bigger impact burst, not just a
+	# bigger travelling shot.
+	projectile.explosion_scale *= projectile_scale
 	get_tree().current_scene.add_child(projectile)
 	projectile.global_position = _muzzle.global_position
 	projectile.global_rotation = _muzzle.global_rotation

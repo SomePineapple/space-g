@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_pnpfe"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_jpvgh"]
+
+[sub_resource type="Resource" id="Resource_a47nf"]
+script = ExtResource("1_pnpfe")
+placement_id = "core"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_ld41h"]
+script = ExtResource("1_pnpfe")
+placement_id = "p_2_10770"
+module_type_id = "hull"
+hex_coord = Vector2i(-1, 1)
+
+[sub_resource type="Resource" id="Resource_b86in"]
+script = ExtResource("1_pnpfe")
+placement_id = "p_3_46675"
+module_type_id = "hull"
+hex_coord = Vector2i(0, 1)
+
+[sub_resource type="Resource" id="Resource_5kr5h"]
+script = ExtResource("1_pnpfe")
+placement_id = "p_7_70893"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_n3rmj"]
+script = ExtResource("1_pnpfe")
+placement_id = "p_8_28698"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_uqo5x"]
+script = ExtResource("1_pnpfe")
+placement_id = "p_5_16982"
+module_type_id = "engine"
+hex_coord = Vector2i(-2, 2)
+
+[sub_resource type="Resource" id="Resource_00tmk"]
+script = ExtResource("1_pnpfe")
+placement_id = "p_6_3046"
+module_type_id = "engine"
+hex_coord = Vector2i(0, 2)
+
+[resource]
+script = ExtResource("2_jpvgh")
+placements = Array[ExtResource("1_pnpfe")]([SubResource("Resource_a47nf"), SubResource("Resource_ld41h"), SubResource("Resource_b86in"), SubResource("Resource_5kr5h"), SubResource("Resource_n3rmj"), SubResource("Resource_uqo5x"), SubResource("Resource_00tmk")])
+core_placement_id = "core"

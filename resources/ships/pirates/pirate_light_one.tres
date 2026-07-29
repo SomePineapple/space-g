@@ -1,0 +1,62 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_bris7"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_agjf3"]
+
+[sub_resource type="Resource" id="Resource_fmcu5"]
+script = ExtResource("1_bris7")
+placement_id = "core"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_tmd4l"]
+script = ExtResource("1_bris7")
+placement_id = "p_2_10770"
+module_type_id = "hull"
+hex_coord = Vector2i(-1, 1)
+
+[sub_resource type="Resource" id="Resource_alupn"]
+script = ExtResource("1_bris7")
+placement_id = "p_3_46675"
+module_type_id = "hull"
+hex_coord = Vector2i(0, 1)
+
+[sub_resource type="Resource" id="Resource_8qhlp"]
+script = ExtResource("1_bris7")
+placement_id = "p_5_46981"
+module_type_id = "hull"
+hex_coord = Vector2i(0, -1)
+
+[sub_resource type="Resource" id="Resource_smlud"]
+script = ExtResource("1_bris7")
+placement_id = "p_6_53566"
+module_type_id = "hull"
+hex_coord = Vector2i(1, -1)
+
+[sub_resource type="Resource" id="Resource_6bbbq"]
+script = ExtResource("1_bris7")
+placement_id = "p_5_72481"
+module_type_id = "engine"
+hex_coord = Vector2i(-1, -1)
+
+[sub_resource type="Resource" id="Resource_sm28b"]
+script = ExtResource("1_bris7")
+placement_id = "p_6_89848"
+module_type_id = "engine"
+hex_coord = Vector2i(2, -1)
+
+[sub_resource type="Resource" id="Resource_1wuia"]
+script = ExtResource("1_bris7")
+placement_id = "p_7_70893"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_3de6w"]
+script = ExtResource("1_bris7")
+placement_id = "p_8_28698"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(1, 0)
+
+[resource]
+script = ExtResource("2_agjf3")
+placements = Array[ExtResource("1_bris7")]([SubResource("Resource_fmcu5"), SubResource("Resource_tmd4l"), SubResource("Resource_alupn"), SubResource("Resource_8qhlp"), SubResource("Resource_smlud"), SubResource("Resource_6bbbq"), SubResource("Resource_sm28b"), SubResource("Resource_1wuia"), SubResource("Resource_3de6w")])
+core_placement_id = "core"

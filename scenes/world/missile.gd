@@ -38,6 +38,23 @@ var _homing_elapsed: float = 0.0
 var _current_speed: float = 0.0
 var _travel_direction: Vector2 = Vector2.RIGHT
 
+@onready var _trail: GPUParticles2D = $Trail
+
+
+## GPUParticles2D billboard size doesn't follow this node's Node2D.scale
+## (unlike the Polygon2D visual and collision shape), since the trail runs in
+## global coordinates rather than local. Tier-scaled missiles would otherwise
+## keep a same-size trail regardless of projectile size, so the process
+## material's particle scale is resized to match here instead. Duplicated
+## first since Godot caches one process_material per scene, shared by every
+## instance.
+func _ready() -> void:
+	super._ready()
+	var trail_material: ParticleProcessMaterial = _trail.process_material.duplicate()
+	trail_material.scale_min *= scale.x
+	trail_material.scale_max *= scale.x
+	_trail.process_material = trail_material
+
 
 ## Locks in an inaccuracy-offset target point, and sets the missile's launch
 ## heading to the angle from the shooter's cockpit (center) out to this

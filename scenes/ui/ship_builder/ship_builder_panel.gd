@@ -8,6 +8,10 @@ const GRID_PIXEL_HEIGHT: float = 260.0
 
 const SAVE_DIRECTORY: String = "user://ships"
 
+## Only lets the builder open near the region's home base marker, so
+## building/spending happens at a fixed "home", not mid-flight anywhere.
+@export var home_base_range: float = 300.0
+
 var template_layout: ShipLayout
 var working_layout: ShipLayout
 
@@ -35,10 +39,24 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_builder"):
-		visible = not visible
-		if not visible:
-			_apply_to_player_ship()
+	if not event.is_action_pressed("toggle_builder"):
+		return
+
+	if visible:
+		visible = false
+		_apply_to_player_ship()
+		return
+
+	if _is_near_home_base():
+		visible = true
+
+
+func _is_near_home_base() -> bool:
+	var players: Array = get_tree().get_nodes_in_group("player_ship")
+	var home_bases: Array = get_tree().get_nodes_in_group("home_base")
+	if players.is_empty() or home_bases.is_empty():
+		return false
+	return players[0].global_position.distance_to(home_bases[0].global_position) <= home_base_range
 
 
 func _apply_to_player_ship() -> void:

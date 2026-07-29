@@ -1,0 +1,151 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_ry16u"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_xt81p"]
+
+[sub_resource type="Resource" id="Resource_qsesr"]
+script = ExtResource("1_ry16u")
+placement_id = "core"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_ia72c"]
+script = ExtResource("1_ry16u")
+placement_id = "hull_a"
+module_type_id = "hull"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_8vd5f"]
+script = ExtResource("1_ry16u")
+placement_id = "hull_b"
+module_type_id = "hull"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_852mk"]
+script = ExtResource("1_ry16u")
+placement_id = "engine_a"
+module_type_id = "engine"
+hex_coord = Vector2i(0, 1)
+
+[sub_resource type="Resource" id="Resource_lkq46"]
+script = ExtResource("1_ry16u")
+placement_id = "weapon_a"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(1, -1)
+
+[sub_resource type="Resource" id="Resource_tm4pl"]
+script = ExtResource("1_ry16u")
+placement_id = "missile_a"
+module_type_id = "missile_hardpoint"
+hex_coord = Vector2i(0, -1)
+
+[sub_resource type="Resource" id="Resource_h2pl0"]
+script = ExtResource("1_ry16u")
+placement_id = "p_6_16995"
+module_type_id = "missile_hardpoint_t3"
+hex_coord = Vector2i(-2, -1)
+rotation_steps = 1
+
+[sub_resource type="Resource" id="Resource_td5ro"]
+script = ExtResource("1_ry16u")
+placement_id = "p_7_4342"
+module_type_id = "missile_hardpoint_t3"
+hex_coord = Vector2i(3, -1)
+rotation_steps = 2
+
+[sub_resource type="Resource" id="Resource_wlvyk"]
+script = ExtResource("1_ry16u")
+placement_id = "p_8_61715"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(-2, -2)
+
+[sub_resource type="Resource" id="Resource_gecgn"]
+script = ExtResource("1_ry16u")
+placement_id = "p_9_85861"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(2, -2)
+
+[sub_resource type="Resource" id="Resource_ipmii"]
+script = ExtResource("1_ry16u")
+placement_id = "p_10_2620"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(-1, -3)
+
+[sub_resource type="Resource" id="Resource_gwo7u"]
+script = ExtResource("1_ry16u")
+placement_id = "p_11_7333"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(2, -3)
+
+[sub_resource type="Resource" id="Resource_k1h3v"]
+script = ExtResource("1_ry16u")
+placement_id = "p_12_23674"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(-3, 0)
+rotation_steps = 1
+
+[sub_resource type="Resource" id="Resource_g4qkk"]
+script = ExtResource("1_ry16u")
+placement_id = "p_13_90207"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(3, 0)
+rotation_steps = 2
+
+[sub_resource type="Resource" id="Resource_l8c28"]
+script = ExtResource("1_ry16u")
+placement_id = "p_14_28640"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(0, 2)
+rotation_steps = 3
+
+[sub_resource type="Resource" id="Resource_hvitr"]
+script = ExtResource("1_ry16u")
+placement_id = "p_15_73620"
+module_type_id = "engine"
+hex_coord = Vector2i(-3, 3)
+
+[sub_resource type="Resource" id="Resource_5p3rl"]
+script = ExtResource("1_ry16u")
+placement_id = "p_16_39349"
+module_type_id = "engine"
+hex_coord = Vector2i(-2, 3)
+
+[sub_resource type="Resource" id="Resource_rdiia"]
+script = ExtResource("1_ry16u")
+placement_id = "p_17_8001"
+module_type_id = "engine"
+hex_coord = Vector2i(-1, 3)
+
+[sub_resource type="Resource" id="Resource_dpjgv"]
+script = ExtResource("1_ry16u")
+placement_id = "p_18_72674"
+module_type_id = "engine"
+hex_coord = Vector2i(0, 3)
+
+[sub_resource type="Resource" id="Resource_0s4lo"]
+script = ExtResource("1_ry16u")
+placement_id = "p_19_69529"
+module_type_id = "engine"
+hex_coord = Vector2i(-3, -1)
+
+[sub_resource type="Resource" id="Resource_g8q10"]
+script = ExtResource("1_ry16u")
+placement_id = "p_20_67972"
+module_type_id = "engine"
+hex_coord = Vector2i(4, -1)
+
+[sub_resource type="Resource" id="Resource_6ucqq"]
+script = ExtResource("1_ry16u")
+placement_id = "p_21_19580"
+module_type_id = "engine"
+hex_coord = Vector2i(-4, 1)
+
+[sub_resource type="Resource" id="Resource_k8r0m"]
+script = ExtResource("1_ry16u")
+placement_id = "p_22_11851"
+module_type_id = "engine"
+hex_coord = Vector2i(3, 1)
+
+[resource]
+script = ExtResource("2_xt81p")
+placements = Array[ExtResource("1_ry16u")]([SubResource("Resource_qsesr"), SubResource("Resource_ia72c"), SubResource("Resource_8vd5f"), SubResource("Resource_852mk"), SubResource("Resource_lkq46"), SubResource("Resource_tm4pl"), SubResource("Resource_h2pl0"), SubResource("Resource_td5ro"), SubResource("Resource_wlvyk"), SubResource("Resource_gecgn"), SubResource("Resource_ipmii"), SubResource("Resource_gwo7u"), SubResource("Resource_k1h3v"), SubResource("Resource_g4qkk"), SubResource("Resource_l8c28"), SubResource("Resource_hvitr"), SubResource("Resource_5p3rl"), SubResource("Resource_rdiia"), SubResource("Resource_dpjgv"), SubResource("Resource_0s4lo"), SubResource("Resource_g8q10"), SubResource("Resource_6ucqq"), SubResource("Resource_k8r0m")])
+core_placement_id = "core"

@@ -4,7 +4,7 @@ extends Area2D
 @export var speed: float = 700.0
 @export var lifetime: float = 2.0
 @export var explosion_scene: PackedScene = preload("res://scenes/world/explosion.tscn")
-@export var explosion_scale: float = 0.2
+@export var explosion_scale: float = 0.35
 @export var damage: float = 10.0
 
 @export var color: Color = Color(1, 1, 1, 1):
