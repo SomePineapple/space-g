@@ -9,3 +9,5 @@ script = ExtResource("1_launcher")
 color = Color(1, 0.6, 0.15, 1)
 
 [node name="Muzzle" type="Marker2D" parent="."]
+
+[node name="FireSound" type="AudioStreamPlayer2D" parent="."]

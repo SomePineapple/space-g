@@ -17,6 +17,9 @@ signal layout_applied
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
 @export var hit_flash_color: Color = Color(1, 1, 1, 1)
 @export var hit_flash_duration: float = 0.12
+## Left unassigned by default (no audio assets yet); assign a stream once
+## one exists and taking damage will play it automatically.
+@export var hit_sound: AudioStream = null
 @export var ship_layout: ShipLayout = preload("res://resources/ships/starter_ship_layout.tres")
 @export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
 @export var hardpoint_gun_scene: PackedScene = preload("res://scenes/player/hardpoint_gun.tscn")
@@ -38,10 +41,12 @@ var _weapon_upgrade_modifiers: Dictionary = {}
 var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
+var _last_known_health: float = -1.0
 
 @onready var _health: Health = $Health
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
 @onready var _inventory: Inventory = $Inventory
+@onready var _hit_sound_player: AudioStreamPlayer2D = $HitSound
 
 
 func _ready() -> void:
@@ -123,10 +128,12 @@ func _spawn_hardpoint_guns() -> void:
 	_hardpoint_guns.clear()
 
 	for placement in ship_layout.get_weapon_hardpoint_placements():
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		var gun: HardpointGun = hardpoint_gun_scene.instantiate()
 		add_child(gun)
-		gun.position = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
-		gun.set_cell_size(_hull_renderer.cell_size)
+		gun.position = _hardpoint_center(placement)
+		gun.set_cell_size(_hull_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
+		gun.apply_tier(module_type.tier)
 		gun.setup(self)
 		for property_name in _weapon_upgrade_modifiers:
 			gun.set(property_name, gun.get(property_name) + _weapon_upgrade_modifiers[property_name])
@@ -139,14 +146,28 @@ func _spawn_missile_launchers() -> void:
 	_missile_launchers.clear()
 
 	for placement in ship_layout.get_missile_hardpoint_placements():
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		var launcher: HardpointMissileLauncher = hardpoint_missile_launcher_scene.instantiate()
 		add_child(launcher)
-		launcher.position = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
-		launcher.set_cell_size(_hull_renderer.cell_size)
+		launcher.position = _hardpoint_center(placement)
+		launcher.set_cell_size(_hull_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
+		launcher.apply_tier(module_type.tier)
 		launcher.setup(self)
 		for property_name in _missile_upgrade_modifiers:
 			launcher.set(property_name, launcher.get(property_name) + _missile_upgrade_modifiers[property_name])
 		_missile_launchers.append(launcher)
+
+
+## Centroid of a hardpoint's occupied cells, so multi-hex (tier 2/3)
+## hardpoints mount their gun/launcher in the middle of their footprint
+## rather than at the anchor cell's corner.
+func _hardpoint_center(placement: ModulePlacement) -> Vector2:
+	var occupied_cells: Array[Vector2i] = ship_layout.get_occupied_cells(placement)
+	var center_local: Vector2 = Vector2.ZERO
+	for cell in occupied_cells:
+		center_local += HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
+	center_local /= occupied_cells.size()
+	return center_local.rotated(_hull_renderer.rotation)
 
 
 ## Routes "Weapon" upgrade-tree modifiers to every mounted hardpoint gun
@@ -174,7 +195,17 @@ func get_aim_target() -> Vector2:
 	return _aim_target if _has_aim_target else global_position + transform.x * 1000.0
 
 
-func _on_health_changed(_current: float, _max: float) -> void:
+## Only current < last-known counts as damage — configure() (ship rebuilds
+## in the builder) also emits health_changed, but resets to full health
+## rather than lowering it, so it never falls through to the hit feedback.
+func _on_health_changed(current: float, _max: float) -> void:
+	var took_damage: bool = _last_known_health >= 0.0 and current < _last_known_health
+	_last_known_health = current
+
+	if took_damage and hit_sound != null:
+		_hit_sound_player.stream = hit_sound
+		_hit_sound_player.play()
+
 	if _flash_tween:
 		_flash_tween.kill()
 	_hull_renderer.modulate = hit_flash_color

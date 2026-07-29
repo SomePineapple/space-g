@@ -21,6 +21,7 @@ var _stats_label: Label
 var _grid: HexGridControl
 var _palette_buttons: Dictionary = {}
 var _save_name_edit: LineEdit
+var _saved_list: ItemList
 
 
 func _ready() -> void:
@@ -128,6 +129,13 @@ func _build_ui() -> void:
 	load_button.text = "Load"
 	load_button.pressed.connect(_on_load_pressed)
 	actions.add_child(load_button)
+
+	_saved_list = ItemList.new()
+	_saved_list.position = Vector2(0, 88 + GRID_PIXEL_HEIGHT + 40)
+	_saved_list.size = Vector2(GRID_PIXEL_WIDTH, 100)
+	_saved_list.item_selected.connect(_on_saved_item_selected)
+	panel.add_child(_saved_list)
+	_refresh_saved_list()
 
 
 func _on_palette_pressed(module_type_id: String) -> void:
@@ -279,6 +287,7 @@ func _on_save_pressed() -> void:
 		_status_label.text = "Save failed (error %d)." % error
 		return
 	_status_label.text = "Saved to %s." % save_path
+	_refresh_saved_list()
 
 
 func _on_load_pressed() -> void:
@@ -300,6 +309,26 @@ func _on_load_pressed() -> void:
 		_palette_buttons[id].button_pressed = false
 	_status_label.text = "Loaded '%s'." % _save_name_edit.text
 	_refresh()
+
+
+func _on_saved_item_selected(index: int) -> void:
+	_save_name_edit.text = _saved_list.get_item_text(index)
+	_on_load_pressed()
+
+
+func _refresh_saved_list() -> void:
+	_saved_list.clear()
+	var dir: DirAccess = DirAccess.open(SAVE_DIRECTORY)
+	if dir == null:
+		return
+
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if file_name.ends_with(".tres"):
+			_saved_list.add_item(file_name.trim_suffix(".tres"))
+		file_name = dir.get_next()
+	dir.list_dir_end()
 
 
 func _get_save_path() -> String:

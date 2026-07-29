@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="1_ship"]
+[ext_resource type="Script" path="res://scenes/enemies/missile_cruiser_ai.gd" id="2_ai"]
+[ext_resource type="Resource" path="res://resources/ships/missile_cruiser_layout.tres" id="3_layout"]
+
+[node name="MissileCruiser" instance=ExtResource("1_ship")]
+ship_layout = ExtResource("3_layout")
+
+[node name="AIInput" type="Node" parent="." index="5"]
+script = ExtResource("2_ai")

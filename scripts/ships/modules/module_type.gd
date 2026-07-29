@@ -9,3 +9,11 @@ extends Resource
 @export var mass_contribution: float = 0.0
 @export var health_contribution: float = 0.0
 @export var thrust_contribution: float = 0.0
+
+## "weapon" or "missile" for hardpoint modules (any tier), "" otherwise.
+## Lets ShipLayout find all hardpoints of a kind without hard-coding every
+## tier's module id.
+@export var hardpoint_category: String = ""
+## Hardpoint size tier (1-3). Scales the spawned gun/launcher's stats and
+## visual size; ignored for non-hardpoint modules.
+@export var tier: int = 1

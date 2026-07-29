@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3 uid="uid://c1v6qk5dqp5jw"]
+
+[ext_resource type="Script" uid="uid://dvxmcqefbs8g8" path="res://scripts/ships/layout/ship_layout.gd" id="1_layout"]
+[ext_resource type="Script" uid="uid://b6qe4yx2c6t2d" path="res://scripts/ships/modules/module_placement.gd" id="2_placement"]
+
+[sub_resource type="Resource" id="Resource_core"]
+script = ExtResource("2_placement")
+placement_id = "core"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_heavy_hull"]
+script = ExtResource("2_placement")
+placement_id = "heavy_hull_a"
+module_type_id = "heavy_hull"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_engine"]
+script = ExtResource("2_placement")
+placement_id = "engine_a"
+module_type_id = "engine"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_missile_a"]
+script = ExtResource("2_placement")
+placement_id = "missile_a"
+module_type_id = "missile_hardpoint"
+hex_coord = Vector2i(0, -1)
+
+[sub_resource type="Resource" id="Resource_missile_b"]
+script = ExtResource("2_placement")
+placement_id = "missile_b"
+module_type_id = "missile_hardpoint"
+hex_coord = Vector2i(0, 1)
+
+[resource]
+script = ExtResource("1_layout")
+placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_heavy_hull"), SubResource("Resource_engine"), SubResource("Resource_missile_a"), SubResource("Resource_missile_b")])
+core_placement_id = "core"

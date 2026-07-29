@@ -42,17 +42,20 @@ func get_thruster_placements() -> Array[ModulePlacement]:
 
 
 func get_weapon_hardpoint_placements() -> Array[ModulePlacement]:
-	var hardpoints: Array[ModulePlacement] = []
-	for placement in placements:
-		if placement.module_type_id == ModuleCatalog.WEAPON_HARDPOINT_TYPE_ID:
-			hardpoints.append(placement)
-	return hardpoints
+	return _get_hardpoint_placements("weapon")
 
 
 func get_missile_hardpoint_placements() -> Array[ModulePlacement]:
+	return _get_hardpoint_placements("missile")
+
+
+## Matches by ModuleType.hardpoint_category rather than a single fixed id,
+## so any tier of weapon/missile hardpoint is found without new lookup code.
+func _get_hardpoint_placements(hardpoint_category: String) -> Array[ModulePlacement]:
 	var hardpoints: Array[ModulePlacement] = []
 	for placement in placements:
-		if placement.module_type_id == ModuleCatalog.MISSILE_HARDPOINT_TYPE_ID:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null and module_type.hardpoint_category == hardpoint_category:
 			hardpoints.append(placement)
 	return hardpoints
 

@@ -21,6 +21,9 @@ const DANGER_PULSE_STRENGTH: float = 0.7
 @export var drift_speed: float = 20.0
 @export var is_dangerous: bool = false
 @export var danger_damage: float = 15.0
+## Left unassigned by default (no audio assets yet); assign a stream once
+## one exists and collecting salvage will play it automatically.
+@export var pickup_sound: AudioStream = null
 
 var salvage_value: int = 10
 var _drift_direction: Vector2 = Vector2.ZERO
@@ -65,4 +68,21 @@ func _on_body_entered(body: Node) -> void:
 	if is_dangerous and body.has_method("take_damage"):
 		body.take_damage(danger_damage)
 	collected.emit(salvage_value)
-	queue_free()
+	_play_pickup_sound()
+	# Deferred: this runs from within the physics engine's collision query
+	# flush (body_entered), where freeing a CollisionObject2D synchronously
+	# triggers a physics server error.
+	queue_free.call_deferred()
+
+
+## Spawned detached (rather than as a child) so the sound survives this
+## node's own queue_free() and can finish playing before it frees itself.
+func _play_pickup_sound() -> void:
+	if pickup_sound == null:
+		return
+	var player := AudioStreamPlayer2D.new()
+	player.stream = pickup_sound
+	player.global_position = global_position
+	get_tree().current_scene.add_child(player)
+	player.play()
+	player.finished.connect(player.queue_free)

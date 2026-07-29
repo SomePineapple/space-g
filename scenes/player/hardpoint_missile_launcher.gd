@@ -37,8 +37,10 @@ func _ready() -> void:
 
 
 ## Missiles now spawn from the hex's centre (matching the silo hole in the
-## hex art) rather than a raised barrel tip.
-func set_cell_size(_cell_size: float) -> void:
+## hex art) rather than a raised barrel tip. tier_scale is accepted for a
+## consistent signature with HardpointGun, but the silo has no directional
+## barrel to resize.
+func set_cell_size(_cell_size: float, _tier_scale: float = 1.0) -> void:
 	_muzzle.position = Vector2.ZERO
 
 

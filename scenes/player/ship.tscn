@@ -17,6 +17,8 @@ script = ExtResource("8_hullrend")
 [node name="Health" type="Node" parent="." unique_id=546496258]
 script = ExtResource("8_5lh7k")
 
+[node name="HitSound" type="AudioStreamPlayer2D" parent="."]
+
 [node name="TractorBeam" type="Node2D" parent="." unique_id=2091864127]
 script = ExtResource("9_tf6ds")
 
