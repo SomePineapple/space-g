@@ -15,6 +15,8 @@ const SAVE_DIRECTORY: String = "user://ships"
 var template_layout: ShipLayout
 var working_layout: ShipLayout
 
+var _inventory: Inventory
+
 var _selected_type_id: String = ""
 var _pending_rotation: int = 0
 var _has_hover: bool = false
@@ -36,6 +38,10 @@ func _ready() -> void:
 
 	template_layout = load("res://resources/ships/starter_ship_layout.tres")
 	working_layout = template_layout.duplicate(true)
+
+	var players: Array = get_tree().get_nodes_in_group("player_ship")
+	if not players.is_empty():
+		_inventory = players[0].get_node("Inventory")
 
 	_build_ui()
 	_refresh()
@@ -103,7 +109,7 @@ func _build_ui() -> void:
 
 	for module_type in ModuleCatalog.get_all():
 		var button := Button.new()
-		button.text = module_type.display_name
+		button.text = "%s\n%s" % [module_type.display_name, _format_costs(module_type.build_costs)]
 		button.toggle_mode = true
 		button.pressed.connect(_on_palette_pressed.bind(module_type.id))
 		palette.add_child(button)
@@ -230,8 +236,15 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_status_label.text = "Cannot place: %s" % reason
 		return
 
+	var type_to_place: ModuleType = ModuleCatalog.get_by_id(_selected_type_id)
+	if _inventory != null and not _inventory.has_materials(type_to_place.build_costs):
+		_status_label.text = "Cannot place %s: need %s" % [type_to_place.display_name, _format_costs(type_to_place.build_costs)]
+		return
+
 	working_layout.place(_selected_type_id, hex_coord, _pending_rotation)
-	_status_label.text = "Placed %s." % ModuleCatalog.get_by_id(_selected_type_id).display_name
+	if _inventory != null:
+		_inventory.spend_materials(type_to_place.build_costs)
+	_status_label.text = "Placed %s." % type_to_place.display_name
 	_pending_rotation = 0
 	_refresh()
 	_grid.clear_preview()
@@ -285,15 +298,31 @@ func _on_remove_pressed() -> void:
 		_status_label.text = "Cannot remove: %s" % reason
 		return
 
+	var removed_placement: ModulePlacement = working_layout.get_placement_by_id(_grid.selected_placement_id)
+	var removed_type: ModuleType = ModuleCatalog.get_by_id(removed_placement.module_type_id)
+
 	working_layout.remove(_grid.selected_placement_id)
 	_grid.selected_placement_id = ""
-	_status_label.text = "Removed."
+
+	if _inventory != null:
+		for material_id in removed_type.build_costs:
+			_inventory.add_material(material_id, removed_type.build_costs[material_id])
+		_status_label.text = "Removed. Refunded %s." % _format_costs(removed_type.build_costs)
+	else:
+		_status_label.text = "Removed."
 	_refresh()
 
 
 func _refresh() -> void:
 	_grid.refresh()
 	_stats_label.text = "Max Health: %d   Mass: %.2f" % [working_layout.total_max_health(), working_layout.total_mass()]
+
+
+func _format_costs(costs: Dictionary) -> String:
+	var parts: Array = []
+	for material_id in costs:
+		parts.append("%d %s" % [costs[material_id], Materials.display_name(material_id)])
+	return ", ".join(parts)
 
 
 func _on_validate_pressed() -> void:

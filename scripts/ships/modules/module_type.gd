@@ -17,3 +17,5 @@ extends Resource
 ## Hardpoint size tier (1-3). Scales the spawned gun/launcher's stats and
 ## visual size; ignored for non-hardpoint modules.
 @export var tier: int = 1
+## Material id -> amount required to place this module in the ship builder.
+@export var build_costs: Dictionary = {}
