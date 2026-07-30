@@ -17,6 +17,9 @@ var _buttons: Dictionary = {}
 
 func _ready() -> void:
 	visible = false
+	# So gameplay input (ship_input.gd) can suspend itself while any menu is
+	# open, without hard-coding a reference to this specific panel.
+	add_to_group("menu_panel")
 
 	var players: Array = get_tree().get_nodes_in_group("player_ship")
 	if players.is_empty():

@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="ShipLayout" format=3]
+[gd_resource type="Resource" script_class="ShipLayout" format=3 uid="uid://cyiak0pyikau0"]
 
-[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_bris7"]
-[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_agjf3"]
+[ext_resource type="Script" uid="uid://b6qe4yx2c6t2d" path="res://scripts/ships/modules/module_placement.gd" id="1_bris7"]
+[ext_resource type="Script" uid="uid://dvxmcqefbs8g8" path="res://scripts/ships/layout/ship_layout.gd" id="2_agjf3"]
 
 [sub_resource type="Resource" id="Resource_fmcu5"]
 script = ExtResource("1_bris7")

@@ -7,8 +7,8 @@ extends HardpointGun
 ## upgrade tree via Ship.apply_missile_modifier(), same as projectile_speed.
 @export var missile_acceleration: float = 900.0
 @export var ignition_delay: float = 1.2
-@export var turn_rate_min: float = 1.0
-@export var turn_rate_max: float = 5.0
+@export var turn_rate_min: float = 0.35
+@export var turn_rate_max: float = 1.5
 @export var turn_rate_ramp_time: float = 0.6
 @export var max_miss_offset_ratio: float = 0.2
 @export var miss_chance: float = 0.3
@@ -24,7 +24,9 @@ extends HardpointGun
 func _ready() -> void:
 	projectile_scene = missile_scene
 	fire_rate = 1.0
-	projectile_speed = 450.0
+	# Lowered by a third from the original 450 so missiles are dodgeable
+	# rather than essentially guaranteed hits.
+	projectile_speed = 300.0
 	# Missiles spew straight up out of a fixed tube rather than being fired
 	# like a gun, so there's no reaction kick into the ship.
 	recoil_force = 0.0
@@ -61,5 +63,10 @@ func fire() -> Projectile:
 		missile.miss_chance = miss_chance
 		missile.lifetime = randf_range(missile_lifetime - lifetime_variance, missile_lifetime)
 		missile.creep_acceleration = creep_acceleration
-		missile.set_target(_shooter.get_aim_target())
+
+		var locked_target: Node2D = _shooter.get_locked_target()
+		if locked_target != null:
+			missile.launch_toward(locked_target)
+		else:
+			missile.launch_outward()
 	return projectile

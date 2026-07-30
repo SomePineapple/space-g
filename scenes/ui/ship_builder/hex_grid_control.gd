@@ -114,20 +114,30 @@ func refresh() -> void:
 
 
 func is_in_bounds(hex_coord: Vector2i) -> bool:
-	var q_min: int = -grid_width / 2
 	var r_min: int = -grid_height / 2
-	return hex_coord.x >= q_min and hex_coord.x < q_min + grid_width \
-		and hex_coord.y >= r_min and hex_coord.y < r_min + grid_height
+	if hex_coord.y < r_min or hex_coord.y >= r_min + grid_height:
+		return false
+	var q_min: int = -grid_width / 2 - _row_q_offset(hex_coord.y)
+	return hex_coord.x >= q_min and hex_coord.x < q_min + grid_width
 
 
 func _all_coords_in_bounds() -> Array[Vector2i]:
 	var coords: Array[Vector2i] = []
-	var q_min: int = -grid_width / 2
 	var r_min: int = -grid_height / 2
-	for q in range(q_min, q_min + grid_width):
-		for r in range(r_min, r_min + grid_height):
+	for r in range(r_min, r_min + grid_height):
+		var q_min: int = -grid_width / 2 - _row_q_offset(r)
+		for q in range(q_min, q_min + grid_width):
 			coords.append(Vector2i(q, r))
 	return coords
+
+
+## Each axial row is horizontally offset by half a cell per row in pixel
+## space (see HexUtils.axial_to_pixel), so a plain fixed q-range per row
+## draws as a parallelogram with diagonal left/right edges. Shifting q_min
+## by this row offset instead produces a stepped, zig-zagging edge that
+## reads as an overall rectangle.
+func _row_q_offset(r: int) -> int:
+	return floori(r / 2.0)
 
 
 func _axial_to_pixel(hex_coord: Vector2i) -> Vector2:

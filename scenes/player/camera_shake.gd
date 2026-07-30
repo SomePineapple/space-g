@@ -4,11 +4,13 @@ extends Camera2D
 @export var destroyed_shake_strength: float = 20.0
 @export var shake_decay_rate: float = 40.0
 
-## Ship layout extent (see Ship.get_layout_extent()) at which zoom is 1.0 —
-## tuned to the starter ship's size, so default framing is unchanged.
+## Ship layout extent (see Ship.get_layout_extent()) at which zoom is
+## max_zoom — tuned to the starter ship's size.
 @export var reference_ship_extent: float = 66.0
 @export var min_zoom: float = 0.35
-@export var max_zoom: float = 1.0
+## Capped below 1.0 so even the smallest ship keeps a wide view of the
+## region (pirates, home base) rather than a tight close-up from the start.
+@export var max_zoom: float = 0.6
 @export var zoom_response: float = 3.0
 
 var _shake_strength: float = 0.0

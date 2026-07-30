@@ -1,11 +1,13 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="1_ship"]
-[ext_resource type="Script" path="res://scenes/enemies/ai_input.gd" id="2_ai"]
+[ext_resource type="Script" path="res://scenes/enemies/ship_ai.gd" id="2_ai"]
 [ext_resource type="Resource" path="res://resources/ships/pirates/pirate_light_two.tres" id="3_layout"]
+[ext_resource type="Resource" path="res://resources/ai/personality_rammer.tres" id="4_personality"]
 
-[node name="PirateLightTwo" instance=ExtResource("1_ship")]
+[node name="PirateLightTwo" groups=["enemy_ship", "lockable"] instance=ExtResource("1_ship")]
 ship_layout = ExtResource("3_layout")
+personality = ExtResource("4_personality")
 
 [node name="AIInput" type="Node" parent="." index="5"]
 script = ExtResource("2_ai")

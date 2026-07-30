@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/lock_on_indicator.gd" id="1_indicator"]
+
+[node name="LockOnIndicator" type="Node2D"]
+script = ExtResource("1_indicator")

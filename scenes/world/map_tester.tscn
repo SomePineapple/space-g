@@ -10,7 +10,7 @@
 [ext_resource type="PackedScene" uid="uid://b5udl06fbo3cy" path="res://scenes/ui/upgrade_panel.tscn" id="9_gc6po"]
 [ext_resource type="PackedScene" uid="uid://c8k2f6qh1w3xa" path="res://scenes/ui/ship_builder/ship_builder_panel.tscn" id="10_ja1me"]
 [ext_resource type="Script" uid="uid://bl25agppsdxej" path="res://scenes/world/enemy_spawner.gd" id="10_ojmk8"]
-[ext_resource type="Script" path="res://scenes/world/region_boundary.gd" id="11_boundary"]
+[ext_resource type="Script" uid="uid://cv8gwe3gh3n2o" path="res://scenes/world/region_boundary.gd" id="11_boundary"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_light_one.tscn" id="12_pirate_light"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_med_one.tscn" id="13_pirate_med"]
 
@@ -141,14 +141,14 @@ environment = SubResource("Environment_u02ng")
 [node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
 script = ExtResource("10_ojmk8")
 
-[node name="RegionBoundary" type="Node2D" parent="."]
+[node name="RegionBoundary" type="Node2D" parent="." unique_id=807573718]
 script = ExtResource("11_boundary")
 
-[node name="HomeBase" type="Marker2D" parent="." groups=["home_base"]]
+[node name="HomeBase" type="Marker2D" parent="." unique_id=1408683389 groups=["home_base"]]
 position = Vector2(0, -80)
 
-[node name="PirateLightOne" parent="." instance=ExtResource("12_pirate_light")]
+[node name="PirateLightOne" parent="." unique_id=1702620105 instance=ExtResource("12_pirate_light")]
 position = Vector2(1000, 750)
 
-[node name="PirateMedOne" parent="." instance=ExtResource("13_pirate_med")]
+[node name="PirateMedOne" parent="." unique_id=2030797357 instance=ExtResource("13_pirate_med")]
 position = Vector2(1180, 880)

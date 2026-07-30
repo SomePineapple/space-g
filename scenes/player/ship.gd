@@ -21,6 +21,10 @@ signal layout_applied
 ## one exists and taking damage will play it automatically.
 @export var hit_sound: AudioStream = null
 @export var ship_layout: ShipLayout = preload("res://resources/ships/starter_ship_layout.tres")
+## Defaults to USER (no AI behavior) since PlayerInput drives the player
+## ship; enemy scenes override this to a Rammer/Sniper/etc. resource so
+## ShipAI knows how to fly and fight.
+@export var personality: ShipPersonality = preload("res://resources/ai/personality_user.tres")
 @export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
 @export var hardpoint_gun_scene: PackedScene = preload("res://scenes/player/hardpoint_gun.tscn")
 @export var hardpoint_missile_launcher_scene: PackedScene = preload("res://scenes/player/hardpoint_missile_launcher.tscn")
@@ -41,6 +45,7 @@ var _weapon_upgrade_modifiers: Dictionary = {}
 var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
+var _locked_target: Node2D = null
 var _last_known_health: float = -1.0
 
 @onready var _health: Health = $Health
@@ -193,6 +198,20 @@ func set_aim_target(target: Vector2) -> void:
 
 func get_aim_target() -> Vector2:
 	return _aim_target if _has_aim_target else global_position + transform.x * 1000.0
+
+
+## The object homing missiles should steer toward: manually toggled by the
+## player's lock-on (see ship_input.gd) or automatically set to whatever an
+## AI ship is currently pursuing (see ship_ai.gd). Null means "no lock" —
+## HardpointMissileLauncher then fires unguided, straight-outward missiles.
+func set_locked_target(target: Node2D) -> void:
+	_locked_target = target
+
+
+func get_locked_target() -> Node2D:
+	if _locked_target != null and not is_instance_valid(_locked_target):
+		_locked_target = null
+	return _locked_target
 
 
 ## Only current < last-known counts as damage — configure() (ship rebuilds

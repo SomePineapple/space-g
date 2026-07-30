@@ -1,10 +1,10 @@
 extends CanvasLayer
 
 const GRID_COLS: int = 20
-const GRID_ROWS: int = 10
+const GRID_ROWS: int = 20
 const GRID_CELL_SIZE: float = 14.0
 const GRID_PIXEL_WIDTH: float = 640.0
-const GRID_PIXEL_HEIGHT: float = 260.0
+const GRID_PIXEL_HEIGHT: float = 470.0
 
 const SAVE_DIRECTORY: String = "user://ships"
 
@@ -30,6 +30,9 @@ var _saved_list: ItemList
 
 func _ready() -> void:
 	visible = false
+	# So gameplay input (ship_input.gd) can suspend itself while any menu is
+	# open, without hard-coding a reference to this specific panel.
+	add_to_group("menu_panel")
 
 	template_layout = load("res://resources/ships/starter_ship_layout.tres")
 	working_layout = template_layout.duplicate(true)
@@ -39,16 +42,21 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("toggle_builder"):
+	if event.is_action_pressed("toggle_builder"):
+		if visible:
+			visible = false
+			_apply_to_player_ship()
+		elif _is_near_home_base():
+			visible = true
 		return
 
-	if visible:
-		visible = false
-		_apply_to_player_ship()
+	if not visible:
 		return
 
-	if _is_near_home_base():
-		visible = true
+	if event.is_action_pressed("builder_rotate"):
+		_on_rotate_pressed()
+	elif event.is_action_pressed("builder_delete"):
+		_on_remove_pressed()
 
 
 func _is_near_home_base() -> bool:
