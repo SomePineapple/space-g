@@ -9,7 +9,7 @@ script = ExtResource("1_0mwgc")
 offset_left = 10.0
 offset_top = 10.0
 offset_right = 660.0
-offset_bottom = 82.0
+offset_bottom = 104.0
 color = Color(0.05, 0.07, 0.1, 0.55)
 
 [node name="SalvageLabel" type="Label" parent="." unique_id=610305732]
@@ -31,6 +31,16 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 22
 text = "Health: 0 / 0"
+
+[node name="EnergyLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 76.0
+offset_right = 21.0
+offset_bottom = 99.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 22
+text = "Energy: 0 / 0"
 
 [node name="DamageFlash" type="ColorRect" parent="."]
 show_behind_parent = false

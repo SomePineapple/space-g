@@ -4,11 +4,11 @@ const GRID_COLS: int = 20
 const GRID_ROWS: int = 20
 const GRID_CELL_SIZE: float = 14.0
 const GRID_PIXEL_WIDTH: float = 640.0
-const GRID_PIXEL_HEIGHT: float = 470.0
+const GRID_PIXEL_HEIGHT: float = 450.0
 
 const SAVE_DIRECTORY: String = "user://ships"
 
-const CONTENT_TOP: float = 84.0
+const CONTENT_TOP: float = 108.0
 const CONTENT_LEFT: float = 20.0
 const INFO_BAR_HEIGHT: float = 40.0
 const ACTIONS_HEIGHT: float = 34.0
@@ -38,6 +38,10 @@ var template_layout: ShipLayout
 var working_layout: ShipLayout
 
 var _inventory: Inventory
+## Only used to read base_energy_generation/base_energy_capacity so the
+## builder's energy stat matches what the ship will actually have once
+## applied — the working layout's own totals don't include that baseline.
+var _player_ship: Ship
 
 var _selected_type_id: String = ""
 var _pending_rotation: int = 0
@@ -64,6 +68,7 @@ func _ready() -> void:
 	var players: Array = get_tree().get_nodes_in_group("player_ship")
 	if not players.is_empty():
 		_inventory = players[0].get_node("Inventory")
+		_player_ship = players[0]
 
 	_build_ui()
 	_refresh()
@@ -405,7 +410,14 @@ func _on_remove_pressed() -> void:
 
 func _refresh() -> void:
 	_grid.refresh()
-	_stats_label.text = "Max Health: %d   Mass: %.2f" % [working_layout.total_max_health(), working_layout.total_mass()]
+
+	var base_generation: float = _player_ship.base_energy_generation if _player_ship != null else 0.0
+	var base_capacity: float = _player_ship.base_energy_capacity if _player_ship != null else 0.0
+	var energy_generation: float = base_generation + working_layout.total_energy_generation()
+	var energy_capacity: float = base_capacity + working_layout.total_energy_capacity()
+
+	_stats_label.text = "Max Health: %d   Mass: %.2f   Energy: +%.0f/s (cap %.0f)" % [
+		working_layout.total_max_health(), working_layout.total_mass(), energy_generation, energy_capacity]
 
 
 func _format_costs(costs: Dictionary) -> String:

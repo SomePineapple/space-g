@@ -19,3 +19,8 @@ extends Resource
 @export var tier: int = 1
 ## Material id -> amount required to place this module in the ship builder.
 @export var build_costs: Dictionary = {}
+
+## Energy/second this module adds to the ship's regeneration rate (reactors).
+@export var energy_generation: float = 0.0
+## Energy capacity this module adds to the ship's energy pool (batteries).
+@export var energy_capacity_contribution: float = 0.0

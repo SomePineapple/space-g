@@ -48,6 +48,15 @@ static func get_all() -> Array[ModuleType]:
 		1.2, 75.0, 0.0, null, "missile", 3,
 		{Materials.STEEL_ALLOY: 38, Materials.ELECTRONICS: 26, Materials.REACTOR_COMPONENTS: 10}))
 
+	types.append(_make("reactor_mk1", "Reactor Mk1", Color(1.0, 0.75, 0.2), SINGLE_CELL,
+		0.35, 25.0, 0.0, null, "", 1,
+		{Materials.STEEL_ALLOY: 15, Materials.ELECTRONICS: 15, Materials.REACTOR_COMPONENTS: 10},
+		15.0, 0.0))
+	types.append(_make("battery_mk1", "Battery Mk1", Color(0.85, 0.75, 0.95), SINGLE_CELL,
+		0.3, 20.0, 0.0, null, "", 1,
+		{Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 20},
+		0.0, 80.0))
+
 	return types
 
 
@@ -61,7 +70,8 @@ static func get_by_id(id: String) -> ModuleType:
 static func _make(id: String, display_name: String, color: Color, footprint_cells: Array[Vector2i],
 		mass_contribution: float = 0.0, health_contribution: float = 0.0, thrust_contribution: float = 0.0,
 		hex_texture: Texture2D = null, hardpoint_category: String = "", tier: int = 1,
-		build_costs: Dictionary = {}) -> ModuleType:
+		build_costs: Dictionary = {}, energy_generation: float = 0.0,
+		energy_capacity_contribution: float = 0.0) -> ModuleType:
 	var type := ModuleType.new()
 	type.id = id
 	type.display_name = display_name
@@ -74,4 +84,6 @@ static func _make(id: String, display_name: String, color: Color, footprint_cell
 	type.hardpoint_category = hardpoint_category
 	type.tier = tier
 	type.build_costs = build_costs
+	type.energy_generation = energy_generation
+	type.energy_capacity_contribution = energy_capacity_contribution
 	return type

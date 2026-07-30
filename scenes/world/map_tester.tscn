@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_light_one.tscn" id="12_pirate_light"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_med_one.tscn" id="13_pirate_med"]
 [ext_resource type="PackedScene" path="res://scenes/world/planet.tscn" id="14_planet"]
+[ext_resource type="Script" path="res://scenes/world/debug_tools.gd" id="15_debug_tools"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
 sky_top_color = Color(0.38, 0.45, 0.55, 1)
@@ -144,6 +145,9 @@ environment = SubResource("Environment_u02ng")
 
 [node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
 script = ExtResource("10_ojmk8")
+
+[node name="DebugTools" type="Node" parent="."]
+script = ExtResource("15_debug_tools")
 
 [node name="RegionBoundary" type="Node2D" parent="." unique_id=807573718]
 script = ExtResource("11_boundary")

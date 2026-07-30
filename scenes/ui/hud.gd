@@ -5,6 +5,7 @@ extends CanvasLayer
 
 @onready var _salvage_label: Label = $SalvageLabel
 @onready var _health_label: Label = $HealthLabel
+@onready var _energy_label: Label = $EnergyLabel
 @onready var _damage_flash: ColorRect = $DamageFlash
 
 var _inventory: Inventory
@@ -25,6 +26,10 @@ func _ready() -> void:
 	_health = players[0].get_node("Health")
 	_health.health_changed.connect(_on_health_changed)
 	_update_health_label(_health.current_health, _health.max_health)
+
+	var ship: Ship = players[0]
+	ship.energy_changed.connect(_on_energy_changed)
+	_update_energy_label(ship.current_energy, ship.max_energy)
 
 
 func _on_materials_changed(totals: Dictionary) -> void:
@@ -65,3 +70,11 @@ func _flash_damage() -> void:
 
 func _update_health_label(current: float, max_health: float) -> void:
 	_health_label.text = "Health: %d / %d" % [current, max_health]
+
+
+func _on_energy_changed(current: float, max_energy: float) -> void:
+	_update_energy_label(current, max_energy)
+
+
+func _update_energy_label(current: float, max_energy: float) -> void:
+	_energy_label.text = "Energy: %d / %d" % [current, max_energy]

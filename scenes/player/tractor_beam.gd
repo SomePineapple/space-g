@@ -11,6 +11,9 @@ extends Node2D
 ## — gives the beam a brighter, more "energetic" look than a single line.
 @export var glow_width_multiplier: float = 3.0
 @export var glow_alpha_multiplier: float = 0.35
+## Energy/sec per salvage item actively being pulled — beaming in several
+## pieces at once costs proportionally more.
+@export var energy_cost_per_second: float = 5.0
 
 @onready var _ship: Ship = get_owner()
 
@@ -25,7 +28,9 @@ func _physics_process(delta: float) -> void:
 	for node in get_tree().get_nodes_in_group("salvage"):
 		var salvage: Salvage = node
 		var distance: float = _ship.global_position.distance_to(salvage.global_position)
-		if distance <= tractor_range:
+		# Out of energy just drops this item from the beam (same as being out
+		# of range) rather than a hard block — the beam visibly cuts out.
+		if distance <= tractor_range and _ship.spend_energy(energy_cost_per_second * delta):
 			# Heavier (rarer) salvage resists the beam and reels in slower,
 			# so it physically feels heavier rather than just being worth more.
 			salvage.pull_toward(_ship.global_position, pull_speed * salvage.pull_resistance, delta)

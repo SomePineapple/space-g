@@ -32,6 +32,7 @@ func _ready() -> void:
 	recoil_force = 0.0
 	projectile_color = Color(1, 0.6, 0.15, 1)
 	projectile_damage = 40.0
+	energy_cost = 15.0
 	super._ready()
 	# The missile-silo hex art already shows the tube; the inherited barrel
 	# shape would just draw a redundant grey rectangle on top of it.

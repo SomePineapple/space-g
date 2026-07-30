@@ -8,6 +8,7 @@ extends Node2D
 @export var projectile_color: Color = Color(0.4, 0.9, 1.0, 1.0)
 @export var projectile_damage: float = 8.0
 @export var barrel_color: Color = Color(0.5, 0.85, 1.0, 1.0)
+@export var energy_cost: float = 4.0
 ## Left unassigned by default (no audio assets yet); assign a stream once
 ## one exists and firing will play it automatically.
 @export var fire_sound: AudioStream = null
@@ -20,6 +21,7 @@ const TIER_FIRE_RATE_MULTIPLIER: Array[float] = [1.0, 1.0, 0.8, 0.6]
 const TIER_RECOIL_MULTIPLIER: Array[float] = [1.0, 1.0, 1.5, 2.2]
 const TIER_VISUAL_SCALE: Array[float] = [1.0, 1.0, 1.4, 1.8]
 const TIER_PROJECTILE_SCALE_MULTIPLIER: Array[float] = [1.0, 1.0, 1.4, 2.0]
+const TIER_ENERGY_COST_MULTIPLIER: Array[float] = [1.0, 1.0, 1.8, 2.8]
 
 ## Scales the spawned projectile's whole node (visual and collision shape
 ## alike, since both are sized relative to this transform), so bigger-tier
@@ -49,6 +51,7 @@ func apply_tier(tier: int) -> void:
 	fire_rate *= TIER_FIRE_RATE_MULTIPLIER[tier]
 	recoil_force *= TIER_RECOIL_MULTIPLIER[tier]
 	projectile_scale *= TIER_PROJECTILE_SCALE_MULTIPLIER[tier]
+	energy_cost *= TIER_ENERGY_COST_MULTIPLIER[tier]
 
 
 static func tier_visual_scale(tier: int) -> float:
@@ -82,6 +85,8 @@ func _process(delta: float) -> void:
 
 func fire() -> Projectile:
 	if _cooldown_remaining > 0.0 or _shooter == null:
+		return null
+	if not _shooter.spend_energy(energy_cost):
 		return null
 	_cooldown_remaining = 1.0 / fire_rate
 

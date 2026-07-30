@@ -32,6 +32,24 @@ func total_thrust() -> float:
 	return total
 
 
+func total_energy_generation() -> float:
+	var total: float = 0.0
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			total += module_type.energy_generation
+	return total
+
+
+func total_energy_capacity() -> float:
+	var total: float = 0.0
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			total += module_type.energy_capacity_contribution
+	return total
+
+
 func get_thruster_placements() -> Array[ModulePlacement]:
 	var thrusters: Array[ModulePlacement] = []
 	for placement in placements:

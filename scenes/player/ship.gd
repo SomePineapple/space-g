@@ -2,6 +2,7 @@ class_name Ship
 extends CharacterBody2D
 
 signal layout_applied
+signal energy_changed(current: float, max_energy: float)
 
 @export var thrust_force: float = 600.0
 @export var reverse_thrust_force: float = 120.0
@@ -32,6 +33,18 @@ signal layout_applied
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
 
+## Energy pool available even with no Reactor/Battery modules installed, so
+## existing ship layouts (pirates, the starter ship) keep working once
+## weapons/thrusters/tractor beam start actually spending energy — reactor
+## and battery modules add on top of this baseline.
+@export var base_energy_generation: float = 10.0
+@export var base_energy_capacity: float = 50.0
+## Energy/sec spent thrusting at full non-boosted throttle. Deliberately at
+## or below base_energy_generation so cruising is sustainable forever on
+## base power alone — firing weapons or boosting is what actually draws the
+## reserve down without a Reactor installed.
+@export var thrust_energy_cost: float = 8.0
+
 var _thrust_input: float = 0.0
 var _turn_input: float = 0.0
 var _boost_active: bool = false
@@ -47,6 +60,10 @@ var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
 var _last_known_health: float = -1.0
+
+var current_energy: float = 0.0
+var max_energy: float = 0.0
+var energy_generation_rate: float = 0.0
 
 @onready var _health: Health = $Health
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
@@ -72,6 +89,7 @@ func _apply_ship_layout() -> void:
 	mass = ship_layout.total_mass()
 	_health.configure(ship_layout.total_max_health())
 	_hull_renderer.set_layout(ship_layout)
+	_apply_layout_energy()
 	_apply_layout_thrust()
 	_spawn_thrusters()
 	_spawn_collision_shapes()
@@ -104,6 +122,17 @@ func _spawn_collision_shapes() -> void:
 			shape.position = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
 			add_child(shape)
 			_collision_shapes.append(shape)
+
+
+## New max_energy keeps the same fraction full rather than resetting to full
+## or to the old absolute amount, so refitting a ship (builder, upgrades)
+## doesn't grant or destroy energy out of nowhere.
+func _apply_layout_energy() -> void:
+	var previous_fraction: float = (current_energy / max_energy) if max_energy > 0.0 else 1.0
+	max_energy = base_energy_capacity + ship_layout.total_energy_capacity()
+	energy_generation_rate = base_energy_generation + ship_layout.total_energy_generation()
+	current_energy = max_energy * previous_fraction
+	energy_changed.emit(current_energy, max_energy)
 
 
 func _apply_layout_thrust() -> void:
@@ -322,9 +351,10 @@ func set_boost_input(boosting: bool) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_regenerate_energy(delta)
 	rotation += _turn_input * rotation_speed * delta
 
-	if _thrust_input != 0.0:
+	if _thrust_input != 0.0 and _try_spend_thrust_energy(delta):
 		var thrust: float = thrust_force if _thrust_input > 0.0 else reverse_thrust_force
 		var current_max_speed: float = max_speed
 		if _boost_active and _thrust_input > 0.0:
@@ -340,6 +370,8 @@ func _physics_process(delta: float) -> void:
 			if forward_speed < -reverse_max_speed:
 				velocity -= transform.x * (forward_speed + reverse_max_speed)
 	else:
+		# No thrust input, or thrust requested but not enough energy for it —
+		# either way the ship just coasts/drags rather than accelerating.
 		velocity = velocity.move_toward(Vector2.ZERO, drag * max_speed * delta)
 
 	# Generous absolute safety net (not a directional cap) so nothing — e.g.
@@ -350,6 +382,33 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_update_engine_particles()
 	_update_hardpoint_aim()
+
+
+func has_energy(amount: float) -> bool:
+	return current_energy >= amount
+
+
+func spend_energy(amount: float) -> bool:
+	if current_energy < amount:
+		return false
+	current_energy -= amount
+	energy_changed.emit(current_energy, max_energy)
+	return true
+
+
+## Boosted thrust costs proportionally more, same multiplier as the extra
+## speed/force it grants.
+func _try_spend_thrust_energy(delta: float) -> bool:
+	var boosting: bool = _boost_active and _thrust_input > 0.0
+	var cost: float = thrust_energy_cost * absf(_thrust_input) * (boost_multiplier if boosting else 1.0) * delta
+	return spend_energy(cost)
+
+
+func _regenerate_energy(delta: float) -> void:
+	if current_energy >= max_energy:
+		return
+	current_energy = minf(current_energy + energy_generation_rate * delta, max_energy)
+	energy_changed.emit(current_energy, max_energy)
 
 
 func _update_hardpoint_aim() -> void:
