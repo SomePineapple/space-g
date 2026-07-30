@@ -49,6 +49,11 @@ func set_module_detached(placement_id: String) -> void:
 	queue_redraw()
 
 
+func set_module_repaired(placement_id: String) -> void:
+	_destroyed_placement_ids.erase(placement_id)
+	queue_redraw()
+
+
 func _draw() -> void:
 	if ship_layout == null:
 		return

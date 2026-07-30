@@ -30,3 +30,11 @@ extends Resource
 
 @export var use_primary_weapon: bool = true
 @export var use_secondary_weapon: bool = true
+
+## Scales overall ship Health and every module's condition (see Ship's use
+## of personality.health_multiplier). Kept per-personality rather than a
+## separate faction resource since personality is already the one thing that
+## distinguishes the player from each pirate archetype — the player should
+## survive noticeably longer than a pirate of equivalent build, since this is
+## meant to feel forgiving rather than punishing like a souls-like.
+@export var health_multiplier: float = 1.0

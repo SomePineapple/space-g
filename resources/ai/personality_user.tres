@@ -6,3 +6,4 @@
 script = ExtResource("1_ship_personality")
 display_name = "User"
 is_player_controlled = true
+health_multiplier = 2.0

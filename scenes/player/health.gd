@@ -28,3 +28,14 @@ func take_damage(amount: float) -> void:
 
 	if current_health <= 0.0:
 		destroyed.emit()
+
+
+## Mirrors module repair (see Ship._repair_module): a holed-out module
+## regrowing restores the same amount to the overall Health pool, so a fully
+## repaired ship doesn't still carry invisible splash-damage debt from
+## before.
+func heal(amount: float) -> void:
+	if current_health <= 0.0:
+		return
+	current_health = minf(current_health + amount, max_health)
+	health_changed.emit(current_health, max_health)

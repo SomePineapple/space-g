@@ -41,6 +41,14 @@ signal energy_changed(current: float, max_energy: float)
 ## nothing until one lucky hit lines up exactly right.
 @export var module_splash_fraction: float = 0.35
 
+## Seconds the ship must go without taking any damage before holed-out
+## modules start regrowing. Prevents repair from meaningfully undoing damage
+## mid-fight — it's a recovery mechanic for between engagements, not a heal
+## button under fire.
+@export var module_repair_delay: float = 6.0
+## Condition/second restored to a regrowing module once it's eligible.
+@export var module_repair_rate: float = 6.0
+
 ## Outward speed/spin added on top of the ship's own velocity when a module
 ## detaches, so a severed wing visibly kicks away rather than just trailing
 ## along at the exact same velocity as the ship that lost it.
@@ -74,6 +82,7 @@ var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
 var _last_known_health: float = -1.0
+var _time_since_last_damage: float = 0.0
 
 var current_energy: float = 0.0
 var max_energy: float = 0.0
@@ -98,6 +107,15 @@ var _detached_placement_ids: Dictionary = {}
 ## can be removed from this ship's body along with its visual.
 var _collision_shapes_by_placement: Dictionary = {}
 
+## placement_id -> true. A holed-out module regrowing (see _regenerate_modules)
+## stays here — and counts as destroyed for every gameplay purpose, same as
+## _detached_placement_ids — for its whole climb back to full condition, not
+## just while condition is at zero. Without this, is_module_destroyed would
+## flip back to false (restoring fire/thrust) the instant condition ticked
+## above zero, and a multi-hex hole's neighbors would all unlock on top of
+## each other in the same frame instead of visibly sweeping outward.
+var _regrowing_placement_ids: Dictionary = {}
+
 @onready var _health: Health = $Health
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
 @onready var _inventory: Inventory = $Inventory
@@ -120,7 +138,7 @@ func _apply_ship_layout() -> void:
 	if ship_layout == null:
 		return
 	mass = ship_layout.total_mass()
-	_health.configure(ship_layout.total_max_health())
+	_health.configure(ship_layout.total_max_health() * personality.health_multiplier)
 	_hull_renderer.set_layout(ship_layout)
 	_init_module_conditions()
 	_apply_layout_energy()
@@ -151,24 +169,32 @@ func _spawn_collision_shapes() -> void:
 	_collision_shapes_by_placement.clear()
 
 	for placement in ship_layout.placements:
-		var shapes_for_placement: Array = []
-		for cell in ship_layout.get_occupied_cells(placement):
-			var shape := CollisionPolygon2D.new()
-			shape.polygon = HexUtils.hex_corners(Vector2.ZERO, _hull_renderer.cell_size)
-			shape.position = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
-			add_child(shape)
-			_collision_shapes.append(shape)
-			shapes_for_placement.append(shape)
-		_collision_shapes_by_placement[placement.placement_id] = shapes_for_placement
+		_spawn_collision_shape_for(placement)
+
+
+## Split out from _spawn_collision_shapes() so a single repaired module (see
+## _on_module_repaired) can get its shape back without rebuilding every other
+## placement's shapes too.
+func _spawn_collision_shape_for(placement: ModulePlacement) -> void:
+	var shapes_for_placement: Array = []
+	for cell in ship_layout.get_occupied_cells(placement):
+		var shape := CollisionPolygon2D.new()
+		shape.polygon = HexUtils.hex_corners(Vector2.ZERO, _hull_renderer.cell_size)
+		shape.position = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+		add_child(shape)
+		_collision_shapes.append(shape)
+		shapes_for_placement.append(shape)
+	_collision_shapes_by_placement[placement.placement_id] = shapes_for_placement
 
 
 func _init_module_conditions() -> void:
 	_module_conditions.clear()
 	_detached_placement_ids.clear()
+	_regrowing_placement_ids.clear()
 	for placement in ship_layout.placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			_module_conditions[placement.placement_id] = module_type.health_contribution
+			_module_conditions[placement.placement_id] = module_type.health_contribution * personality.health_multiplier
 
 
 func get_module_condition(placement_id: String) -> float:
@@ -180,7 +206,9 @@ func get_module_condition(placement_id: String) -> float:
 ## it no longer contributes to the ship (see _on_module_destroyed and
 ## _detach_module).
 func is_module_destroyed(placement_id: String) -> bool:
-	return get_module_condition(placement_id) <= 0.0 or _detached_placement_ids.has(placement_id)
+	if _detached_placement_ids.has(placement_id) or _regrowing_placement_ids.has(placement_id):
+		return true
+	return get_module_condition(placement_id) <= 0.0
 
 
 ## Resolves a world-space impact point to the specific module occupying that
@@ -305,6 +333,72 @@ func _spawn_severance_sparks(detached_placement_ids: Array[String]) -> void:
 			# skip edges facing open space, which aren't a "seam" at all.
 			if not detached_cells.has(neighbor) and ship_layout.is_occupied(neighbor):
 				_spawn_seam_spark_at(cell, neighbor)
+
+
+## Regrows holed-out (destroyed but still attached) modules over time, one
+## ring at a time outward from whatever's still healthy — a module can only
+## *start* regrowing once it has a neighbor that isn't itself destroyed (or
+## already mid-regrow), and it stays non-functional for its whole climb back
+## to full condition (see _regrowing_placement_ids), so a multi-hex hole
+## visibly sweeps outward from the healthy edge inward rather than every hex
+## in it popping back at once. Detached (severed) modules are excluded
+## entirely — a piece that's already flown off as debris has nothing to grow
+## back onto.
+func _regenerate_modules(delta: float) -> void:
+	if ship_layout == null or _time_since_last_damage < module_repair_delay:
+		return
+
+	for placement in ship_layout.placements:
+		if _detached_placement_ids.has(placement.placement_id):
+			continue
+
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type == null:
+			continue
+		var max_condition: float = module_type.health_contribution * personality.health_multiplier
+
+		if not _regrowing_placement_ids.has(placement.placement_id):
+			if get_module_condition(placement.placement_id) > 0.0:
+				continue # undamaged, or only combat-damaged rather than holed out
+			if not _has_healthy_neighbor(placement):
+				continue # nothing healthy adjacent yet for this hex to grow back from
+			_regrowing_placement_ids[placement.placement_id] = true
+
+		_advance_module_repair(placement, module_type, max_condition, delta)
+
+
+func _has_healthy_neighbor(placement: ModulePlacement) -> bool:
+	for cell in ship_layout.get_occupied_cells(placement):
+		for neighbor_coord in HexUtils.neighbors(cell):
+			var neighbor_placement: ModulePlacement = ship_layout.get_placement_at(neighbor_coord)
+			if neighbor_placement != null and not is_module_destroyed(neighbor_placement.placement_id):
+				return true
+	return false
+
+
+func _advance_module_repair(placement: ModulePlacement, module_type: ModuleType, max_condition: float, delta: float) -> void:
+	var new_condition: float = minf(get_module_condition(placement.placement_id) + module_repair_rate * delta, max_condition)
+	var healed_amount: float = new_condition - get_module_condition(placement.placement_id)
+	_module_conditions[placement.placement_id] = new_condition
+	_health.heal(healed_amount)
+
+	if new_condition >= max_condition:
+		_regrowing_placement_ids.erase(placement.placement_id)
+		_on_module_repaired(placement, module_type)
+
+
+## Reverses _on_module_destroyed's effects once a holed-out module finishes
+## regrowing to full condition: restores its stat contribution, collision
+## shape and normal hull appearance all at once (fire_primary/fire_secondary/
+## thrust all gate on is_module_destroyed, which only reads false once this
+## runs — see _regrowing_placement_ids).
+func _on_module_repaired(placement: ModulePlacement, module_type: ModuleType) -> void:
+	_hull_renderer.set_module_repaired(placement.placement_id)
+	_spawn_collision_shape_for(placement)
+
+	if module_type.thrust_contribution > 0.0:
+		thrust_force += module_type.thrust_contribution
+		reverse_thrust_force = thrust_force * reverse_thrust_ratio
 
 
 func _spawn_seam_spark_at(cell: Vector2i, neighbor: Vector2i) -> void:
@@ -527,6 +621,7 @@ func fire_secondary() -> void:
 
 
 func take_damage(amount: float) -> void:
+	_time_since_last_damage = 0.0
 	_health.take_damage(amount)
 
 
@@ -616,6 +711,8 @@ func set_boost_input(boosting: bool) -> void:
 
 func _physics_process(delta: float) -> void:
 	_regenerate_energy(delta)
+	_time_since_last_damage += delta
+	_regenerate_modules(delta)
 	rotation += _turn_input * rotation_speed * delta
 
 	if _thrust_input != 0.0 and _try_spend_thrust_energy(delta):
