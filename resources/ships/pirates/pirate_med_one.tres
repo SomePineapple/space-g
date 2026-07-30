@@ -104,7 +104,13 @@ placement_id = "p_16_54448"
 module_type_id = "engine"
 hex_coord = Vector2i(-5, 2)
 
+[sub_resource type="Resource" id="Resource_reactor"]
+script = ExtResource("1_5rvah")
+placement_id = "reactor_a"
+module_type_id = "reactor_mk1"
+hex_coord = Vector2i(0, 1)
+
 [resource]
 script = ExtResource("2_lyics")
-placements = Array[ExtResource("1_5rvah")]([SubResource("Resource_a47nf"), SubResource("Resource_kmq25"), SubResource("Resource_whgxq"), SubResource("Resource_gsui8"), SubResource("Resource_1wyh8"), SubResource("Resource_ys1yt"), SubResource("Resource_ubmp0"), SubResource("Resource_8j6y1"), SubResource("Resource_fmc83"), SubResource("Resource_vabff"), SubResource("Resource_0j7hx"), SubResource("Resource_q778m"), SubResource("Resource_538bv"), SubResource("Resource_bfjwy"), SubResource("Resource_tl84u"), SubResource("Resource_ixrjr"), SubResource("Resource_ldbk0")])
+placements = Array[ExtResource("1_5rvah")]([SubResource("Resource_a47nf"), SubResource("Resource_kmq25"), SubResource("Resource_whgxq"), SubResource("Resource_gsui8"), SubResource("Resource_1wyh8"), SubResource("Resource_ys1yt"), SubResource("Resource_ubmp0"), SubResource("Resource_8j6y1"), SubResource("Resource_fmc83"), SubResource("Resource_vabff"), SubResource("Resource_0j7hx"), SubResource("Resource_q778m"), SubResource("Resource_538bv"), SubResource("Resource_bfjwy"), SubResource("Resource_tl84u"), SubResource("Resource_ixrjr"), SubResource("Resource_ldbk0"), SubResource("Resource_reactor")])
 core_placement_id = "core"

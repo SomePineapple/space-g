@@ -4,6 +4,13 @@ extends Resource
 @export var placements: Array[ModulePlacement] = []
 @export var core_placement_id: String = ""
 
+## Energy contribution (Reactor/Battery) falls off the further a module sits
+## from the Core, on the idea that power delivery loses efficiency over
+## distance ("cockpit interference") — encourages keeping reactors close in
+## rather than clustering every module on the core hex regardless of role.
+const REACTOR_DISTANCE_PENALTY_PER_CELL: float = 0.08
+const REACTOR_DISTANCE_PENALTY_MAX: float = 0.5
+
 
 func total_mass() -> float:
 	var total: float = 0.0
@@ -37,7 +44,7 @@ func total_energy_generation() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.energy_generation
+			total += module_type.energy_generation * _core_distance_energy_multiplier(placement)
 	return total
 
 
@@ -46,8 +53,25 @@ func total_energy_capacity() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.energy_capacity_contribution
+			total += module_type.energy_capacity_contribution * _core_distance_energy_multiplier(placement)
 	return total
+
+
+## Hex-grid distance from the Core's placement to this one. Anchor-cell to
+## anchor-cell is close enough for this stat curve — multi-hex modules don't
+## need per-cell precision here, unlike hit detection.
+func distance_from_core(placement: ModulePlacement) -> int:
+	if core_placement_id.is_empty():
+		return 0
+	var core_placement: ModulePlacement = get_placement_by_id(core_placement_id)
+	if core_placement == null:
+		return 0
+	return HexUtils.distance(placement.hex_coord, core_placement.hex_coord)
+
+
+func _core_distance_energy_multiplier(placement: ModulePlacement) -> float:
+	var penalty: float = minf(REACTOR_DISTANCE_PENALTY_PER_CELL * distance_from_core(placement), REACTOR_DISTANCE_PENALTY_MAX)
+	return 1.0 - penalty
 
 
 func get_thruster_placements() -> Array[ModulePlacement]:
@@ -293,3 +317,43 @@ func _footprints_touch(cells_a: Array[Vector2i], cells_b: Array[Vector2i]) -> bo
 			if neighbor in cells_b:
 				return true
 	return false
+
+
+## Which remaining (non-destroyed) placements can no longer reach the core
+## through an unbroken chain of adjacent modules, given a set of placement
+## ids to treat as gone (destroyed or already detached). Used by Ship at
+## runtime to sever wings/appendages that lose their connection mid-fight —
+## unlike _is_connected_excluding(), this never mutates placements and can
+## report more than one disconnected id at once (a whole severed limb).
+func find_unreachable_from_core(gone_placement_ids: Dictionary) -> Array[String]:
+	var unreachable: Array[String] = []
+	if core_placement_id.is_empty() or gone_placement_ids.has(core_placement_id):
+		return unreachable
+
+	var remaining: Array[ModulePlacement] = []
+	for placement in placements:
+		if not gone_placement_ids.has(placement.placement_id):
+			remaining.append(placement)
+
+	var core_placement: ModulePlacement = get_placement_by_id(core_placement_id)
+	if core_placement == null:
+		return unreachable
+
+	var visited: Dictionary = {}
+	var frontier: Array[ModulePlacement] = [core_placement]
+	visited[core_placement.placement_id] = true
+
+	while not frontier.is_empty():
+		var current: ModulePlacement = frontier.pop_back()
+		var current_cells: Array[Vector2i] = get_occupied_cells(current)
+		for other in remaining:
+			if visited.has(other.placement_id):
+				continue
+			if _footprints_touch(current_cells, get_occupied_cells(other)):
+				visited[other.placement_id] = true
+				frontier.append(other)
+
+	for placement in remaining:
+		if not visited.has(placement.placement_id):
+			unreachable.append(placement.placement_id)
+	return unreachable

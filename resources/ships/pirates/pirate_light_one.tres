@@ -56,7 +56,13 @@ placement_id = "p_8_28698"
 module_type_id = "weapon_hardpoint"
 hex_coord = Vector2i(1, 0)
 
+[sub_resource type="Resource" id="Resource_reactor"]
+script = ExtResource("1_bris7")
+placement_id = "reactor_a"
+module_type_id = "reactor_mk1"
+hex_coord = Vector2i(1, -2)
+
 [resource]
 script = ExtResource("2_agjf3")
-placements = Array[ExtResource("1_bris7")]([SubResource("Resource_fmcu5"), SubResource("Resource_tmd4l"), SubResource("Resource_alupn"), SubResource("Resource_8qhlp"), SubResource("Resource_smlud"), SubResource("Resource_6bbbq"), SubResource("Resource_sm28b"), SubResource("Resource_1wuia"), SubResource("Resource_3de6w")])
+placements = Array[ExtResource("1_bris7")]([SubResource("Resource_fmcu5"), SubResource("Resource_tmd4l"), SubResource("Resource_alupn"), SubResource("Resource_8qhlp"), SubResource("Resource_smlud"), SubResource("Resource_6bbbq"), SubResource("Resource_sm28b"), SubResource("Resource_1wuia"), SubResource("Resource_3de6w"), SubResource("Resource_reactor")])
 core_placement_id = "core"

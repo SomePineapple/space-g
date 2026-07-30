@@ -145,33 +145,7 @@ func _axial_to_pixel(hex_coord: Vector2i) -> Vector2:
 
 
 func _pixel_to_axial(pixel: Vector2) -> Vector2i:
-	var local: Vector2 = pixel - _center
-	var qf: float = (HexUtils.SQRT3 / 3.0 * local.x - 1.0 / 3.0 * local.y) / cell_size
-	var rf: float = (2.0 / 3.0 * local.y) / cell_size
-	return _hex_round(qf, rf)
-
-
-func _hex_round(qf: float, rf: float) -> Vector2i:
-	var xf: float = qf
-	var zf: float = rf
-	var yf: float = -xf - zf
-
-	var rx: float = roundf(xf)
-	var ry: float = roundf(yf)
-	var rz: float = roundf(zf)
-
-	var x_diff: float = absf(rx - xf)
-	var y_diff: float = absf(ry - yf)
-	var z_diff: float = absf(rz - zf)
-
-	if x_diff > y_diff and x_diff > z_diff:
-		rx = -ry - rz
-	elif y_diff > z_diff:
-		ry = -rx - rz
-	else:
-		rz = -rx - ry
-
-	return Vector2i(int(rx), int(rz))
+	return HexUtils.pixel_to_axial(pixel - _center, cell_size)
 
 
 func _hex_corners(center: Vector2) -> PackedVector2Array:

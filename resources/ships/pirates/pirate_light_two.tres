@@ -44,7 +44,13 @@ placement_id = "p_6_3046"
 module_type_id = "engine"
 hex_coord = Vector2i(0, 2)
 
+[sub_resource type="Resource" id="Resource_reactor"]
+script = ExtResource("1_pnpfe")
+placement_id = "reactor_a"
+module_type_id = "reactor_mk1"
+hex_coord = Vector2i(0, -1)
+
 [resource]
 script = ExtResource("2_jpvgh")
-placements = Array[ExtResource("1_pnpfe")]([SubResource("Resource_a47nf"), SubResource("Resource_ld41h"), SubResource("Resource_b86in"), SubResource("Resource_5kr5h"), SubResource("Resource_n3rmj"), SubResource("Resource_uqo5x"), SubResource("Resource_00tmk")])
+placements = Array[ExtResource("1_pnpfe")]([SubResource("Resource_a47nf"), SubResource("Resource_ld41h"), SubResource("Resource_b86in"), SubResource("Resource_5kr5h"), SubResource("Resource_n3rmj"), SubResource("Resource_uqo5x"), SubResource("Resource_00tmk"), SubResource("Resource_reactor")])
 core_placement_id = "core"

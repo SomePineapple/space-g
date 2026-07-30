@@ -32,6 +32,20 @@ signal energy_changed(current: float, max_energy: float)
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
+@export var ship_debris_scene: PackedScene = preload("res://scenes/world/ship_debris.tscn")
+@export var seam_spark_scene: PackedScene = preload("res://scenes/world/seam_spark.tscn")
+## Fraction of a hit's damage that also lands on the modules directly
+## adjacent to the exact hex hit. Landing a hit on precisely the same hex
+## repeatedly (needed to break a specific module) is hard against a moving,
+## rotating target; without this, focused fire on a wing feels like it does
+## nothing until one lucky hit lines up exactly right.
+@export var module_splash_fraction: float = 0.35
+
+## Outward speed/spin added on top of the ship's own velocity when a module
+## detaches, so a severed wing visibly kicks away rather than just trailing
+## along at the exact same velocity as the ship that lost it.
+const DETACH_KICK_SPEED: float = 60.0
+const DETACH_SPIN_RANGE: float = 2.0
 
 ## Energy pool available even with no Reactor/Battery modules installed, so
 ## existing ship layouts (pirates, the starter ship) keep working once
@@ -65,6 +79,25 @@ var current_energy: float = 0.0
 var max_energy: float = 0.0
 var energy_generation_rate: float = 0.0
 
+## Per-placement runtime hit points (placement_id -> current condition),
+## separate from the overall Health pool: a module can be individually
+## knocked out mid-fight without that being a second way to destroy the
+## ship. Rebuilt fresh whenever a layout is applied — never stored on the
+## ShipLayout resource itself, since that resource is shared (not
+## duplicated) across every instance of the same enemy scene.
+var _module_conditions: Dictionary = {}
+
+## placement_id -> true. A module ends up here when it's still intact but
+## has lost its connection back to the core (see _check_for_detachment) —
+## distinct from _module_conditions reaching zero, which means the module
+## itself was destroyed outright. Either way counts as "gone" for gameplay
+## purposes (see is_module_destroyed).
+var _detached_placement_ids: Dictionary = {}
+
+## placement_id -> Array[CollisionPolygon2D], so a detached module's hitbox
+## can be removed from this ship's body along with its visual.
+var _collision_shapes_by_placement: Dictionary = {}
+
 @onready var _health: Health = $Health
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
 @onready var _inventory: Inventory = $Inventory
@@ -89,6 +122,7 @@ func _apply_ship_layout() -> void:
 	mass = ship_layout.total_mass()
 	_health.configure(ship_layout.total_max_health())
 	_hull_renderer.set_layout(ship_layout)
+	_init_module_conditions()
 	_apply_layout_energy()
 	_apply_layout_thrust()
 	_spawn_thrusters()
@@ -114,14 +148,229 @@ func _spawn_collision_shapes() -> void:
 	for shape in _collision_shapes:
 		shape.queue_free()
 	_collision_shapes.clear()
+	_collision_shapes_by_placement.clear()
 
 	for placement in ship_layout.placements:
+		var shapes_for_placement: Array = []
 		for cell in ship_layout.get_occupied_cells(placement):
 			var shape := CollisionPolygon2D.new()
 			shape.polygon = HexUtils.hex_corners(Vector2.ZERO, _hull_renderer.cell_size)
 			shape.position = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
 			add_child(shape)
 			_collision_shapes.append(shape)
+			shapes_for_placement.append(shape)
+		_collision_shapes_by_placement[placement.placement_id] = shapes_for_placement
+
+
+func _init_module_conditions() -> void:
+	_module_conditions.clear()
+	_detached_placement_ids.clear()
+	for placement in ship_layout.placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			_module_conditions[placement.placement_id] = module_type.health_contribution
+
+
+func get_module_condition(placement_id: String) -> float:
+	return _module_conditions.get(placement_id, 0.0)
+
+
+## True if the module is either destroyed outright (condition at zero) or
+## still intact but severed from the core's connectivity graph — both mean
+## it no longer contributes to the ship (see _on_module_destroyed and
+## _detach_module).
+func is_module_destroyed(placement_id: String) -> bool:
+	return get_module_condition(placement_id) <= 0.0 or _detached_placement_ids.has(placement_id)
+
+
+## Resolves a world-space impact point to the specific module occupying that
+## hex cell (if any) and damages it, plus a splash fraction to its immediate
+## neighbors, independent of the ship's overall Health pool. Destroying an
+## engine this way costs the ship real thrust; destroying a weapon/missile
+## hardpoint stops it firing (see fire_primary/fire_secondary) — both react
+## live, no rebuild needed.
+func _damage_module_at_point(amount: float, impact_point: Vector2) -> void:
+	if ship_layout == null:
+		return
+
+	var hull_local: Vector2 = to_local(impact_point).rotated(-_hull_renderer.rotation)
+	var hex_coord: Vector2i = HexUtils.pixel_to_axial(hull_local, _hull_renderer.cell_size)
+	var placement: ModulePlacement = ship_layout.get_placement_at(hex_coord)
+	if placement != null:
+		_apply_module_damage(placement, amount)
+
+	for neighbor_coord in HexUtils.neighbors(hex_coord):
+		var neighbor_placement: ModulePlacement = ship_layout.get_placement_at(neighbor_coord)
+		# The Core is exempt from splash: it ends the ship outright if lost
+		# (see _on_module_destroyed), so it shouldn't be catchable in
+		# crossfire aimed at whatever else happens to be clustered around
+		# it — only a hit landing squarely on it should count.
+		if neighbor_placement != null and neighbor_placement != placement and neighbor_placement.placement_id != ship_layout.core_placement_id:
+			_apply_module_damage(neighbor_placement, amount * module_splash_fraction)
+
+
+func _apply_module_damage(placement: ModulePlacement, amount: float) -> void:
+	if is_module_destroyed(placement.placement_id):
+		return
+
+	var remaining: float = maxf(get_module_condition(placement.placement_id) - amount, 0.0)
+	_module_conditions[placement.placement_id] = remaining
+	if remaining <= 0.0:
+		_on_module_destroyed(placement)
+
+
+func _on_module_destroyed(placement: ModulePlacement) -> void:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	if module_type == null:
+		return
+
+	_hull_renderer.set_module_destroyed(placement.placement_id)
+	# A destroyed hex is a hole, not still-solid wreckage — without this, a
+	# scorched module keeps blocking incoming shots aimed at whatever's
+	# behind it (e.g. the connector further along a wing), which made
+	# severing a wing much harder than intended.
+	_free_collision_shapes_for(placement.placement_id)
+
+	# Losing the Core ends the ship outright: without it there's no anchor
+	# left to measure "still connected" against, so detachment checks would
+	# otherwise go permanently inert and leftover modules would sit attached
+	# to a dead, driverless hulk forever (see find_unreachable_from_core).
+	if placement.placement_id == ship_layout.core_placement_id:
+		_health.take_damage(_health.current_health)
+		return
+
+	if module_type.thrust_contribution > 0.0:
+		thrust_force = maxf(thrust_force - module_type.thrust_contribution, 0.0)
+		reverse_thrust_force = thrust_force * reverse_thrust_ratio
+
+	_check_for_detachment()
+	_check_all_modules_gone()
+
+
+## The overall Health pool and per-module condition are deliberately separate
+## (see _module_conditions), but splash damage (module_splash_fraction) lets
+## modules collectively take more cumulative damage than Health ever
+## registers, since a splash hit only affects modules, not Health. Without
+## this, a ship can end up with every module destroyed/detached — visually a
+## dead hulk — while Health still has some left and the ship keeps flying
+## and fighting. Once nothing is left, finish the ship off for real.
+func _check_all_modules_gone() -> void:
+	if ship_layout == null or ship_layout.placements.is_empty():
+		return
+	for placement in ship_layout.placements:
+		if not is_module_destroyed(placement.placement_id):
+			return
+	_health.take_damage(_health.current_health)
+
+
+## After any module is destroyed outright, some other still-intact modules
+## may no longer have a path back to the core through adjacent modules —
+## a wing losing the one piece connecting it to the hull, for example. Any
+## such module is severed for good: it stops contributing (is_module_destroyed
+## now returns true for it) and flies off as its own debris piece.
+func _check_for_detachment() -> void:
+	if ship_layout == null:
+		return
+
+	var gone: Dictionary = {}
+	for placement in ship_layout.placements:
+		if is_module_destroyed(placement.placement_id):
+			gone[placement.placement_id] = true
+
+	var newly_unreachable: Array[String] = ship_layout.find_unreachable_from_core(gone)
+	if not newly_unreachable.is_empty():
+		_spawn_severance_sparks(newly_unreachable)
+
+	for placement_id in newly_unreachable:
+		_detach_module(ship_layout.get_placement_by_id(placement_id))
+
+
+## Sparks trace the exact hex edge(s) where a severed wing tears away from
+## the rest of the hull, one burst per boundary edge, rather than a single
+## generic burst at the ship's center — reads as the connection itself
+## breaking, especially for a multi-hex limb detaching all at once.
+func _spawn_severance_sparks(detached_placement_ids: Array[String]) -> void:
+	var detached_cells: Dictionary = {}
+	for placement_id in detached_placement_ids:
+		var placement: ModulePlacement = ship_layout.get_placement_by_id(placement_id)
+		if placement == null:
+			continue
+		for cell in ship_layout.get_occupied_cells(placement):
+			detached_cells[cell] = true
+
+	for cell in detached_cells:
+		for neighbor in HexUtils.neighbors(cell):
+			# Only spark where another module (still attached, or the
+			# destroyed connector that caused this severance) actually sits —
+			# skip edges facing open space, which aren't a "seam" at all.
+			if not detached_cells.has(neighbor) and ship_layout.is_occupied(neighbor):
+				_spawn_seam_spark_at(cell, neighbor)
+
+
+func _spawn_seam_spark_at(cell: Vector2i, neighbor: Vector2i) -> void:
+	var cell_center: Vector2 = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
+	var neighbor_center: Vector2 = HexUtils.axial_to_pixel(neighbor, _hull_renderer.cell_size)
+	var edge_midpoint: Vector2 = (cell_center + neighbor_center) * 0.5
+	var local_outward: Vector2 = (neighbor_center - cell_center).normalized()
+
+	var spark: Node2D = seam_spark_scene.instantiate()
+	get_tree().current_scene.add_child(spark)
+	spark.global_position = _hull_renderer.global_transform * edge_midpoint
+	spark.global_rotation = _hull_renderer.global_transform.basis_xform(local_outward).angle()
+
+
+func _detach_module(placement: ModulePlacement) -> void:
+	if placement == null or _detached_placement_ids.has(placement.placement_id):
+		return
+	_detached_placement_ids[placement.placement_id] = true
+
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	if module_type == null:
+		return
+
+	# A module destroyed by a direct hit already lost its stat contribution in
+	# _on_module_destroyed; only apply it here for a module that detaches
+	# while still otherwise intact.
+	if module_type.thrust_contribution > 0.0 and get_module_condition(placement.placement_id) > 0.0:
+		thrust_force = maxf(thrust_force - module_type.thrust_contribution, 0.0)
+		reverse_thrust_force = thrust_force * reverse_thrust_ratio
+
+	_hull_renderer.set_module_detached(placement.placement_id)
+	_free_collision_shapes_for(placement.placement_id)
+	_spawn_debris_for(placement, module_type)
+
+
+func _free_collision_shapes_for(placement_id: String) -> void:
+	var shapes: Array = _collision_shapes_by_placement.get(placement_id, [])
+	for shape in shapes:
+		_collision_shapes.erase(shape)
+		shape.queue_free()
+	_collision_shapes_by_placement.erase(placement_id)
+
+
+func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> void:
+	var cells: Array[Vector2i] = ship_layout.get_occupied_cells(placement)
+	var colors: Array[Color] = []
+	var textures: Array[Texture2D] = []
+	var local_centroid: Vector2 = Vector2.ZERO
+	for cell in cells:
+		colors.append(module_type.color)
+		textures.append(module_type.hex_texture)
+		local_centroid += HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
+	local_centroid /= cells.size()
+
+	var debris: ShipDebris = ship_debris_scene.instantiate()
+	get_tree().current_scene.add_child(debris)
+	# Same transform as HullRenderer (ship center + its fixed rotation offset),
+	# so the debris's cells render exactly where they were an instant ago,
+	# before drifting away under their own velocity.
+	debris.global_transform = _hull_renderer.global_transform
+
+	var kick_direction: Vector2 = debris.global_transform.basis_xform(local_centroid)
+	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(debris.global_rotation)
+
+	debris.setup(cells, colors, textures, _hull_renderer.cell_size,
+		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE))
 
 
 ## New max_energy keeps the same fraction full rather than resetting to full
@@ -168,7 +417,9 @@ func _spawn_hardpoint_guns() -> void:
 		gun.position = _hardpoint_center(placement)
 		gun.set_cell_size(_hull_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
 		gun.apply_tier(module_type.tier)
+		gun.apply_core_distance_bonus(ship_layout.distance_from_core(placement))
 		gun.setup(self)
+		gun.source_placement_id = placement.placement_id
 		for property_name in _weapon_upgrade_modifiers:
 			gun.set(property_name, gun.get(property_name) + _weapon_upgrade_modifiers[property_name])
 		_hardpoint_guns.append(gun)
@@ -186,7 +437,9 @@ func _spawn_missile_launchers() -> void:
 		launcher.position = _hardpoint_center(placement)
 		launcher.set_cell_size(_hull_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
 		launcher.apply_tier(module_type.tier)
+		launcher.apply_core_distance_bonus(ship_layout.distance_from_core(placement))
 		launcher.setup(self)
+		launcher.source_placement_id = placement.placement_id
 		for property_name in _missile_upgrade_modifiers:
 			launcher.set(property_name, launcher.get(property_name) + _missile_upgrade_modifiers[property_name])
 		_missile_launchers.append(launcher)
@@ -263,16 +516,27 @@ func _on_health_changed(current: float, _max: float) -> void:
 
 func fire_primary() -> void:
 	for gun in _hardpoint_guns:
-		gun.fire()
+		if not is_module_destroyed(gun.source_placement_id):
+			gun.fire()
 
 
 func fire_secondary() -> void:
 	for launcher in _missile_launchers:
-		launcher.fire()
+		if not is_module_destroyed(launcher.source_placement_id):
+			launcher.fire()
 
 
 func take_damage(amount: float) -> void:
 	_health.take_damage(amount)
+
+
+## Same as take_damage(), but also attributes the hit to whichever module
+## occupies the impact point, so individual engines/weapons can be knocked
+## out mid-fight — the ship's overall Health pool takes the same damage
+## either way; module condition is a separate, parallel effect.
+func take_damage_at(amount: float, impact_point: Vector2) -> void:
+	take_damage(amount)
+	_damage_module_at_point(amount, impact_point)
 
 
 func add_material(material_id: String, amount: int) -> void:

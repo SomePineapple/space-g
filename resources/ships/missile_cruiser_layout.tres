@@ -32,7 +32,13 @@ placement_id = "missile_b"
 module_type_id = "missile_hardpoint"
 hex_coord = Vector2i(0, 1)
 
+[sub_resource type="Resource" id="Resource_reactor"]
+script = ExtResource("2_placement")
+placement_id = "reactor_a"
+module_type_id = "reactor_mk1"
+hex_coord = Vector2i(-1, 1)
+
 [resource]
 script = ExtResource("1_layout")
-placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_heavy_hull"), SubResource("Resource_engine"), SubResource("Resource_missile_a"), SubResource("Resource_missile_b")])
+placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_heavy_hull"), SubResource("Resource_engine"), SubResource("Resource_missile_a"), SubResource("Resource_missile_b"), SubResource("Resource_reactor")])
 core_placement_id = "core"

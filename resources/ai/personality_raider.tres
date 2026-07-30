@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ShipPersonality" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/ai/ship_personality.gd" id="1_ship_personality"]
+
+[resource]
+script = ExtResource("1_ship_personality")
+display_name = "Raider"
+is_player_controlled = false
+detection_range = 800.0
+fire_range = 300.0
+keep_distance = 100.0
+aim_tolerance_deg = 15.0
+turn_response = 3.0
+suspicion_delay = 0.2
+retreats_when_too_close = false
+use_primary_weapon = true
+use_secondary_weapon = true

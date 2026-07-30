@@ -23,10 +23,23 @@ const TIER_VISUAL_SCALE: Array[float] = [1.0, 1.0, 1.4, 1.8]
 const TIER_PROJECTILE_SCALE_MULTIPLIER: Array[float] = [1.0, 1.0, 1.4, 2.0]
 const TIER_ENERGY_COST_MULTIPLIER: Array[float] = [1.0, 1.0, 1.8, 2.8]
 
+## Mirrors ShipLayout's reactor distance penalty (see
+## ShipLayout.REACTOR_DISTANCE_PENALTY_PER_CELL): weapons get more damage the
+## further out from the Core they're mounted, on the same "cockpit
+## interference" idea, so a good hull design has to weigh reactors-close-in
+## against weapons-pushed-out rather than clustering everything on one hex.
+const CORE_DISTANCE_DAMAGE_BONUS_PER_CELL: float = 0.08
+const CORE_DISTANCE_DAMAGE_BONUS_MAX: float = 0.5
+
 ## Scales the spawned projectile's whole node (visual and collision shape
 ## alike, since both are sized relative to this transform), so bigger-tier
 ## weapons visibly fire bigger shots.
 @export var projectile_scale: float = 1.0
+
+## Which ModulePlacement (on the shooter's ShipLayout) this hardpoint was
+## spawned from — set by Ship right after instancing, so Ship.fire_primary()/
+## fire_secondary() can skip a hardpoint whose module has been destroyed.
+var source_placement_id: String = ""
 
 var _cooldown_remaining: float = 0.0
 var _shooter: Ship
@@ -52,6 +65,12 @@ func apply_tier(tier: int) -> void:
 	recoil_force *= TIER_RECOIL_MULTIPLIER[tier]
 	projectile_scale *= TIER_PROJECTILE_SCALE_MULTIPLIER[tier]
 	energy_cost *= TIER_ENERGY_COST_MULTIPLIER[tier]
+
+
+## Called once, right after apply_tier(), before upgrade modifiers.
+func apply_core_distance_bonus(distance: int) -> void:
+	var bonus: float = minf(CORE_DISTANCE_DAMAGE_BONUS_PER_CELL * distance, CORE_DISTANCE_DAMAGE_BONUS_MAX)
+	projectile_damage *= 1.0 + bonus
 
 
 static func tier_visual_scale(tier: int) -> float:

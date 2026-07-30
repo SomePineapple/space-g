@@ -41,7 +41,9 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if body == _shooter:
 		return
-	if body.has_method("take_damage"):
+	if body.has_method("take_damage_at"):
+		body.take_damage_at(damage, global_position)
+	elif body.has_method("take_damage"):
 		body.take_damage(damage)
 	_destroy()
 

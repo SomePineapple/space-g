@@ -15,6 +15,17 @@ var current_state: State = State.IDLE
 var _suspicion_elapsed: float = 0.0
 var _last_known_health: float = -1.0
 
+## Real weapons fire shouldn't converge on the exact same point every shot —
+## without this, every hit lands dead-on the target's origin, which is where
+## the Command Core sits by convention on most layouts, making it a
+## guaranteed bullseye the instant anything in front of it breaks. Re-rolled
+## periodically (not every frame) so the barrel tracks smoothly instead of
+## vibrating.
+var _aim_jitter_offset: Vector2 = Vector2.ZERO
+var _aim_jitter_timer: float = 0.0
+const AIM_JITTER_INTERVAL: float = 0.35
+const AIM_JITTER_FRACTION: float = 0.5
+
 
 func _ready() -> void:
 	_health.health_changed.connect(_on_health_changed)
@@ -55,7 +66,7 @@ func _physics_process(delta: float) -> void:
 		State.SUSPICIOUS:
 			_track_player(to_player, personality)
 		State.ALERT:
-			_engage_player(player, to_player, distance, personality)
+			_engage_player(player, to_player, distance, personality, delta)
 
 
 ## Idle -> Suspicious happens on detection; Suspicious -> Alert happens after
@@ -93,9 +104,9 @@ func _track_player(to_player: Vector2, personality: ShipPersonality) -> void:
 	ship.set_thrust_input(0.0)
 
 
-func _engage_player(player: Ship, to_player: Vector2, distance: float, personality: ShipPersonality) -> void:
+func _engage_player(player: Ship, to_player: Vector2, distance: float, personality: ShipPersonality, delta: float) -> void:
 	var angle_diff: float = wrapf(to_player.angle() - ship.rotation, -PI, PI)
-	ship.set_aim_target(player.global_position)
+	ship.set_aim_target(_jittered_aim_point(player, delta))
 	ship.set_locked_target(player)
 	ship.set_turn_input(clampf(angle_diff * personality.turn_response, -1.0, 1.0))
 
@@ -112,6 +123,18 @@ func _engage_player(player: Ship, to_player: Vector2, distance: float, personali
 			ship.fire_primary()
 		if personality.use_secondary_weapon:
 			ship.fire_secondary()
+
+
+## Spreads aim across the target's own silhouette instead of dead-center on
+## its origin, re-rolling only every AIM_JITTER_INTERVAL so the barrel drifts
+## smoothly rather than vibrating frame to frame.
+func _jittered_aim_point(player: Ship, delta: float) -> Vector2:
+	_aim_jitter_timer -= delta
+	if _aim_jitter_timer <= 0.0:
+		_aim_jitter_timer = AIM_JITTER_INTERVAL
+		var spread_radius: float = player.get_layout_extent() * AIM_JITTER_FRACTION
+		_aim_jitter_offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * spread_radius
+	return player.global_position + _aim_jitter_offset
 
 
 func _find_player() -> Ship:

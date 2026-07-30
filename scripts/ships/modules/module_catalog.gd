@@ -23,14 +23,30 @@ const COCKPIT_TEXTURE: Texture2D = preload("res://art/ships/cockpit_v1.png")
 
 static func get_all() -> Array[ModuleType]:
 	var types: Array[ModuleType] = []
-	types.append(_make(CORE_TYPE_ID, "Command Core", Color(0.9, 0.85, 0.2), SINGLE_CELL, 0.4, 40.0, 0.0, COCKPIT_TEXTURE,
+	# Losing the Core ends the ship outright (see Ship._on_module_destroyed),
+	# so it needs to be the best-armored single point on the whole hull rather
+	# than one of the flimsiest — a heavy weapon shouldn't be able to end a
+	# fight in one lucky hit to the cockpit.
+	types.append(_make(CORE_TYPE_ID, "Command Core", Color(0.9, 0.85, 0.2), SINGLE_CELL, 0.4, 140.0, 0.0, COCKPIT_TEXTURE,
 		"", 1, {Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 20}))
-	types.append(_make("hull", "Hull", Color(0.5, 0.55, 0.6), SINGLE_CELL, 0.3, 60.0, 0.0, HULL_TEXTURE,
+	# Fragile enough to be crackable within a normal engagement (with splash
+	# from nearby hits, see Ship.module_splash_fraction), but not so fragile
+	# that whatever's behind sturdier armor is exposed within a few seconds
+	# of sustained close-range fire.
+	types.append(_make("hull", "Hull", Color(0.5, 0.55, 0.6), SINGLE_CELL, 0.3, 50.0, 0.0, HULL_TEXTURE,
 		"", 1, {Materials.STEEL_ALLOY: 5}))
 	types.append(_make("engine", "Engine", Color(0.3, 0.7, 1.0), SINGLE_CELL, 0.25, 20.0, 500.0, null,
 		"", 1, {Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 5}))
-	types.append(_make("heavy_hull", "Heavy Hull", Color(0.45, 0.3, 0.55), LINE_3_CELLS, 0.9, 150.0, 0.0, null,
+	# Meant to actually function as a wall: tough enough that sustained
+	# close-range fire can't punch through to whatever it's shielding within
+	# a few seconds, even from several guns at once.
+	types.append(_make("heavy_hull", "Heavy Hull", Color(0.45, 0.3, 0.55), LINE_3_CELLS, 0.9, 240.0, 0.0, null,
 		"", 1, {Materials.STEEL_ALLOY: 20}))
+	# Deliberately cheaper, lighter and far more fragile than Hull: a strut's
+	# only job is connecting a wing/appendage back to the core, so a snapped-off
+	# wing costs little to have risked and rebuilt, unlike investing in Hull.
+	types.append(_make("strut", "Strut", Color(0.55, 0.58, 0.5), SINGLE_CELL, 0.15, 25.0, 0.0, null,
+		"", 1, {Materials.STEEL_ALLOY: 3}))
 
 	types.append(_make(WEAPON_HARDPOINT_TYPE_ID, "Weapon Hardpoint I", Color(0.9, 0.35, 0.3), SINGLE_CELL,
 		0.2, 15.0, 0.0, null, "weapon", 1, {Materials.STEEL_ALLOY: 8, Materials.ELECTRONICS: 4}))

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ShipPersonality" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/ai/ship_personality.gd" id="1_ship_personality"]
+
+[resource]
+script = ExtResource("1_ship_personality")
+display_name = "Gunship"
+is_player_controlled = false
+detection_range = 900.0
+fire_range = 550.0
+keep_distance = 450.0
+aim_tolerance_deg = 12.0
+turn_response = 1.0
+suspicion_delay = 0.8
+retreats_when_too_close = false
+use_primary_weapon = true
+use_secondary_weapon = true

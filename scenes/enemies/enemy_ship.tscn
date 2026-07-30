@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="1_ship"]
 [ext_resource type="Script" path="res://scenes/enemies/ship_ai.gd" id="2_ai"]
-[ext_resource type="Resource" path="res://resources/ai/personality_rammer.tres" id="3_personality"]
+[ext_resource type="Resource" path="res://resources/ai/personality_scout.tres" id="3_personality"]
 
 [node name="EnemyShip" unique_id=690453083 groups=["enemy_ship", "lockable"] instance=ExtResource("1_ship")]
 personality = ExtResource("3_personality")
