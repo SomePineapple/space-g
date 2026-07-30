@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://art/planets/planet_earth_like.png" id="1_earth"]
+
+[node name="PlanetEarthLike" type="Sprite2D"]
+texture_filter = 4
+scale = Vector2(0.75, 0.75)
+texture = ExtResource("1_earth")

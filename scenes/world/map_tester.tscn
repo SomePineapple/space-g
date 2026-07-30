@@ -13,6 +13,7 @@
 [ext_resource type="Script" uid="uid://cv8gwe3gh3n2o" path="res://scenes/world/region_boundary.gd" id="11_boundary"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_light_one.tscn" id="12_pirate_light"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_med_one.tscn" id="13_pirate_med"]
+[ext_resource type="PackedScene" path="res://scenes/world/planet.tscn" id="14_planet"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
 sky_top_color = Color(0.38, 0.45, 0.55, 1)
@@ -85,6 +86,9 @@ field_size = Vector2(3500, 2000)
 max_star_size = 2.5
 max_brightness = 1.8
 random_seed = 2
+
+[node name="PlanetEarthLike" parent="." unique_id=-1234500001 instance=ExtResource("14_planet")]
+position = Vector2(-1100, 700)
 
 [node name="Ship" parent="." unique_id=236908416 groups=["player_ship"] instance=ExtResource("1_a385b")]
 drops_salvage = false
