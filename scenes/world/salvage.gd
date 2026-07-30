@@ -8,17 +8,32 @@ enum Rarity { COMMON, ELECTRONICS, ENERGY, EXPERIMENTAL, ARTEFACT }
 ## Experimental/Artefact tiers reuse the existing three material types at
 ## larger amounts until dedicated rarer materials (Alien Biomatter, Rare
 ## Crystals, ...) are added in a later increment.
+## "visual_scale" and "spike_count" give higher rarities a bigger, spikier
+## silhouette (0 spikes = plain glow, no overlay) so rarity reads at a
+## glance without text — "pull_resistance" makes rarer salvage feel heavier
+## on the tractor beam (see TractorBeam._update_beam).
 const RARITY_DATA: Dictionary = {
-	Rarity.COMMON: {"color": Color(0.75, 0.78, 0.8), "material": Materials.STEEL_ALLOY, "amount": 10},
-	Rarity.ELECTRONICS: {"color": Color(0.3, 0.6, 1.0), "material": Materials.ELECTRONICS, "amount": 8},
-	Rarity.ENERGY: {"color": Color(0.3, 1.0, 0.5), "material": Materials.REACTOR_COMPONENTS, "amount": 5},
-	Rarity.EXPERIMENTAL: {"color": Color(0.7, 0.3, 1.0), "material": Materials.REACTOR_COMPONENTS, "amount": 12},
-	Rarity.ARTEFACT: {"color": Color(1.0, 0.85, 0.3), "material": Materials.ELECTRONICS, "amount": 25},
+	Rarity.COMMON: {"color": Color(0.75, 0.78, 0.8), "material": Materials.STEEL_ALLOY, "amount": 10,
+		"visual_scale": 1.0, "spike_count": 0, "pull_resistance": 1.0},
+	Rarity.ELECTRONICS: {"color": Color(0.3, 0.6, 1.0), "material": Materials.ELECTRONICS, "amount": 8,
+		"visual_scale": 1.1, "spike_count": 4, "pull_resistance": 0.9},
+	Rarity.ENERGY: {"color": Color(0.3, 1.0, 0.5), "material": Materials.REACTOR_COMPONENTS, "amount": 5,
+		"visual_scale": 1.2, "spike_count": 5, "pull_resistance": 0.8},
+	Rarity.EXPERIMENTAL: {"color": Color(0.7, 0.3, 1.0), "material": Materials.REACTOR_COMPONENTS, "amount": 12,
+		"visual_scale": 1.35, "spike_count": 6, "pull_resistance": 0.65},
+	Rarity.ARTEFACT: {"color": Color(1.0, 0.85, 0.3), "material": Materials.ELECTRONICS, "amount": 25,
+		"visual_scale": 1.5, "spike_count": 8, "pull_resistance": 0.5},
 }
 
 const DANGER_COLOR: Color = Color(1.0, 0.15, 0.15)
 const DANGER_PULSE_SPEED: float = 6.0
 const DANGER_PULSE_STRENGTH: float = 0.7
+
+const STAR_OUTER_RADIUS: float = 22.0
+const STAR_INNER_RATIO: float = 0.5
+const STAR_OUTLINE_WIDTH: float = 2.0
+## Radians/sec per spike point — rarer (more spikes) items shimmer faster.
+const SPIKE_ROTATION_SPEED: float = 0.6
 
 @export var rarity: Rarity = Rarity.COMMON
 @export var drift_speed: float = 20.0
@@ -30,8 +45,12 @@ const DANGER_PULSE_STRENGTH: float = 0.7
 
 var material_id: String = Materials.STEEL_ALLOY
 var material_amount: int = 10
+var pull_resistance: float = 1.0
+var _visual_scale: float = 1.0
+var _spike_count: int = 0
 var _drift_direction: Vector2 = Vector2.ZERO
 var _base_color: Color
+var _display_color: Color
 var _time: float = 0.0
 
 @onready var _visual: Sprite2D = $Visual
@@ -44,17 +63,47 @@ func _ready() -> void:
 
 	var data: Dictionary = RARITY_DATA[rarity]
 	_base_color = data["color"]
+	_display_color = _base_color
 	_visual.modulate = _base_color
 	material_id = data["material"]
 	material_amount = data["amount"]
+	pull_resistance = data["pull_resistance"]
+	_visual_scale = data["visual_scale"]
+	_spike_count = data["spike_count"]
+	_visual.scale *= _visual_scale
 
-	set_process(is_dangerous)
+	set_process(is_dangerous or _spike_count > 0)
 
 
 func _process(delta: float) -> void:
 	_time += delta
-	var pulse: float = (sin(_time * DANGER_PULSE_SPEED) + 1.0) * 0.5
-	_visual.modulate = _base_color.lerp(DANGER_COLOR, pulse * DANGER_PULSE_STRENGTH)
+	if is_dangerous:
+		var pulse: float = (sin(_time * DANGER_PULSE_SPEED) + 1.0) * 0.5
+		_display_color = _base_color.lerp(DANGER_COLOR, pulse * DANGER_PULSE_STRENGTH)
+		_visual.modulate = _display_color
+
+	if _spike_count > 0:
+		rotation += SPIKE_ROTATION_SPEED * _spike_count * delta
+		queue_redraw()
+
+
+## Higher rarities get a spikier star silhouette layered over the glow
+## sprite, so rarity reads from shape alone, not just color.
+func _draw() -> void:
+	if _spike_count <= 0:
+		return
+
+	var outer_radius: float = STAR_OUTER_RADIUS * _visual_scale
+	var inner_radius: float = outer_radius * STAR_INNER_RATIO
+	var point_count: int = _spike_count * 2
+	var points := PackedVector2Array()
+	for i in point_count:
+		var point_radius: float = outer_radius if i % 2 == 0 else inner_radius
+		var angle: float = TAU * i / float(point_count)
+		points.append(Vector2(cos(angle), sin(angle)) * point_radius)
+	points.append(points[0])
+
+	draw_polyline(points, _display_color, STAR_OUTLINE_WIDTH)
 
 
 func _physics_process(delta: float) -> void:

@@ -14,6 +14,12 @@ extends Resource
 @export var detection_range: float = 900.0
 @export var fire_range: float = 500.0
 @export var keep_distance: float = 300.0
+
+## Seconds spent "noticing" the target (turning to face it, not yet moving
+## or firing) after it enters detection_range before escalating to full
+## Alert. Skipped entirely if the target is already within fire_range, or
+## if this ship takes damage (ShipAI jumps straight to Alert on damage).
+@export var suspicion_delay: float = 0.6
 @export var aim_tolerance_deg: float = 10.0
 @export var turn_response: float = 2.0
 

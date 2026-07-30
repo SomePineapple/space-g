@@ -5,6 +5,10 @@ const BOX_HEIGHT: float = 50.0
 const COLUMN_SPACING: float = 30.0
 const ROW_SPACING: float = 50.0
 const HEADER_HEIGHT: float = 30.0
+const CONTENT_TOP: float = 84.0
+const CONTENT_LEFT: float = 20.0
+const BACKGROUND_MARGIN: float = 10.0
+const BACKGROUND_COLOR: Color = Color(0.05, 0.07, 0.1, 0.55)
 
 ## Only lets the upgrade panel open near the region's home base marker,
 ## matching the ship builder's gating.
@@ -55,8 +59,14 @@ func _is_near_home_base() -> bool:
 
 func _build_ui() -> void:
 	var panel := Control.new()
-	panel.position = Vector2(20, 60)
+	panel.position = Vector2(CONTENT_LEFT, CONTENT_TOP)
 	add_child(panel)
+
+	var background := ColorRect.new()
+	background.position = Vector2(-BACKGROUND_MARGIN, -BACKGROUND_MARGIN)
+	background.color = BACKGROUND_COLOR
+	panel.add_child(background)
+	panel.move_child(background, 0)
 
 	var lines_layer := UpgradeTreeLines.new()
 	panel.add_child(lines_layer)
@@ -115,6 +125,8 @@ func _build_ui() -> void:
 		HEADER_HEIGHT + (max_depth + 1) * (BOX_HEIGHT + ROW_SPACING)
 	)
 	lines_layer.set_lines(connections)
+
+	background.size = lines_layer.size + Vector2(BACKGROUND_MARGIN * 2, BACKGROUND_MARGIN * 2)
 
 
 func _compute_depths(all_nodes: Array) -> Dictionary:

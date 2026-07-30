@@ -5,6 +5,13 @@
 [node name="HUD" type="CanvasLayer" unique_id=309546132]
 script = ExtResource("1_0mwgc")
 
+[node name="Background" type="ColorRect" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 660.0
+offset_bottom = 82.0
+color = Color(0.05, 0.07, 0.1, 0.55)
+
 [node name="SalvageLabel" type="Label" parent="." unique_id=610305732]
 offset_left = 20.0
 offset_top = 20.0

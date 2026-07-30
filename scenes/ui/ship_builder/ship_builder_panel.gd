@@ -8,6 +8,28 @@ const GRID_PIXEL_HEIGHT: float = 470.0
 
 const SAVE_DIRECTORY: String = "user://ships"
 
+const CONTENT_TOP: float = 84.0
+const CONTENT_LEFT: float = 20.0
+const INFO_BAR_HEIGHT: float = 40.0
+const ACTIONS_HEIGHT: float = 34.0
+const SECTION_GAP: float = 8.0
+
+const SIDE_PANEL_GAP: float = 20.0
+const SIDE_PANEL_WIDTH: float = 260.0
+const SIDE_HEADER_HEIGHT: float = 22.0
+const SIDE_SAVE_ROW_HEIGHT: float = 30.0
+const SIDE_SAVED_LIST_HEIGHT: float = 120.0
+const SIDE_MARGIN: float = 10.0
+const PALETTE_BUTTON_HEIGHT: float = 66.0
+const PALETTE_BUTTON_GAP: int = 6
+
+## "Basic backgrounds for now" per the current UI tidy-up pass — a dark
+## translucent bar behind the info/status text and a neon-blue translucent
+## panel behind the module list, both easy to reskin later.
+const INFO_BG_COLOR: Color = Color(0.05, 0.07, 0.1, 0.55)
+const GRID_BG_COLOR: Color = Color(0.03, 0.04, 0.06, 0.5)
+const PALETTE_BG_COLOR: Color = Color(0.1, 0.5, 1.0, 0.5)
+
 ## Only lets the builder open near the region's home base marker, so
 ## building/spending happens at a fixed "home", not mid-flight anywhere.
 @export var home_base_range: float = 300.0
@@ -89,34 +111,43 @@ func _apply_to_player_ship() -> void:
 
 func _build_ui() -> void:
 	var panel := Control.new()
-	panel.position = Vector2(20, 60)
+	panel.position = Vector2(CONTENT_LEFT, CONTENT_TOP)
 	add_child(panel)
 
+	_build_left_column(panel)
+	_build_side_panel(panel)
+	_refresh_saved_list()
+
+
+func _build_left_column(panel: Control) -> void:
+	var info_bg := ColorRect.new()
+	info_bg.position = Vector2(0, 0)
+	info_bg.size = Vector2(GRID_PIXEL_WIDTH, INFO_BAR_HEIGHT)
+	info_bg.color = INFO_BG_COLOR
+	panel.add_child(info_bg)
+
 	_status_label = Label.new()
-	_status_label.position = Vector2(0, 0)
-	_status_label.size = Vector2(GRID_PIXEL_WIDTH, 24)
+	_status_label.position = Vector2(8, 2)
+	_status_label.size = Vector2(GRID_PIXEL_WIDTH - 16, 18)
+	_status_label.clip_text = true
 	_status_label.text = "Select a module type, then click an adjacent cell."
 	panel.add_child(_status_label)
 
 	_stats_label = Label.new()
-	_stats_label.position = Vector2(0, 24)
-	_stats_label.size = Vector2(GRID_PIXEL_WIDTH, 20)
+	_stats_label.position = Vector2(8, 20)
+	_stats_label.size = Vector2(GRID_PIXEL_WIDTH - 16, 18)
 	panel.add_child(_stats_label)
 
-	var palette := HBoxContainer.new()
-	palette.position = Vector2(0, 48)
-	panel.add_child(palette)
+	var grid_top: float = INFO_BAR_HEIGHT + SECTION_GAP
 
-	for module_type in ModuleCatalog.get_all():
-		var button := Button.new()
-		button.text = "%s\n%s" % [module_type.display_name, _format_costs(module_type.build_costs)]
-		button.toggle_mode = true
-		button.pressed.connect(_on_palette_pressed.bind(module_type.id))
-		palette.add_child(button)
-		_palette_buttons[module_type.id] = button
+	var grid_bg := ColorRect.new()
+	grid_bg.position = Vector2(0, grid_top)
+	grid_bg.size = Vector2(GRID_PIXEL_WIDTH, GRID_PIXEL_HEIGHT)
+	grid_bg.color = GRID_BG_COLOR
+	panel.add_child(grid_bg)
 
 	_grid = HexGridControl.new()
-	_grid.position = Vector2(0, 88)
+	_grid.position = Vector2(0, grid_top)
 	_grid.size = Vector2(GRID_PIXEL_WIDTH, GRID_PIXEL_HEIGHT)
 	_grid.cell_size = GRID_CELL_SIZE
 	_grid.grid_width = GRID_COLS
@@ -128,7 +159,8 @@ func _build_ui() -> void:
 	panel.add_child(_grid)
 
 	var actions := HBoxContainer.new()
-	actions.position = Vector2(0, 88 + GRID_PIXEL_HEIGHT + 10)
+	actions.position = Vector2(0, grid_top + GRID_PIXEL_HEIGHT + SECTION_GAP)
+	actions.add_theme_constant_override("separation", 8)
 	panel.add_child(actions)
 
 	var rotate_button := Button.new()
@@ -146,28 +178,86 @@ func _build_ui() -> void:
 	validate_button.pressed.connect(_on_validate_pressed)
 	actions.add_child(validate_button)
 
+
+## Right-hand column: the placeable-module list (scrollable, neon-blue
+## backdrop) on top, ship save/load underneath, matching the same overall
+## height as the grid + actions row on the left.
+func _build_side_panel(panel: Control) -> void:
+	var side_x: float = GRID_PIXEL_WIDTH + SIDE_PANEL_GAP
+	var side_height: float = INFO_BAR_HEIGHT + SECTION_GAP + GRID_PIXEL_HEIGHT + SECTION_GAP + ACTIONS_HEIGHT
+
+	var side_bg := ColorRect.new()
+	side_bg.position = Vector2(side_x, 0)
+	side_bg.size = Vector2(SIDE_PANEL_WIDTH, side_height)
+	side_bg.color = PALETTE_BG_COLOR
+	panel.add_child(side_bg)
+
+	var header := Label.new()
+	header.position = Vector2(side_x + SIDE_MARGIN, 4)
+	header.size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, SIDE_HEADER_HEIGHT - 4)
+	header.text = "Modules"
+	header.add_theme_font_size_override("font_size", 18)
+	panel.add_child(header)
+
+	var save_row_top: float = side_height - SIDE_SAVE_ROW_HEIGHT - SECTION_GAP - SIDE_SAVED_LIST_HEIGHT
+	var palette_top: float = SIDE_HEADER_HEIGHT
+	var palette_height: float = save_row_top - SECTION_GAP - palette_top
+
+	var palette_scroll := ScrollContainer.new()
+	palette_scroll.position = Vector2(side_x + SIDE_MARGIN, palette_top)
+	palette_scroll.size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, palette_height)
+	palette_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(palette_scroll)
+
+	var palette := VBoxContainer.new()
+	palette.custom_minimum_size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, 0)
+	palette.add_theme_constant_override("separation", PALETTE_BUTTON_GAP)
+	palette_scroll.add_child(palette)
+
+	for module_type in ModuleCatalog.get_all():
+		var button := Button.new()
+		button.text = "%s\n%s" % [module_type.display_name, _format_costs(module_type.build_costs)]
+		button.toggle_mode = true
+		# clip_text excludes the (sometimes long) cost string from the
+		# button's minimum-size calculation; without it a long enough cost
+		# string forces the ScrollContainer wider than SIDE_PANEL_WIDTH
+		# (ScrollContainer expands to fit content when horizontal scrolling
+		# is disabled), pushing the list and its scrollbar out past the
+		# neon-blue background on the right.
+		button.clip_text = true
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
+		button.pressed.connect(_on_palette_pressed.bind(module_type.id))
+		palette.add_child(button)
+		_palette_buttons[module_type.id] = button
+
+	var save_row := HBoxContainer.new()
+	save_row.position = Vector2(side_x + SIDE_MARGIN, save_row_top)
+	save_row.size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, SIDE_SAVE_ROW_HEIGHT)
+	save_row.add_theme_constant_override("separation", 6)
+	panel.add_child(save_row)
+
 	_save_name_edit = LineEdit.new()
 	_save_name_edit.placeholder_text = "ship name"
 	_save_name_edit.text = "my_ship"
-	_save_name_edit.custom_minimum_size = Vector2(120, 0)
-	actions.add_child(_save_name_edit)
+	_save_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	save_row.add_child(_save_name_edit)
 
 	var save_button := Button.new()
 	save_button.text = "Save"
 	save_button.pressed.connect(_on_save_pressed)
-	actions.add_child(save_button)
+	save_row.add_child(save_button)
 
 	var load_button := Button.new()
 	load_button.text = "Load"
 	load_button.pressed.connect(_on_load_pressed)
-	actions.add_child(load_button)
+	save_row.add_child(load_button)
 
 	_saved_list = ItemList.new()
-	_saved_list.position = Vector2(0, 88 + GRID_PIXEL_HEIGHT + 40)
-	_saved_list.size = Vector2(GRID_PIXEL_WIDTH, 100)
+	_saved_list.position = Vector2(side_x + SIDE_MARGIN, save_row_top + SIDE_SAVE_ROW_HEIGHT + SECTION_GAP)
+	_saved_list.size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, SIDE_SAVED_LIST_HEIGHT)
 	_saved_list.item_selected.connect(_on_saved_item_selected)
 	panel.add_child(_saved_list)
-	_refresh_saved_list()
 
 
 func _on_palette_pressed(module_type_id: String) -> void:
