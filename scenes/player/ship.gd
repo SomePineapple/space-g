@@ -246,8 +246,8 @@ func take_damage(amount: float) -> void:
 	_health.take_damage(amount)
 
 
-func add_salvage(amount: int) -> void:
-	_inventory.add_salvage(amount)
+func add_material(material_id: String, amount: int) -> void:
+	_inventory.add_material(material_id, amount)
 
 
 func apply_impulse(impulse: Vector2) -> void:

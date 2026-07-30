@@ -28,7 +28,7 @@ func _ready() -> void:
 	_ship = players[0]
 	_manager = _ship.get_node("UpgradeManager")
 	_manager.upgrade_purchased.connect(_on_state_changed)
-	_ship.get_node("Inventory").salvage_changed.connect(_on_state_changed)
+	_ship.get_node("Inventory").materials_changed.connect(_on_state_changed)
 
 	_build_ui()
 	_refresh_all()
@@ -158,5 +158,12 @@ func _refresh_all() -> void:
 			button.text = "%s\nOwned" % node.display_name
 			button.disabled = true
 		else:
-			button.text = "%s\n%d salvage" % [node.display_name, node.cost]
+			button.text = "%s\n%s" % [node.display_name, _format_costs(node.costs)]
 			button.disabled = not _manager.can_purchase(node.id)
+
+
+func _format_costs(costs: Dictionary) -> String:
+	var parts: Array = []
+	for material_id in costs:
+		parts.append("%d %s" % [costs[material_id], Materials.display_name(material_id)])
+	return ", ".join(parts)

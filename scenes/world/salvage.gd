@@ -1,16 +1,19 @@
 class_name Salvage
 extends Area2D
 
-signal collected(value: int)
+signal collected(material_id: String, amount: int)
 
 enum Rarity { COMMON, ELECTRONICS, ENERGY, EXPERIMENTAL, ARTEFACT }
 
+## Experimental/Artefact tiers reuse the existing three material types at
+## larger amounts until dedicated rarer materials (Alien Biomatter, Rare
+## Crystals, ...) are added in a later increment.
 const RARITY_DATA: Dictionary = {
-	Rarity.COMMON: {"color": Color(0.75, 0.78, 0.8), "value": 10},
-	Rarity.ELECTRONICS: {"color": Color(0.3, 0.6, 1.0), "value": 20},
-	Rarity.ENERGY: {"color": Color(0.3, 1.0, 0.5), "value": 35},
-	Rarity.EXPERIMENTAL: {"color": Color(0.7, 0.3, 1.0), "value": 60},
-	Rarity.ARTEFACT: {"color": Color(1.0, 0.85, 0.3), "value": 100},
+	Rarity.COMMON: {"color": Color(0.75, 0.78, 0.8), "material": Materials.STEEL_ALLOY, "amount": 10},
+	Rarity.ELECTRONICS: {"color": Color(0.3, 0.6, 1.0), "material": Materials.ELECTRONICS, "amount": 8},
+	Rarity.ENERGY: {"color": Color(0.3, 1.0, 0.5), "material": Materials.REACTOR_COMPONENTS, "amount": 5},
+	Rarity.EXPERIMENTAL: {"color": Color(0.7, 0.3, 1.0), "material": Materials.REACTOR_COMPONENTS, "amount": 12},
+	Rarity.ARTEFACT: {"color": Color(1.0, 0.85, 0.3), "material": Materials.ELECTRONICS, "amount": 25},
 }
 
 const DANGER_COLOR: Color = Color(1.0, 0.15, 0.15)
@@ -25,7 +28,8 @@ const DANGER_PULSE_STRENGTH: float = 0.7
 ## one exists and collecting salvage will play it automatically.
 @export var pickup_sound: AudioStream = null
 
-var salvage_value: int = 10
+var material_id: String = Materials.STEEL_ALLOY
+var material_amount: int = 10
 var _drift_direction: Vector2 = Vector2.ZERO
 var _base_color: Color
 var _time: float = 0.0
@@ -41,7 +45,8 @@ func _ready() -> void:
 	var data: Dictionary = RARITY_DATA[rarity]
 	_base_color = data["color"]
 	_visual.modulate = _base_color
-	salvage_value = data["value"]
+	material_id = data["material"]
+	material_amount = data["amount"]
 
 	set_process(is_dangerous)
 
@@ -63,11 +68,11 @@ func pull_toward(target_position: Vector2, speed: float, delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if not body.is_in_group("player_ship"):
 		return
-	if body.has_method("add_salvage"):
-		body.add_salvage(salvage_value)
+	if body.has_method("add_material"):
+		body.add_material(material_id, material_amount)
 	if is_dangerous and body.has_method("take_damage"):
 		body.take_damage(danger_damage)
-	collected.emit(salvage_value)
+	collected.emit(material_id, material_amount)
 	_play_pickup_sound()
 	# Deferred: this runs from within the physics engine's collision query
 	# flush (body_entered), where freeing a CollisionObject2D synchronously

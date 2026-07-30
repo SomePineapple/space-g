@@ -31,7 +31,7 @@ func can_purchase(id: String) -> bool:
 	var data: UpgradeNode = _catalog_by_id.get(id)
 	if data == null or is_unlocked(id):
 		return false
-	if _ship.get_node("Inventory").total_salvage < data.cost:
+	if not _ship.get_node("Inventory").has_materials(data.costs):
 		return false
 	for req in data.requires:
 		if not is_unlocked(req):
@@ -44,7 +44,7 @@ func purchase(id: String) -> bool:
 		return false
 
 	var data: UpgradeNode = _catalog_by_id[id]
-	_ship.get_node("Inventory").spend_salvage(data.cost)
+	_ship.get_node("Inventory").spend_materials(data.costs)
 	_apply_modifiers(data)
 	unlocked[id] = true
 	upgrade_purchased.emit(id)

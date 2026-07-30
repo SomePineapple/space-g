@@ -19,20 +19,24 @@ func _ready() -> void:
 		return
 
 	_inventory = players[0].get_node("Inventory")
-	_inventory.salvage_changed.connect(_on_salvage_changed)
-	_update_salvage_label(_inventory.total_salvage)
+	_inventory.materials_changed.connect(_on_materials_changed)
+	_update_salvage_label(_inventory.get_all_materials())
 
 	_health = players[0].get_node("Health")
 	_health.health_changed.connect(_on_health_changed)
 	_update_health_label(_health.current_health, _health.max_health)
 
 
-func _on_salvage_changed(total: int) -> void:
-	_update_salvage_label(total)
+func _on_materials_changed(totals: Dictionary) -> void:
+	_update_salvage_label(totals)
 
 
-func _update_salvage_label(total: int) -> void:
-	_salvage_label.text = "Salvage: %d" % total
+func _update_salvage_label(totals: Dictionary) -> void:
+	var parts: Array = []
+	for material_id in [Materials.STEEL_ALLOY, Materials.ELECTRONICS, Materials.REACTOR_COMPONENTS]:
+		var amount: int = totals.get(material_id, 0)
+		parts.append("%s: %d" % [Materials.display_name(material_id), amount])
+	_salvage_label.text = "  |  ".join(parts)
 
 
 ## Only current < last-known counts as damage — a ship rebuild in the
