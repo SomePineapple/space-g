@@ -75,6 +75,10 @@ var _boost_active: bool = false
 var _base_hull_modulate: Color
 var _flash_tween: Tween
 var _thrusters: Array[Node2D] = []
+## Parallel to _thrusters — which placement each thruster's flame belongs to,
+## so a destroyed/detached engine's particles can be silenced individually
+## even while other engines (or leftover momentum) keep the ship moving.
+var _thruster_placement_ids: Array[String] = []
 var _collision_shapes: Array[CollisionPolygon2D] = []
 var _hardpoint_guns: Array[HardpointGun] = []
 var _missile_launchers: Array[HardpointMissileLauncher] = []
@@ -464,17 +468,20 @@ func _free_collision_shapes_for(placement_id: String) -> void:
 ## Shared by _spawn_debris_for/_spawn_capturable_part_for: both spawn a node
 ## representing the same severed placement's hex(es), just as a different
 ## scene type, so the cell/color/texture/centroid gathering only lives once.
+## Uses the same per-cell, faction-reskinned texture lookup as
+## ShipLayoutRenderer (get_hex_texture_for_cell) so the severed piece keeps
+## showing the exact art it had on the hull, not the type's generic fallback.
 func _debris_visual_data(placement: ModulePlacement, module_type: ModuleType) -> Dictionary:
 	var cells: Array[Vector2i] = ship_layout.get_occupied_cells(placement)
 	var colors: Array[Color] = []
 	var textures: Array[Texture2D] = []
 	var local_centroid: Vector2 = Vector2.ZERO
-	for cell in cells:
+	for i in cells.size():
 		colors.append(module_type.color)
-		textures.append(module_type.hex_texture)
-		local_centroid += HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
+		textures.append(module_type.get_hex_texture_for_cell(personality.faction_id, i))
+		local_centroid += HexUtils.axial_to_pixel(cells[i], _hull_renderer.cell_size)
 	local_centroid /= cells.size()
-	return {"cells": cells, "colors": colors, "textures": textures, "centroid": local_centroid}
+	return {"cells": cells, "colors": colors, "textures": textures, "rotation_steps": placement.rotation_steps, "centroid": local_centroid}
 
 
 func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> void:
@@ -490,7 +497,7 @@ func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> v
 	var kick_direction: Vector2 = debris.global_transform.basis_xform(data["centroid"])
 	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(debris.global_rotation)
 
-	debris.setup(data["cells"], data["colors"], data["textures"], _hull_renderer.cell_size,
+	debris.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _hull_renderer.cell_size,
 		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE))
 
 
@@ -521,7 +528,7 @@ func _spawn_capturable_part_for(placement: ModulePlacement, module_type: ModuleT
 	var kick_direction: Vector2 = part.global_transform.basis_xform(data["centroid"])
 	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(part.global_rotation)
 
-	part.setup(data["cells"], data["colors"], data["textures"], _hull_renderer.cell_size,
+	part.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _hull_renderer.cell_size,
 		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE),
 		module_type.id, personality.faction_id)
 
@@ -550,12 +557,21 @@ func _spawn_thrusters() -> void:
 	for thruster in _thrusters:
 		thruster.queue_free()
 	_thrusters.clear()
+	_thruster_placement_ids.clear()
 
 	for placement in ship_layout.get_thruster_placements():
 		var thruster: Node2D = engine_thruster_scene.instantiate()
 		add_child(thruster)
-		thruster.position = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+		# Offset from the hex's center to its trailing (-X, "back of the
+		# ship") edge midpoint, so the flame visually bursts from the hex's
+		# own back edge instead of appearing to originate from its middle —
+		# see HexUtils.hex_corners for why -X is a flat edge, not a point.
+		var hex_center: Vector2 = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size)
+		var back_edge_offset: Vector2 = Vector2(-_hull_renderer.cell_size * HexUtils.SQRT3 * 0.5, 0.0)
+		thruster.position = (hex_center + back_edge_offset).rotated(_hull_renderer.rotation)
+		thruster.rotation = _hull_renderer.rotation
 		_thrusters.append(thruster)
+		_thruster_placement_ids.append(placement.placement_id)
 
 
 func _spawn_hardpoint_guns() -> void:
@@ -937,15 +953,20 @@ func _update_engine_particles() -> void:
 	var thrusting_forward: bool = _thrust_input > 0.0
 	var boosting: bool = thrusting_forward and _boost_active
 
-	for thruster in _thrusters:
+	for i in _thrusters.size():
+		var thruster: Node2D = _thrusters[i]
+		# A destroyed/detached engine shouldn't keep showing its own flame,
+		# even while other engines (or leftover momentum) keep the ship
+		# actually moving forward.
+		var alive: bool = not is_module_destroyed(_thruster_placement_ids[i])
 		var particles: GPUParticles2D = thruster.get_node("Particles")
 		var particles_soft: GPUParticles2D = thruster.get_node("ParticlesSoft")
 		var particles_normal: GPUParticles2D = thruster.get_node("ParticlesNormal")
 
-		particles.emitting = boosting
+		particles.emitting = boosting and alive
 		particles.amount_ratio = 1.0
 
-		particles_soft.emitting = boosting
+		particles_soft.emitting = boosting and alive
 		particles_soft.amount_ratio = 1.0
 
-		particles_normal.emitting = thrusting_forward and not boosting
+		particles_normal.emitting = thrusting_forward and not boosting and alive
