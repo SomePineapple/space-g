@@ -14,6 +14,8 @@ extends StaticBody2D
 @onready var _collision: CollisionPolygon2D = $Collision
 @onready var _health: Health = $Health
 
+var _radius: float = 0.0
+
 
 func _ready() -> void:
 	add_to_group("lockable")
@@ -22,6 +24,7 @@ func _ready() -> void:
 	rng.seed = random_seed
 
 	var base_radius: float = rng.randf_range(min_radius, max_radius)
+	_radius = base_radius
 	var points: PackedVector2Array = PackedVector2Array()
 	for i in point_count:
 		var angle: float = TAU * float(i) / float(point_count)
@@ -39,6 +42,13 @@ func _ready() -> void:
 
 func take_damage(amount: float) -> void:
 	_health.take_damage(amount)
+
+
+## Used by HardpointWinch for touch/arrival checks. Deliberately has no
+## apply_impulse (StaticBody2D — genuinely immovable), so a winch grappled to
+## an asteroid always pulls the ship toward it, never the reverse.
+func get_winch_radius() -> float:
+	return _radius
 
 
 ## Deferred as a whole: this fires from within the physics engine's

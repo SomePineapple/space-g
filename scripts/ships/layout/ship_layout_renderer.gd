@@ -6,6 +6,9 @@ extends Node2D
 
 @export var ship_layout: ShipLayout
 @export var cell_size: float = 24.0
+## Which faction's reskin (see ModuleType.faction_hex_textures) this ship's
+## hull draws with — set by Ship from its ShipPersonality.faction_id.
+@export var faction_id: String = "pirate"
 
 const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.07, 0.9)
 ## Flat scorched-hull look for a destroyed module — deliberately ignores its
@@ -66,13 +69,24 @@ func _draw() -> void:
 			continue
 
 		var destroyed: bool = _destroyed_placement_ids.has(placement.placement_id)
-		for cell in ship_layout.get_occupied_cells(placement):
+		var occupied_cells: Array[Vector2i] = ship_layout.get_occupied_cells(placement)
+		for i in occupied_cells.size():
+			var cell: Vector2i = occupied_cells[i]
 			var corners: PackedVector2Array = HexUtils.hex_corners(HexUtils.axial_to_pixel(cell, cell_size), cell_size)
 			if destroyed:
 				draw_colored_polygon(corners, DESTROYED_COLOR)
-			elif module_type.hex_texture != null:
-				draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners(), module_type.hex_texture)
 			else:
-				draw_colored_polygon(corners, module_type.color)
-			for i in corners.size():
-				draw_line(corners[i], corners[(i + 1) % corners.size()], OUTLINE_COLOR, 2.0)
+				var texture: Texture2D = module_type.get_hex_texture_for_cell(faction_id, i)
+				if texture != null:
+					var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
+					draw_colored_polygon(corners, Color.WHITE, uvs, texture)
+				else:
+					draw_colored_polygon(corners, module_type.color)
+				# Weapon-hardpoint overlay art (turret_360/etc) is drawn by the
+				# rotating HardpointGun itself during gameplay (see
+				# HardpointGun.set_turret_texture), not here — drawing it a
+				# second time on this static, non-rotating hull layer would
+				# leave a ghost turret showing through whenever the gun aims
+				# away from its neutral orientation.
+			for corner_index in corners.size():
+				draw_line(corners[corner_index], corners[(corner_index + 1) % corners.size()], OUTLINE_COLOR, 2.0)

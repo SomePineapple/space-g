@@ -29,10 +29,12 @@ signal energy_changed(current: float, max_energy: float)
 @export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
 @export var hardpoint_gun_scene: PackedScene = preload("res://scenes/player/hardpoint_gun.tscn")
 @export var hardpoint_missile_launcher_scene: PackedScene = preload("res://scenes/player/hardpoint_missile_launcher.tscn")
+@export var hardpoint_winch_scene: PackedScene = preload("res://scenes/player/hardpoint_winch.tscn")
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
 @export var ship_debris_scene: PackedScene = preload("res://scenes/world/ship_debris.tscn")
+@export var captured_tech_part_scene: PackedScene = preload("res://scenes/world/captured_tech_part.tscn")
 @export var seam_spark_scene: PackedScene = preload("res://scenes/world/seam_spark.tscn")
 ## Fraction of a hit's damage that also lands on the modules directly
 ## adjacent to the exact hex hit. Landing a hit on precisely the same hex
@@ -76,6 +78,7 @@ var _thrusters: Array[Node2D] = []
 var _collision_shapes: Array[CollisionPolygon2D] = []
 var _hardpoint_guns: Array[HardpointGun] = []
 var _missile_launchers: Array[HardpointMissileLauncher] = []
+var _winch_hardpoints: Array[HardpointWinch] = []
 var _weapon_upgrade_modifiers: Dictionary = {}
 var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
@@ -139,6 +142,7 @@ func _apply_ship_layout() -> void:
 		return
 	mass = ship_layout.total_mass()
 	_health.configure(ship_layout.total_max_health() * personality.health_multiplier)
+	_hull_renderer.faction_id = personality.faction_id
 	_hull_renderer.set_layout(ship_layout)
 	_init_module_conditions()
 	_apply_layout_energy()
@@ -147,7 +151,15 @@ func _apply_ship_layout() -> void:
 	_spawn_collision_shapes()
 	_spawn_hardpoint_guns()
 	_spawn_missile_launchers()
+	_spawn_hardpoint_winches()
 	layout_applied.emit()
+
+
+## Approximate "collision radius" for HardpointWinch's touch/arrival checks
+## against another ship — see get_layout_extent(), which this just aliases
+## under a name meaningful to the winch.
+func get_winch_radius() -> float:
+	return get_layout_extent()
 
 
 func get_layout_extent() -> float:
@@ -258,6 +270,7 @@ func _on_module_destroyed(placement: ModulePlacement) -> void:
 	# behind it (e.g. the connector further along a wing), which made
 	# severing a wing much harder than intended.
 	_free_collision_shapes_for(placement.placement_id)
+	_set_hardpoint_visual_visible(placement.placement_id, false)
 
 	# Losing the Core ends the ship outright: without it there's no anchor
 	# left to measure "still connected" against, so detachment checks would
@@ -395,6 +408,7 @@ func _advance_module_repair(placement: ModulePlacement, module_type: ModuleType,
 func _on_module_repaired(placement: ModulePlacement, module_type: ModuleType) -> void:
 	_hull_renderer.set_module_repaired(placement.placement_id)
 	_spawn_collision_shape_for(placement)
+	_set_hardpoint_visual_visible(placement.placement_id, true)
 
 	if module_type.thrust_contribution > 0.0:
 		thrust_force += module_type.thrust_contribution
@@ -431,7 +445,12 @@ func _detach_module(placement: ModulePlacement) -> void:
 
 	_hull_renderer.set_module_detached(placement.placement_id)
 	_free_collision_shapes_for(placement.placement_id)
-	_spawn_debris_for(placement, module_type)
+	_set_hardpoint_visual_visible(placement.placement_id, false)
+
+	if _roll_capturable(placement, module_type):
+		_spawn_capturable_part_for(placement, module_type)
+	else:
+		_spawn_debris_for(placement, module_type)
 
 
 func _free_collision_shapes_for(placement_id: String) -> void:
@@ -442,7 +461,10 @@ func _free_collision_shapes_for(placement_id: String) -> void:
 	_collision_shapes_by_placement.erase(placement_id)
 
 
-func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> void:
+## Shared by _spawn_debris_for/_spawn_capturable_part_for: both spawn a node
+## representing the same severed placement's hex(es), just as a different
+## scene type, so the cell/color/texture/centroid gathering only lives once.
+func _debris_visual_data(placement: ModulePlacement, module_type: ModuleType) -> Dictionary:
 	var cells: Array[Vector2i] = ship_layout.get_occupied_cells(placement)
 	var colors: Array[Color] = []
 	var textures: Array[Texture2D] = []
@@ -452,6 +474,11 @@ func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> v
 		textures.append(module_type.hex_texture)
 		local_centroid += HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
 	local_centroid /= cells.size()
+	return {"cells": cells, "colors": colors, "textures": textures, "centroid": local_centroid}
+
+
+func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> void:
+	var data: Dictionary = _debris_visual_data(placement, module_type)
 
 	var debris: ShipDebris = ship_debris_scene.instantiate()
 	get_tree().current_scene.add_child(debris)
@@ -460,11 +487,43 @@ func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> v
 	# before drifting away under their own velocity.
 	debris.global_transform = _hull_renderer.global_transform
 
-	var kick_direction: Vector2 = debris.global_transform.basis_xform(local_centroid)
+	var kick_direction: Vector2 = debris.global_transform.basis_xform(data["centroid"])
 	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(debris.global_rotation)
 
-	debris.setup(cells, colors, textures, _hull_renderer.cell_size,
+	debris.setup(data["cells"], data["colors"], data["textures"], _hull_renderer.cell_size,
 		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE))
+
+
+## A severed module only stays intact enough to be worth recovering if it
+## kept most of its own health right up to the moment it detached (rather
+## than being chewed apart first via splash/direct hits) — and even then only
+## sometimes, so capture is a notable outcome, not a guaranteed drop every
+## time a wing carrying real tech comes off (see ModuleType.is_capturable_tech).
+func _roll_capturable(placement: ModulePlacement, module_type: ModuleType) -> bool:
+	if not module_type.is_capturable_tech:
+		return false
+	var max_condition: float = module_type.health_contribution * personality.health_multiplier
+	if max_condition <= 0.0:
+		return false
+	var condition_fraction: float = get_module_condition(placement.placement_id) / max_condition
+	if condition_fraction < module_type.capture_health_fraction:
+		return false
+	return randf() < module_type.capture_chance
+
+
+func _spawn_capturable_part_for(placement: ModulePlacement, module_type: ModuleType) -> void:
+	var data: Dictionary = _debris_visual_data(placement, module_type)
+
+	var part: CapturedTechPart = captured_tech_part_scene.instantiate()
+	get_tree().current_scene.add_child(part)
+	part.global_transform = _hull_renderer.global_transform
+
+	var kick_direction: Vector2 = part.global_transform.basis_xform(data["centroid"])
+	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(part.global_rotation)
+
+	part.setup(data["cells"], data["colors"], data["textures"], _hull_renderer.cell_size,
+		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE),
+		module_type.id, personality.faction_id)
 
 
 ## New max_energy keeps the same fraction full rather than resetting to full
@@ -506,10 +565,12 @@ func _spawn_hardpoint_guns() -> void:
 
 	for placement in ship_layout.get_weapon_hardpoint_placements():
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-		var gun: HardpointGun = hardpoint_gun_scene.instantiate()
+		var scene_to_spawn: PackedScene = module_type.hardpoint_scene if module_type.hardpoint_scene != null else hardpoint_gun_scene
+		var gun: HardpointGun = scene_to_spawn.instantiate()
 		add_child(gun)
 		gun.position = _hardpoint_center(placement)
 		gun.set_cell_size(_hull_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
+		gun.set_turret_texture(module_type.get_hex_overlay_texture(personality.faction_id))
 		gun.apply_tier(module_type.tier)
 		gun.apply_core_distance_bonus(ship_layout.distance_from_core(placement))
 		gun.setup(self)
@@ -537,6 +598,44 @@ func _spawn_missile_launchers() -> void:
 		for property_name in _missile_upgrade_modifiers:
 			launcher.set(property_name, launcher.get(property_name) + _missile_upgrade_modifiers[property_name])
 		_missile_launchers.append(launcher)
+
+
+## Unlike guns/launchers, a winch hardpoint has a fixed facing rather than
+## tracking the mouse (see HardpointWinch, Ship._update_hardpoint_aim) — its
+## rotation is set once here from the placement's own rotation_steps (the
+## same per-hex facing the ship builder's R hotkey already edits), plus the
+## hull's fixed rendering offset, so "the direction the room is facing" is
+## whatever the player pointed it at in the builder.
+func _spawn_hardpoint_winches() -> void:
+	for winch in _winch_hardpoints:
+		winch.queue_free()
+	_winch_hardpoints.clear()
+
+	for placement in ship_layout.get_winch_hardpoint_placements():
+		var winch: HardpointWinch = hardpoint_winch_scene.instantiate()
+		add_child(winch)
+		winch.position = _hardpoint_center(placement)
+		winch.rotation = float(placement.rotation_steps) * (PI / 3.0) + _hull_renderer.rotation
+		winch.setup(self)
+		winch.source_placement_id = placement.placement_id
+		_winch_hardpoints.append(winch)
+
+
+## A destroyed/detached module's hex goes dark (see _on_module_destroyed/
+## _detach_module), but its HardpointGun/HardpointMissileLauncher is a
+## separate node positioned on top of that hex — without this it kept
+## floating there fully visible (turret and all) over a scorched or
+## already-departed hole. Repairing a module (_on_module_repaired) reverses
+## it. No-op for a placement that isn't a weapon/missile hardpoint.
+func _set_hardpoint_visual_visible(placement_id: String, should_be_visible: bool) -> void:
+	for gun in _hardpoint_guns:
+		if gun.source_placement_id == placement_id:
+			gun.visible = should_be_visible
+			return
+	for launcher in _missile_launchers:
+		if launcher.source_placement_id == placement_id:
+			launcher.visible = should_be_visible
+			return
 
 
 ## Centroid of a hardpoint's occupied cells, so multi-hex (tier 2/3)
@@ -620,6 +719,23 @@ func fire_secondary() -> void:
 			launcher.fire()
 
 
+## Called on fire_winch's just-pressed edge (see ship_input.gd) — starts a
+## cast on every mounted, still-intact winch hardpoint (usually just one).
+func fire_winch() -> void:
+	for winch in _winch_hardpoints:
+		if not is_module_destroyed(winch.source_placement_id):
+			winch.fire()
+
+
+## Called every physics frame with fire_winch's current held state — only
+## has an effect on a winch that's already ATTACHED to a part (see
+## HardpointWinch.set_reel_input).
+func set_winch_reel_input(is_held: bool) -> void:
+	for winch in _winch_hardpoints:
+		if not is_module_destroyed(winch.source_placement_id):
+			winch.set_reel_input(is_held)
+
+
 func take_damage(amount: float) -> void:
 	_time_since_last_damage = 0.0
 	_health.take_damage(amount)
@@ -634,8 +750,43 @@ func take_damage_at(amount: float, impact_point: Vector2) -> void:
 	_damage_module_at_point(amount, impact_point)
 
 
+## Fired by HardpointPhaseLance: unlike a normal hit (one hex + a splash
+## fraction to its neighbors), a beam pierces straight through the hull,
+## applying the full amount to every module hex it crosses from entry_point
+## onward along aim_direction, up to max_travel_distance — including the
+## Command Core, which splash damage deliberately never reaches (see
+## module_splash_fraction). That's the point of this weapon: a well-aligned
+## shot can punch through armor into whatever sits directly behind it.
+## Overall Health only takes the hit once, same as a normal shot.
+func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector2, max_travel_distance: float) -> void:
+	take_damage(amount)
+	if ship_layout == null or aim_direction.length() < 0.001:
+		return
+
+	var hull_local_origin: Vector2 = to_local(entry_point).rotated(-_hull_renderer.rotation)
+	var hull_local_direction: Vector2 = aim_direction.rotated(-global_rotation - _hull_renderer.rotation).normalized()
+
+	var step: float = _hull_renderer.cell_size * 0.5
+	var traveled: float = 0.0
+	var hit_placement_ids: Dictionary = {}
+
+	while traveled <= max_travel_distance:
+		var sample_point: Vector2 = hull_local_origin + hull_local_direction * traveled
+		var hex_coord: Vector2i = HexUtils.pixel_to_axial(sample_point, _hull_renderer.cell_size)
+		var placement: ModulePlacement = ship_layout.get_placement_at(hex_coord)
+		if placement != null and not hit_placement_ids.has(placement.placement_id):
+			hit_placement_ids[placement.placement_id] = true
+			_apply_module_damage(placement, amount)
+		traveled += step
+
+
 func add_material(material_id: String, amount: int) -> void:
 	_inventory.add_material(material_id, amount)
+
+
+## Called by WinchBeam once it finishes reeling in a CapturedTechPart.
+func capture_tech_part(module_type_id: String) -> void:
+	_inventory.add_captured_tech(module_type_id)
 
 
 func apply_impulse(impulse: Vector2) -> void:

@@ -15,6 +15,7 @@ extends Camera2D
 
 var _shake_strength: float = 0.0
 var _target_zoom: float = 1.0
+var _last_known_health: float = -1.0
 
 @onready var _ship: Ship = get_parent()
 @onready var _health: Health = _ship.get_node("Health")
@@ -26,8 +27,15 @@ func _ready() -> void:
 	_ship.layout_applied.connect(_on_layout_applied)
 
 
-func _on_health_changed(_current: float, _max: float) -> void:
-	_shake_strength = maxf(_shake_strength, damage_shake_strength)
+## Only current < last-known counts as damage — Health.heal() (module
+## repair regrowing, see Ship._advance_module_repair) also emits
+## health_changed, and configure() (ship rebuilds) resets to full, so
+## neither should shake the camera the way taking a hit does.
+func _on_health_changed(current: float, _max: float) -> void:
+	var took_damage: bool = _last_known_health >= 0.0 and current < _last_known_health
+	_last_known_health = current
+	if took_damage:
+		_shake_strength = maxf(_shake_strength, damage_shake_strength)
 
 
 func _on_destroyed() -> void:

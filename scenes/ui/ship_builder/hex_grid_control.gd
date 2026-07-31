@@ -9,6 +9,11 @@ signal hover_exited
 @export var grid_width: int = 20
 @export var grid_height: int = 10
 
+## Which faction's reskin the builder previews modules with — set by
+## ShipBuilderPanel from the ship actually being edited (see ModuleType.
+## faction_hex_textures).
+var faction_id: String = "corporate"
+
 var layout: ShipLayout
 var selected_placement_id: String = ""
 
@@ -30,18 +35,20 @@ func _draw() -> void:
 	var occupant_by_cell: Dictionary = _build_occupant_lookup()
 
 	for hex_coord in _all_coords_in_bounds():
-		var placement: ModulePlacement = occupant_by_cell.get(hex_coord)
+		var occupant: Array = occupant_by_cell.get(hex_coord, [])
+		var placement: ModulePlacement = occupant[0] if not occupant.is_empty() else null
 		var fill_color: Color = Color(0.15, 0.16, 0.18, 1.0)
 		var hex_texture: Texture2D = null
 		if placement != null:
 			var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 			if module_type != null:
 				fill_color = module_type.color
-				hex_texture = module_type.hex_texture
+				hex_texture = module_type.get_hex_texture_for_cell(faction_id, occupant[1])
 
 		var corners: PackedVector2Array = _hex_corners(_axial_to_pixel(hex_coord))
 		if hex_texture != null:
-			draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners(), hex_texture)
+			var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
+			draw_colored_polygon(corners, Color.WHITE, uvs, hex_texture)
 		else:
 			draw_colored_polygon(corners, fill_color)
 
@@ -55,7 +62,50 @@ func _draw() -> void:
 			var tip: Vector2 = center + Vector2(cos(angle), sin(angle)) * cell_size * 0.8
 			draw_line(center, tip, Color.WHITE, 3.0)
 
+	_draw_hardpoint_overlays()
 	_draw_preview()
+
+
+## Weapon-hardpoint turret overlay art (turret_360/etc) is one whole icon
+## meant to sit centered on a hardpoint's entire footprint — not per-cell art
+## like the base plate — so it's drawn once per placement here rather than
+## once per occupied hex (drawing it in the main per-cell loop left 2-3
+## overlapping copies of the same icon crammed into individual hexes for any
+## multi-hex tier). Sized/rotated the same way HardpointGun's live turret
+## sprite is (see HardpointGun.set_turret_texture/_update_turret_transform),
+## so the preview roughly matches what the gun looks like in-game.
+func _draw_hardpoint_overlays() -> void:
+	if layout == null:
+		return
+	for placement in layout.placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type == null:
+			continue
+		var overlay_texture: Texture2D = module_type.get_hex_overlay_texture(faction_id)
+		if overlay_texture == null:
+			continue
+
+		var occupied_cells: Array[Vector2i] = layout.get_occupied_cells(placement)
+		var center_local: Vector2 = Vector2.ZERO
+		for cell in occupied_cells:
+			center_local += HexUtils.axial_to_pixel(cell, cell_size)
+		center_local /= occupied_cells.size()
+		var center: Vector2 = _center + center_local
+
+		var length: float = cell_size * 2.0 * HardpointGun.tier_visual_scale(module_type.tier)
+		var texture_size: Vector2 = overlay_texture.get_size()
+		var scale_factor: float = length / (texture_size.y * 0.5)
+		var half_size: Vector2 = texture_size * scale_factor * 0.5
+		var angle: float = deg_to_rad(60.0 * placement.rotation_steps)
+		var local_corners: Array[Vector2] = [
+			Vector2(-half_size.x, -half_size.y), Vector2(half_size.x, -half_size.y),
+			Vector2(half_size.x, half_size.y), Vector2(-half_size.x, half_size.y),
+		]
+		var corners := PackedVector2Array()
+		for local_corner in local_corners:
+			corners.append(center + local_corner.rotated(angle))
+		var uvs := PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+		draw_colored_polygon(corners, Color.WHITE, uvs, overlay_texture)
 
 
 func _draw_preview() -> void:
@@ -70,13 +120,18 @@ func _draw_preview() -> void:
 			draw_line(corners[i], corners[(i + 1) % corners.size()], overlay_color.lightened(0.3), 2.0)
 
 
+## hex_coord -> [ModulePlacement, cell_index], cell_index being this cell's
+## position within the placement's footprint_cells order — needed to look up
+## per-cell base art for multi-hex modules (see
+## ModuleType.faction_hex_textures_per_cell).
 func _build_occupant_lookup() -> Dictionary:
 	var lookup: Dictionary = {}
 	if layout == null:
 		return lookup
 	for placement in layout.placements:
-		for cell in layout.get_occupied_cells(placement):
-			lookup[cell] = placement
+		var cells: Array[Vector2i] = layout.get_occupied_cells(placement)
+		for i in cells.size():
+			lookup[cells[i]] = [placement, i]
 	return lookup
 
 

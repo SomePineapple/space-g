@@ -1,12 +1,12 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scenes/player/hardpoint_gun.gd" id="1_gun"]
+[ext_resource type="Script" path="res://scenes/player/hardpoint_phase_lance.gd" id="1_lance"]
 
-[node name="HardpointGun" type="Node2D"]
-script = ExtResource("1_gun")
+[node name="HardpointPhaseLance" type="Node2D"]
+script = ExtResource("1_lance")
 
 [node name="Barrel" type="Polygon2D" parent="."]
-color = Color(0.5, 0.85, 1, 1)
+color = Color(0.35, 0.2, 0.45, 1)
 
 [node name="Turret" type="Sprite2D" parent="."]
 

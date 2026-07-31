@@ -158,6 +158,8 @@ func _build_left_column(panel: Control) -> void:
 	_grid.grid_width = GRID_COLS
 	_grid.grid_height = GRID_ROWS
 	_grid.layout = working_layout
+	if _player_ship != null:
+		_grid.faction_id = _player_ship.personality.faction_id
 	_grid.hex_clicked.connect(_on_hex_clicked)
 	_grid.hex_hovered.connect(_on_hex_hovered)
 	_grid.hover_exited.connect(_on_hover_exited)

@@ -1,9 +1,10 @@
-[gd_resource type="Resource" script_class="ShipPersonality" format=3]
+[gd_resource type="Resource" script_class="ShipPersonality" format=3 uid="uid://b4d0vq3oy2dxf"]
 
-[ext_resource type="Script" path="res://scripts/ships/ai/ship_personality.gd" id="1_ship_personality"]
+[ext_resource type="Script" uid="uid://8ybe3juert3" path="res://scripts/ships/ai/ship_personality.gd" id="1_ship_personality"]
 
 [resource]
 script = ExtResource("1_ship_personality")
 display_name = "User"
 is_player_controlled = true
-health_multiplier = 2.0
+health_multiplier = 3.0
+faction_id = "corporate"

@@ -43,7 +43,7 @@ func _ready() -> void:
 ## hex art) rather than a raised barrel tip. tier_scale is accepted for a
 ## consistent signature with HardpointGun, but the silo has no directional
 ## barrel to resize.
-func set_cell_size(_cell_size: float, _tier_scale: float = 1.0) -> void:
+func set_cell_size(_unused_cell_size: float, _unused_tier_scale: float = 1.0) -> void:
 	_muzzle.position = Vector2.ZERO
 
 

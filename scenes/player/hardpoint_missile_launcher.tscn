@@ -8,6 +8,8 @@ script = ExtResource("1_launcher")
 [node name="Barrel" type="Polygon2D" parent="."]
 color = Color(1, 0.6, 0.15, 1)
 
+[node name="Turret" type="Sprite2D" parent="."]
+
 [node name="Muzzle" type="Marker2D" parent="."]
 
 [node name="FireSound" type="AudioStreamPlayer2D" parent="."]

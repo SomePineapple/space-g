@@ -38,3 +38,9 @@ extends Resource
 ## survive noticeably longer than a pirate of equivalent build, since this is
 ## meant to feel forgiving rather than punishing like a souls-like.
 @export var health_multiplier: float = 1.0
+
+## Which reskin (see ModuleType.faction_hex_textures) a ship using this
+## personality draws its hull with. Player and pirate archetypes default to
+## "pirate" for historical reasons (the old shared placeholder art was
+## pirate-flavored); set explicitly per personality otherwise.
+@export var faction_id: String = "pirate"

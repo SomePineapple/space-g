@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/world/phase_lance_beam.gd" id="1_beam"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_1"]
+blend_mode = 1
+
+[node name="PhaseLanceBeam" type="Node2D"]
+script = ExtResource("1_beam")
+
+[node name="Line" type="Line2D" parent="."]
+material = SubResource("CanvasItemMaterial_1")
+width = 4.0
+default_color = Color(0.75, 0.55, 1, 1)

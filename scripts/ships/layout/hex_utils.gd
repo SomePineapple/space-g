@@ -34,6 +34,24 @@ static func hex_uv_corners(uv_radius: float = 0.49) -> PackedVector2Array:
 	return uvs
 
 
+## Same as hex_uv_corners(), but rotated to match a placement's
+## rotation_steps — a hex cell's world corners (hex_corners) always sit at
+## the same fixed angles regardless of which axial cell they belong to, so
+## without this a rotated multi-hex module's per-cell art (see
+## ModuleType.faction_hex_textures_per_cell) stays visually un-rotated even
+## though rotate() has moved each piece to a different cell, breaking the
+## seams between pieces. Cyclically shifting which UV vertex maps to which
+## world corner rotates the sampled image itself by rotation_steps * 60°, so
+## a multi-piece assembly rotates as one rigid image instead of each piece's
+## art staying frozen in its original orientation.
+static func hex_uv_corners_for_rotation(rotation_steps: int, uv_radius: float = 0.49) -> PackedVector2Array:
+	var base_uvs: PackedVector2Array = hex_uv_corners(uv_radius)
+	var rotated := PackedVector2Array()
+	for i in 6:
+		rotated.append(base_uvs[posmod(i - rotation_steps, 6)])
+	return rotated
+
+
 static func rotate(coord: Vector2i, steps: int) -> Vector2i:
 	var x: int = coord.x
 	var z: int = coord.y

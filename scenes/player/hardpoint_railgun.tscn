@@ -1,12 +1,12 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scenes/player/hardpoint_gun.gd" id="1_gun"]
+[ext_resource type="Script" path="res://scenes/player/hardpoint_railgun.gd" id="1_railgun"]
 
-[node name="HardpointGun" type="Node2D"]
-script = ExtResource("1_gun")
+[node name="HardpointRailgun" type="Node2D"]
+script = ExtResource("1_railgun")
 
 [node name="Barrel" type="Polygon2D" parent="."]
-color = Color(0.5, 0.85, 1, 1)
+color = Color(0.78, 0.82, 0.9, 1)
 
 [node name="Turret" type="Sprite2D" parent="."]
 

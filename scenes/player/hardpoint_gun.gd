@@ -4,7 +4,7 @@ extends Node2D
 @export var projectile_scene: PackedScene = preload("res://scenes/world/projectile.tscn")
 @export var fire_rate: float = 4.0
 @export var projectile_speed: float = 700.0
-@export var recoil_force: float = 20.0
+@export var recoil_force: float = 24.0
 @export var projectile_color: Color = Color(0.4, 0.9, 1.0, 1.0)
 @export var projectile_damage: float = 8.0
 @export var barrel_color: Color = Color(0.5, 0.85, 1.0, 1.0)
@@ -43,8 +43,11 @@ var source_placement_id: String = ""
 
 var _cooldown_remaining: float = 0.0
 var _shooter: Ship
+var _cell_size: float = 24.0
+var _tier_scale: float = 1.0
 
 @onready var _barrel: Polygon2D = $Barrel
+@onready var _turret: Sprite2D = $Turret
 @onready var _muzzle: Marker2D = $Muzzle
 @onready var _fire_sound_player: AudioStreamPlayer2D = $FireSound
 
@@ -82,6 +85,8 @@ static func tier_visual_scale(tier: int) -> float:
 ## tier_scale grows the barrel for bigger-tier hardpoints (see Ship's
 ## _spawn_hardpoint_guns()), which also occupy more hex cells.
 func set_cell_size(cell_size: float, tier_scale: float = 1.0) -> void:
+	_cell_size = cell_size
+	_tier_scale = tier_scale
 	var length: float = cell_size * 2.0 * tier_scale
 	var half_width: float = cell_size * 0.18 * tier_scale
 	_barrel.polygon = PackedVector2Array([
@@ -91,6 +96,35 @@ func set_cell_size(cell_size: float, tier_scale: float = 1.0) -> void:
 		Vector2(0, half_width),
 	])
 	_muzzle.position = Vector2(length, 0)
+	_update_turret_transform()
+
+
+## Faction/tier turret art (see ModuleType.faction_hex_overlay_textures) drawn
+## on top of the hardpoint's hex, replacing the plain Barrel polygon so the
+## laser visibly fires out of the turret's own barrel rather than a flat
+## rectangle. Null (no art for this faction/tier yet, e.g. Railgun, Phase
+## Lance, or a faction with no turret sprite) falls back to the Barrel
+## polygon unchanged.
+func set_turret_texture(texture: Texture2D) -> void:
+	_turret.texture = texture
+	_barrel.visible = texture == null
+	_update_turret_transform()
+
+
+## The turret art is authored pointing "up" (its barrel tip at the top edge
+## of the canvas, muzzle centered on the image's horizontal axis) with its
+## rotation pivot at the image's vertical/horizontal center, so a 90-degree
+## rotation aligns it with this node's own forward convention (+X, same as
+## the Barrel polygon and Muzzle marker). Scaled so the image's half-height
+## lands exactly on the existing Muzzle position (two hex-lengths out), so
+## the visual barrel tip and the projectile spawn point always match.
+func _update_turret_transform() -> void:
+	if _turret.texture == null:
+		return
+	_turret.rotation = PI / 2.0
+	var length: float = _cell_size * 2.0 * _tier_scale
+	var half_height: float = _turret.texture.get_height() / 2.0
+	_turret.scale = Vector2.ONE * (length / half_height)
 
 
 func aim_at(global_target: Vector2) -> void:
@@ -108,7 +142,15 @@ func fire() -> Projectile:
 	if not _shooter.spend_energy(energy_cost):
 		return null
 	_cooldown_remaining = 1.0 / fire_rate
+	return _execute_fire()
 
+
+## Split out from fire() so a charge-up weapon (HardpointRailgun,
+## HardpointPhaseLance) can override fire() with its own gating/timing —
+## reserving the cooldown slot and consuming energy up front — while still
+## reusing the actual projectile-spawn and recoil logic once its charge
+## completes.
+func _execute_fire() -> Projectile:
 	var projectile: Projectile = projectile_scene.instantiate()
 	projectile.color = projectile_color
 	projectile.damage = projectile_damage
@@ -125,5 +167,15 @@ func fire() -> Projectile:
 		_fire_sound_player.stream = fire_sound
 		_fire_sound_player.play()
 
-	_shooter.apply_impulse(-_muzzle.global_transform.x * recoil_force)
+	_apply_recoil()
 	return projectile
+
+
+## A small straight-line kick opposite the barrel's facing, not a spin — see
+## Ship.apply_impulse. Deliberately linear-only: an earlier version also
+## applied torque for off-center hardpoints, but that "whipped" the ship's
+## rotation around on every shot, which read as unintentional and didn't
+## feel good even on a high-recoil weapon like the Railgun.
+func _apply_recoil() -> void:
+	var recoil_impulse: Vector2 = -_muzzle.global_transform.x * recoil_force
+	_shooter.apply_impulse(recoil_impulse)
