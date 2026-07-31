@@ -75,10 +75,12 @@ static func get_all() -> Array[ModuleType]:
 	# Deliberately cheaper, lighter and far more fragile than Hull: a strut's
 	# only job is connecting a wing/appendage back to the core, so a snapped-off
 	# wing costs little to have risked and rebuilt, unlike investing in Hull.
-	# No faction-specific art exists for this one yet — falls back to a flat
-	# tinted hex (see ShipLayoutRenderer/HexGridControl).
-	types.append(_make("strut", "Strut", Color(0.55, 0.58, 0.5), SINGLE_CELL, 0.15, 25.0, 0.0, null,
-		"", 1, {Materials.STEEL_ALLOY: 3}))
+	# Ancient has no strut art yet — falls back to a flat tinted hex for that
+	# faction only (see ShipLayoutRenderer/HexGridControl).
+	var strut_type: ModuleType = _make("strut", "Strut", Color(0.55, 0.58, 0.5), SINGLE_CELL, 0.15, 25.0, 0.0, null,
+		"", 1, {Materials.STEEL_ALLOY: 3})
+	strut_type.faction_hex_textures = FactionArtImporter.load_faction_textures("strut")
+	types.append(strut_type)
 
 	# Every weapon-hardpoint tier's base plate is exported as one image PER
 	# HEX it occupies — "laser_cannon_mk1_0_0" for the single-hex tier I,
