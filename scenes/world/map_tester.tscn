@@ -16,6 +16,8 @@
 [ext_resource type="PackedScene" path="res://scenes/world/planet.tscn" id="14_planet"]
 [ext_resource type="Script" uid="uid://bx1m1heuhcl5n" path="res://scenes/world/debug_tools.gd" id="15_debug_tools"]
 [ext_resource type="PackedScene" path="res://scenes/ui/trade_panel.tscn" id="16_trade_panel"]
+[ext_resource type="PackedScene" path="res://scenes/world/station.tscn" id="17_station"]
+[ext_resource type="PackedScene" path="res://scenes/ui/station_prompt.tscn" id="18_station_prompt"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
 sky_top_color = Color(0.38, 0.45, 0.55, 1)
@@ -140,11 +142,13 @@ environment = SubResource("Environment_u02ng")
 
 [node name="HUD" parent="." unique_id=309546132 instance=ExtResource("8_0o3hu")]
 
+[node name="StationPrompt" parent="." instance=ExtResource("18_station_prompt")]
+
 [node name="UpgradePanel" parent="." unique_id=1122649445 instance=ExtResource("9_gc6po")]
 
 [node name="ShipBuilderPanel" parent="." unique_id=-523937815 instance=ExtResource("10_ja1me")]
 
-[node name="TradePanel" parent="." instance=ExtResource("16_trade_panel")]
+[node name="TradePanel" parent="." unique_id=1917666629 instance=ExtResource("16_trade_panel")]
 
 [node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
 script = ExtResource("10_ojmk8")
@@ -155,8 +159,9 @@ script = ExtResource("15_debug_tools")
 [node name="RegionBoundary" type="Node2D" parent="." unique_id=807573718]
 script = ExtResource("11_boundary")
 
-[node name="HomeBase" type="Marker2D" parent="." unique_id=1408683389 groups=["home_base"]]
+[node name="HomeBase" parent="." unique_id=1408683389 groups=["home_base"] instance=ExtResource("17_station")]
 position = Vector2(0, -80)
+rotation = -0.25830874
 
 [node name="PirateLightOne" parent="." unique_id=1702620105 instance=ExtResource("12_pirate_light")]
 position = Vector2(1000, 750)

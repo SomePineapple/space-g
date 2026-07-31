@@ -50,6 +50,13 @@ signal energy_changed(current: float, max_energy: float)
 @export var module_repair_delay: float = 6.0
 ## Condition/second restored to a regrowing module once it's eligible.
 @export var module_repair_rate: float = 6.0
+## Passive regrowth (above) only brings a holed-out module back to this
+## fraction of its max condition — the rest requires a paid repair at a
+## station (see repair_fully). Exported so it can be tuned now and raised
+## later by an upgrade.
+@export var passive_repair_cap_fraction: float = 0.4
+## Credits charged per point of overall Health restored by repair_fully.
+@export var repair_cost_per_health: float = 1.0
 
 ## Outward speed/spin added on top of the ship's own velocity when a module
 ## detaches, so a severed wing visibly kicks away rather than just trailing
@@ -225,6 +232,47 @@ func is_module_destroyed(placement_id: String) -> bool:
 	if _detached_placement_ids.has(placement_id) or _regrowing_placement_ids.has(placement_id):
 		return true
 	return get_module_condition(placement_id) <= 0.0
+
+
+func get_missing_health() -> float:
+	return _health.max_health - _health.current_health
+
+
+func needs_repair() -> bool:
+	return get_missing_health() > 0.01
+
+
+func get_repair_cost() -> int:
+	return ceili(get_missing_health() * repair_cost_per_health)
+
+
+## Paid station repair: tops every attached module back to full condition
+## (bypassing passive_repair_cap_fraction) and heals the overall Health pool
+## to match. Detached (severed) modules are excluded — they're gone, not
+## repairable in place.
+func repair_fully() -> void:
+	if ship_layout == null:
+		return
+
+	for placement in ship_layout.placements:
+		if _detached_placement_ids.has(placement.placement_id):
+			continue
+
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type == null:
+			continue
+
+		var max_condition: float = module_type.health_contribution * personality.health_multiplier
+		if get_module_condition(placement.placement_id) >= max_condition:
+			continue
+
+		var was_regrowing: bool = _regrowing_placement_ids.has(placement.placement_id)
+		_module_conditions[placement.placement_id] = max_condition
+		if was_regrowing:
+			_regrowing_placement_ids.erase(placement.placement_id)
+			_on_module_repaired(placement, module_type)
+
+	_health.heal(get_missing_health())
 
 
 ## Resolves a world-space impact point to the specific module occupying that
@@ -404,21 +452,26 @@ func _has_healthy_neighbor(placement: ModulePlacement) -> bool:
 
 
 func _advance_module_repair(placement: ModulePlacement, module_type: ModuleType, max_condition: float, delta: float) -> void:
-	var new_condition: float = minf(get_module_condition(placement.placement_id) + module_repair_rate * delta, max_condition)
-	var healed_amount: float = new_condition - get_module_condition(placement.placement_id)
+	var passive_cap: float = max_condition * passive_repair_cap_fraction
+	var current_condition: float = get_module_condition(placement.placement_id)
+	if current_condition >= passive_cap:
+		return # capped: needs a paid repair (see repair_fully) to go further
+
+	var new_condition: float = minf(current_condition + module_repair_rate * delta, passive_cap)
+	var healed_amount: float = new_condition - current_condition
 	_module_conditions[placement.placement_id] = new_condition
 	_health.heal(healed_amount)
 
-	if new_condition >= max_condition:
+	if new_condition >= passive_cap:
 		_regrowing_placement_ids.erase(placement.placement_id)
 		_on_module_repaired(placement, module_type)
 
 
 ## Reverses _on_module_destroyed's effects once a holed-out module finishes
-## regrowing to full condition: restores its stat contribution, collision
-## shape and normal hull appearance all at once (fire_primary/fire_secondary/
-## thrust all gate on is_module_destroyed, which only reads false once this
-## runs — see _regrowing_placement_ids).
+## regrowing to its passive cap (or is topped off by a paid repair): restores
+## its stat contribution, collision shape and normal hull appearance all at
+## once (fire_primary/fire_secondary/thrust all gate on is_module_destroyed,
+## which only reads false once this runs — see _regrowing_placement_ids).
 func _on_module_repaired(placement: ModulePlacement, module_type: ModuleType) -> void:
 	_hull_renderer.set_module_repaired(placement.placement_id)
 	_spawn_collision_shape_for(placement)

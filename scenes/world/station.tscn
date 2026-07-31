@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/exports/corporate/corporate_space_station.png" id="1_station"]
+
+[node name="CorporateStation" type="Sprite2D"]
+texture_filter = 4
+z_index = -1
+self_modulate = Color(1.1, 1.1, 1.1, 1)
+scale = Vector2(0.35, 0.35)
+texture = ExtResource("1_station")

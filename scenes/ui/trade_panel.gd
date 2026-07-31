@@ -20,7 +20,10 @@ const TRADEABLE_MATERIAL_IDS: Array[String] = [
 
 var _ship: Ship
 var _inventory: Inventory
+var _health: Health
 var _credits_label: Label
+var _repair_label: Label
+var _repair_button: Button
 var _rows: Dictionary = {}
 
 
@@ -36,8 +39,10 @@ func _ready() -> void:
 
 	_ship = players[0]
 	_inventory = _ship.get_node("Inventory")
+	_health = _ship.get_node("Health")
 	_inventory.materials_changed.connect(_on_state_changed)
 	_inventory.credits_changed.connect(_on_state_changed)
+	_health.health_changed.connect(_on_health_changed)
 
 	_build_ui()
 	_refresh()
@@ -68,7 +73,9 @@ func _build_ui() -> void:
 	panel.position = Vector2(CONTENT_LEFT, CONTENT_TOP)
 	add_child(panel)
 
-	var content_height: float = HEADER_HEIGHT + TRADEABLE_MATERIAL_IDS.size() * (ROW_HEIGHT + ROW_GAP)
+	var repair_row_top: float = HEADER_HEIGHT
+	var materials_top: float = repair_row_top + ROW_HEIGHT + ROW_GAP
+	var content_height: float = materials_top + TRADEABLE_MATERIAL_IDS.size() * (ROW_HEIGHT + ROW_GAP)
 
 	var background := ColorRect.new()
 	background.position = Vector2(-BACKGROUND_MARGIN, -BACKGROUND_MARGIN)
@@ -81,9 +88,24 @@ func _build_ui() -> void:
 	_credits_label.size = Vector2(ROW_WIDTH, HEADER_HEIGHT)
 	panel.add_child(_credits_label)
 
+	var repair_row := HBoxContainer.new()
+	repair_row.position = Vector2(0, repair_row_top)
+	repair_row.size = Vector2(ROW_WIDTH, ROW_HEIGHT)
+	repair_row.add_theme_constant_override("separation", 10)
+	panel.add_child(repair_row)
+
+	_repair_label = Label.new()
+	_repair_label.custom_minimum_size = Vector2(190, ROW_HEIGHT)
+	repair_row.add_child(_repair_label)
+
+	_repair_button = Button.new()
+	_repair_button.custom_minimum_size = Vector2(220, ROW_HEIGHT)
+	_repair_button.pressed.connect(_on_repair_pressed)
+	repair_row.add_child(_repair_button)
+
 	for i in TRADEABLE_MATERIAL_IDS.size():
 		var material_id: String = TRADEABLE_MATERIAL_IDS[i]
-		var row_top: float = HEADER_HEIGHT + i * (ROW_HEIGHT + ROW_GAP)
+		var row_top: float = materials_top + i * (ROW_HEIGHT + ROW_GAP)
 
 		var row := HBoxContainer.new()
 		row.position = Vector2(0, row_top)
@@ -108,6 +130,13 @@ func _build_ui() -> void:
 		_rows[material_id] = {"name": name_label, "buy": buy_button, "sell": sell_button}
 
 
+func _on_repair_pressed() -> void:
+	var cost: int = _ship.get_repair_cost()
+	if not _inventory.spend_credits(cost):
+		return
+	_ship.repair_fully()
+
+
 func _on_buy_pressed(material_id: String) -> void:
 	var cost: int = Materials.buy_price(material_id) * TRADE_QUANTITY
 	if not _inventory.spend_credits(cost):
@@ -125,11 +154,24 @@ func _on_state_changed(_value) -> void:
 	_refresh()
 
 
+func _on_health_changed(_current: float, _max_health: float) -> void:
+	_refresh()
+
+
 func _refresh() -> void:
 	if _inventory == null:
 		return
 
 	_credits_label.text = "Credits: %d" % _inventory.get_credits()
+
+	_repair_label.text = "Hull: %d / %d" % [_health.current_health, _health.max_health]
+	if _ship.needs_repair():
+		var repair_cost: int = _ship.get_repair_cost()
+		_repair_button.text = "Repair Fully (%d cr)" % repair_cost
+		_repair_button.disabled = not _inventory.has_credits(repair_cost)
+	else:
+		_repair_button.text = "Fully Repaired"
+		_repair_button.disabled = true
 
 	for material_id in TRADEABLE_MATERIAL_IDS:
 		var row: Dictionary = _rows[material_id]
