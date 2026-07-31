@@ -3,13 +3,17 @@ extends Node
 
 signal materials_changed(totals: Dictionary)
 signal captured_tech_changed(totals: Dictionary)
+signal research_unlocked(module_type_id: String)
 
 var _material_totals: Dictionary = {}
 ## module_type_id -> count. Distinct from _material_totals: these are
-## specific captured tech parts (see Ship.capture_tech_part), meant for a
-## future reverse-engineering/research system, not something spent like a
-## generic material.
+## specific captured tech parts (see Ship.capture_tech_part), spent one at a
+## time to research/unlock a locked ModuleType (see research()).
 var _captured_tech_totals: Dictionary = {}
+## Set of module_type_id (module_type_id -> true) that have been researched
+## and are now buildable despite ModuleType.requires_research. Session-only,
+## like the rest of this prototype's economy state.
+var _researched_ids: Dictionary = {}
 
 
 func add_material(material_id: String, amount: int) -> void:
@@ -52,3 +56,27 @@ func get_captured_tech_count(module_type_id: String) -> int:
 
 func get_all_captured_tech() -> Dictionary:
 	return _captured_tech_totals
+
+
+## True if module_type_id doesn't need research at all, or already has it.
+func is_researched(module_type_id: String) -> bool:
+	return _researched_ids.get(module_type_id, false)
+
+
+## Whether research() would currently succeed — used to enable/disable the
+## ship builder's Research button.
+func can_research(module_type_id: String) -> bool:
+	return not is_researched(module_type_id) and get_captured_tech_count(module_type_id) > 0
+
+
+## Spends one captured part of module_type_id to permanently unlock it for
+## building. Returns false without effect if already researched or no part
+## is available to spend.
+func research(module_type_id: String) -> bool:
+	if not can_research(module_type_id):
+		return false
+	_captured_tech_totals[module_type_id] = get_captured_tech_count(module_type_id) - 1
+	_researched_ids[module_type_id] = true
+	captured_tech_changed.emit(_captured_tech_totals)
+	research_unlocked.emit(module_type_id)
+	return true

@@ -72,6 +72,11 @@ extends Resource
 ## gate is already met — capture is meant to be a notable, not guaranteed,
 ## outcome even for a clean severance.
 @export var capture_chance: float = 0.35
+## Whether this module must be researched (see Inventory.research) before it
+## can be placed in the ship builder — reserved for tech that's meaningfully
+## faction-exclusive (Railgun, Phase Lance), not every capturable module,
+## so recovering enemy tech has a payoff without gating the core weapon loop.
+@export var requires_research: bool = false
 
 
 ## The texture to draw for this module on a ship belonging to faction_id —

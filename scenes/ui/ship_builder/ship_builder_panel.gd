@@ -52,6 +52,8 @@ var _status_label: Label
 var _stats_label: Label
 var _grid: HexGridControl
 var _palette_buttons: Dictionary = {}
+## module_type_id -> Button, only for ModuleType.requires_research entries.
+var _research_buttons: Dictionary = {}
 var _save_name_edit: LineEdit
 var _saved_list: ItemList
 
@@ -223,7 +225,6 @@ func _build_side_panel(panel: Control) -> void:
 
 	for module_type in ModuleCatalog.get_all():
 		var button := Button.new()
-		button.text = "%s\n%s" % [module_type.display_name, _format_costs(module_type.build_costs)]
 		button.toggle_mode = true
 		# clip_text excludes the (sometimes long) cost string from the
 		# button's minimum-size calculation; without it a long enough cost
@@ -237,6 +238,16 @@ func _build_side_panel(panel: Control) -> void:
 		button.pressed.connect(_on_palette_pressed.bind(module_type.id))
 		palette.add_child(button)
 		_palette_buttons[module_type.id] = button
+
+		if module_type.requires_research:
+			var research_button := Button.new()
+			research_button.pressed.connect(_on_research_pressed.bind(module_type.id))
+			palette.add_child(research_button)
+			_research_buttons[module_type.id] = research_button
+
+	if _inventory != null:
+		_inventory.captured_tech_changed.connect(func(_totals): _refresh_lock_state())
+	_refresh_lock_state()
 
 	var save_row := HBoxContainer.new()
 	save_row.position = Vector2(side_x + SIDE_MARGIN, save_row_top)
@@ -265,6 +276,42 @@ func _build_side_panel(panel: Control) -> void:
 	_saved_list.size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, SIDE_SAVED_LIST_HEIGHT)
 	_saved_list.item_selected.connect(_on_saved_item_selected)
 	panel.add_child(_saved_list)
+
+
+## Shows each palette entry's current lock/researched state — call whenever
+## captured-tech counts change (see _build_side_panel) since that's what
+## Inventory.can_research depends on.
+func _refresh_lock_state() -> void:
+	for module_type in ModuleCatalog.get_all():
+		var locked: bool = module_type.requires_research and (_inventory == null or not _inventory.is_researched(module_type.id))
+		var button: Button = _palette_buttons[module_type.id]
+		button.disabled = locked
+		button.text = "%s%s\n%s" % [
+			"[LOCKED] " if locked else "",
+			module_type.display_name,
+			_format_costs(module_type.build_costs),
+		]
+
+		if not _research_buttons.has(module_type.id):
+			continue
+		var research_button: Button = _research_buttons[module_type.id]
+		research_button.visible = locked
+		if locked and _inventory != null:
+			var captured: int = _inventory.get_captured_tech_count(module_type.id)
+			research_button.disabled = not _inventory.can_research(module_type.id)
+			research_button.text = "Research (%d captured)" % captured
+
+
+func _on_research_pressed(module_type_id: String) -> void:
+	if _inventory == null:
+		return
+
+	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
+	if _inventory.research(module_type_id):
+		_status_label.text = "Researched %s. It can now be built." % module_type.display_name
+	else:
+		_status_label.text = "Cannot research %s yet: capture one first." % module_type.display_name
+	_refresh_lock_state()
 
 
 func _on_palette_pressed(module_type_id: String) -> void:

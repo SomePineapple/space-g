@@ -176,6 +176,7 @@ static func get_all() -> Array[ModuleType]:
 		{Materials.STEEL_ALLOY: 25, Materials.ELECTRONICS: 10, Materials.REACTOR_COMPONENTS: 8},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_railgun.tscn"))
 	railgun_type.is_capturable_tech = true
+	railgun_type.requires_research = true
 	types.append(railgun_type)
 
 	# Ancient Civilisation: alien energy weapon. Lighter and more fragile
@@ -185,6 +186,7 @@ static func get_all() -> Array[ModuleType]:
 		{Materials.ELECTRONICS: 20, Materials.REACTOR_COMPONENTS: 18},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_phase_lance.tscn"))
 	phase_lance_type.is_capturable_tech = true
+	phase_lance_type.requires_research = true
 	types.append(phase_lance_type)
 
 	# Winch hardpoint (casts a physical rope — see HardpointWinch/WinchRope/
