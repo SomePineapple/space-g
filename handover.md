@@ -6,13 +6,184 @@ Purpose: bring a fresh chat up to speed without re-deriving context. Read this,
 explicitly brings it up.
 
 **Read "Most recent session" first** — it's the freshest context and covers
-work done after the rest of this file was last updated (a faction-art mipmap
-fix, a new capturable-tech-parts system, and a full winch grapple mechanic
-that was built, tested, and then explicitly disabled). The sections below it
-(faction weapon art/recoil, ship building, combat, per-module damage) are
+work done after the rest of this file was last updated: reverse engineering
+and Manufacturers (both real Version 0.5 systems now), a real severable wing
+for `pirate_light_one`, and two bugs (debris art, thruster particles) found
+via live testing. The sections below it (mipmap fix/capturable tech/winch,
+faction weapon art/recoil, ship building, combat, per-module damage) are
 still accurate but predate that work.
 
-## Most recent session (mipmap fix, capturable tech parts, winch grapple — built then disabled)
+## Most recent session (reverse engineering, pirate_light_one's wing, debris/thruster bug fixes, Manufacturers)
+
+Five pieces of work, roughly in order:
+
+- **Committed a large backlog of uncommitted work from the previous session**
+  first (faction art assets/importer, railgun/phase lance weapons,
+  capturable tech parts, the disabled winch, per-module damage) into two
+  logical commits, since none of it had been committed yet.
+- **Reverse engineering (Roadmap v.2-v.9 Version 0.5) wired up**: added
+  `ModuleType.requires_research`, flagged **only Railgun and Phase Lance**
+  (the two faction-exclusive weapons) — deliberately not every
+  `is_capturable_tech` module, chosen via `AskUserQuestion` to keep the
+  core weapon loop buildable from the start. `Inventory.research()` spends
+  one captured part of that type to permanently unlock it; the ship
+  builder palette shows a `[LOCKED]` disabled button plus a live-updating
+  Research button next to it. Verified live: granting a captured part
+  enables the Research button immediately via the `captured_tech_changed`
+  signal (no re-open needed), and researching spends it and unlocks the
+  palette entry for good.
+- **Gave `pirate_light_one` a real severable wing** — it was previously a
+  known, accepted gap (see "Per-module ship damage" below, now corrected):
+  its Core was completely ringed by all 6 adjacent modules, and every
+  other module touched at least two ring cells, so it had zero severable
+  points by construction. Fixed by relocating its second engine from hex
+  `(2,-1)` to `(3,-2)` and inserting a new single-cell Strut at `(2,-2)`
+  as its *only* connection back to the ring (`hull` at `(1,-1)`) — two
+  edits to `pirate_light_one.tres`, no code changes. Verified live: forcing
+  lethal damage on just that Strut immediately detached the engine while
+  the core, both ring hull/weapon cells, the other engine, and the reactor
+  all stayed attached. Also incidentally confirmed the repair-over-time
+  system's interaction with detachment is correct: the Strut itself (still
+  connected the whole time) regrew after the repair delay, but the
+  already-detached engine correctly stayed gone (detached modules are
+  excluded from regeneration).
+  - Struts had no faction art at all before this, so the new wing
+    initially rendered as a flat grey-tinted hex, standing out against the
+    rest of the ship — the user caught this from a screenshot. Fixed once
+    the user supplied `pirate_strut.png`/`corporate_strut.png` (Ancient
+    intentionally has none yet) by wiring them into `ModuleType
+    .faction_hex_textures` the same way every other module's art loads,
+    same mipmap-generation fix as the original faction art batch.
+- **Two real bugs found via live testing, not review**:
+  - **Severed modules (`ShipDebris`/`CapturedTechPart`) always rendered
+    with `ModuleType.hex_texture`**, the single generic fallback image,
+    instead of the actual faction-reskinned per-cell art the module was
+    showing on the hull a moment earlier — `_debris_visual_data()` now
+    uses `get_hex_texture_for_cell()` like `ShipLayoutRenderer` does, and
+    both scenes draw with `hex_uv_corners_for_rotation()` (plumbing
+    `rotation_steps` through `setup()`) so a rotated placement's severed
+    art matches its hull orientation instead of resetting. Verified live:
+    forcing a severance now spawns debris carrying `pirate_engine_mk1.png`,
+    not a fallback.
+  - **Engine thruster particles kept showing on a destroyed/detached
+    engine** as long as the ship (or another engine) was still moving,
+    since `_update_engine_particles()` only ever checked player/AI thrust
+    input, never whether that specific engine's module was still alive.
+    Fixed by having `Ship` track each thruster's `placement_id`
+    (`_thruster_placement_ids`, parallel to `_thrusters`) and gating each
+    one individually via `is_module_destroyed()`. Also repositioned each
+    thruster from its hex's center to its trailing edge, so the flame
+    visually bursts from the back of its own tile rather than the middle
+    — **this took two attempts**: the first tried offsetting toward
+    hex-grid-local `-X` and additionally rotated the thruster node itself
+    by `_hull_renderer.rotation`, which the user caught as firing sideways
+    instead of backward. The actual bug: `_hull_renderer.rotation` is a
+    real, measured **+90°** fixed offset between the hex grid's own
+    authored axes and the ship's true movement-forward (`+X`) — not zero,
+    as an earlier read of the `.tscn` files (no rotation ever authored on
+    a `HullRenderer` node) had wrongly suggested. Verified directly via
+    `game_eval`: the hex-grid-local direction that actually maps to the
+    ship's true backward after that rotation is **`+Y`** (a vertex per
+    `HexUtils.hex_corners`, not an edge), and the thruster's own
+    `rotation` needed to stay at its default 0 — setting it to
+    `_hull_renderer.rotation` was double-applying the offset on top of the
+    ship's already-inherited rotation. **Worth remembering for any future
+    code that positions/orients something relative to a hex placement**:
+    `_hull_renderer.rotation` only ever belongs in a *position* transform
+    (matching how `hex_center`/collision shapes/hardpoints already use
+    it), never in another node's own `rotation` property, since that
+    node's rotation already inherits the ship's real rotation through the
+    scene tree.
+- **Assessed Roadmap v.2-v.9 Version 0.5 honestly against what's actually
+  in the game**, since the user asked to check if it was done: reverse
+  engineering now works, but **faction identity is still cosmetic-only**
+  — Corporate and Ancient have art/tech but no actual enemy ships exist
+  for either (every enemy in `scenes/enemies/` is a Pirate variant or the
+  generic missile cruiser), and there's no faction-specific salvage beyond
+  generic materials. **Explicitly deferred, not started, per user
+  ("we can do the enemy ships later")** — see "Not yet started" below.
+- **Added Manufacturers** (Atlas Heavy Industries / Nova Precision / Black
+  Market Foundry — Version 0.5's other named sub-feature), designed via
+  two rounds of `AskUserQuestion` covering scope (weapons + Reactor/Battery,
+  not every module type) and build integration (a separate palette row per
+  known manufacturer, not a place-time picker):
+  - `scripts/economy/manufacturer.gd`/`manufacturer_catalog.gd`: a small
+    stateless `Resource` + prototype catalog (same shape as
+    `ModuleCatalog`), keyed by `ModulePlacement.manufacturer_id` (empty =
+    generic) rather than exploding the module catalog per variant.
+    `stat_modifiers: Dictionary` reuses the *exact* additive-delta
+    technique `Ship`'s weapon/missile upgrade tree already uses
+    (`node.set(prop, node.get(prop) + delta)`) instead of inventing a
+    second modifier mechanism.
+  - Weapon/missile modifiers apply at hardpoint spawn time
+    (`Ship._apply_manufacturer_modifiers`). Reactor/Battery have no live
+    spawned node, so their modifiers apply inside `ShipLayout`'s existing
+    `total_energy_generation`/`total_energy_capacity`/`total_mass` sums
+    instead (`_manufacturer_stat_delta`).
+  - **Black Market Foundry's "dangerous" trait is a real mechanic, not
+    just a stat**: `HardpointGun.malfunction_chance` can backfire a shot
+    into self-damage on its own hull module via the existing per-module
+    damage system (new `Ship.damage_own_module()` public wrapper around
+    `_apply_module_damage`) — a genuinely risky weapon can sever its own
+    mount if you lean on it.
+  - **Discovery is tracked separately from research**: capturing a
+    manufacturer-flavored part (`CapturedTechPart` now also carries
+    `manufacturer_id`) marks that manufacturer known on `Inventory`
+    (`discover_manufacturer`/`is_manufacturer_known`) — "a manufacturer
+    exists" and "I can build this module type" are deliberately different
+    facts. **Buying from a known manufacturer is an explicit, deliberate
+    gap** — left as a data hook for once a station/trading system exists
+    (Version 0.6), not built this session, per the user's own framing
+    ("can be picked up, but eventually bought too when the user learns
+    about them").
+  - Ship builder palette grows one row per (module type × known
+    manufacturer) once that module type is itself already unlocked (an
+    "Atlas Railgun" row before Railgun itself is researched would be
+    confusing and unplaceable) — required extracting palette-building into
+    its own `_rebuild_palette()` so a newly discovered manufacturer can add
+    whole new rows live, not just refresh existing lock state.
+  - Seeded one real test case (Black Market Foundry on one of
+    `pirate_light_one`'s weapon hardpoints) so the whole loop was
+    live-testable rather than only unit-tested. Verified end-to-end via
+    the godot-ai MCP tools: the enemy gun's spawned stats matched the
+    hand-computed tier/core-distance/manufacturer combination exactly,
+    a forced malfunction backfired and damaged its own module by the
+    configured amount, capturing it discovered the manufacturer and the
+    palette grew the new row immediately, and placing + applying that
+    variant on the player's own ship produced a gun with the same
+    manufacturer-modified stats. Also verified the Reactor/Battery
+    total-based modifier path directly against hand-computed values.
+
+### Still open from this session
+- No Corporate or Ancient enemy ship exists — explicitly deferred by the
+  user, not an oversight. Faction identity remains cosmetic/tech-only
+  until this exists.
+- No faction-specific salvage — materials are still fully generic across
+  all three factions.
+- Buying from a known manufacturer has no UI/economy to hook into yet —
+  waits on a Version 0.6 station/trading system.
+- Atlas Heavy and Nova Precision have no real in-game seed yet (only
+  Black Market Foundry was placed on an actual enemy ship this session) —
+  fine for now since the manufacturer system itself doesn't require any
+  particular manufacturer to already exist in game data to be correct,
+  but worth seeding once Corporate/Ancient enemies (or more pirate
+  variants) exist.
+- The `hardpoint_winch.gd`/`WinchRope` parse error noted in the previous
+  session's "Known MCP/tooling gotchas" was observed again, unchanged, at
+  the start of every `project_run` this entire session, purely from
+  `recent_errors`/`retained_errors` — never once affected an actual running
+  game (scene trees loaded fine, `WinchRope`'s `class_name` is declared
+  correctly). Increasingly looks like a genuinely stale/cached editor-log
+  entry rather than a real live issue — still not investigated further
+  since the winch feature is intentionally disabled anyway.
+- The user has an uncommitted edit to `CLAUDE.md` (a new "Communication
+  style" section: be extremely concise, minimal narration, terse
+  completion reports) sitting in the working tree, deliberately left
+  uncommitted/untouched this session since it wasn't part of the
+  requested work — worth adopting regardless of whether/when it's
+  committed.
+
+## Mipmap fix, capturable tech parts, and a disabled winch grapple session
 
 Four pieces of work, roughly in order:
 
@@ -369,13 +540,12 @@ sever it independently.
 - **Current module health balance** (tuned this session via live combat
   testing, not just math): Core 140, Hull 50, Heavy Hull 240, Strut 25 —
   see "Decisions made" for why these specific numbers.
-- **Known, accepted limitation**: `pirate_light_one`'s layout has every
-  module directly adjacent to the core (or with 2+ redundant connections)
-  — it is architecturally a blob with **no severable point at all**, by
-  construction, not by any damage-tuning issue. Only `pirate_med_one` (and
-  player-built ships with a real thin appendage) currently have a genuine
-  severable wing. Giving the light pirates an actual appendage was
-  discussed but **not yet done** — see "Suggested next step".
+- **Fixed since**: `pirate_light_one` previously had every module directly
+  adjacent to the core (or with 2+ redundant connections) — architecturally
+  a blob with no severable point at all, by construction. A later session
+  (see "Most recent session" at the top) gave it a real one-point-of-failure
+  Strut-connected wing. `pirate_light_two` and `pirate_heavy_one` haven't
+  been audited for the same issue and may still be blobs.
 
 ### World
 - `starfield_layer.gd` + `ParallaxBackground` layers, bloom via one
@@ -445,6 +615,41 @@ step was verified by re-running the same live pirate-vs-test-ship scenario
 and comparing module-condition traces before/after — if you need to
 re-tune these numbers, that's the methodology to repeat, not pure math.
 
+### `_hull_renderer.rotation` is a real, nonzero fixed offset — not just defensive code
+`ShipLayoutRenderer.rotation`/`Ship._hull_renderer.rotation` is a measured
+**+90°** on every ship checked so far, not the "probably always 0, just
+future-proofing" it looks like from grepping `.tscn` files (no `HullRenderer`
+node has an authored `rotation` value on disk — it's set some other way).
+It rotates the hex grid's own authored axes into the ship's true
+movement-forward (`+X`) axis. Consequence: hex-grid-local `-X` is **not**
+"the ship's back" — the direction that actually maps to the ship's true
+backward after that rotation is hex-grid-local `+Y` (a *vertex*, not an
+edge, per `HexUtils.hex_corners`). This only matters when something needs
+to be positioned/oriented relative to a hex placement in a direction other
+than "at the hex center": always apply `_hull_renderer.rotation` to a
+*position* offset (same as `hex_center`/collision shapes/hardpoints already
+do), and never to another node's own `rotation` property — that node
+already inherits the ship's real rotation through the scene tree, so
+adding `_hull_renderer.rotation` on top double-applies it. Confirmed by
+directly measuring `_hull_renderer.rotation` via `game_eval` and
+solving for the correct direction, not by guessing — see thruster
+particle positioning in "Most recent session" for the bug this caused.
+
+### Manufacturers are deliberately separate from Factions
+A `Manufacturer` (Atlas Heavy Industries / Nova Precision / Black Market
+Foundry) is a stat-modifier profile independent of faction — it answers
+"what engineering philosophy built this specific part," not "whose
+territory/art is this." A Corporate ship and a Pirate ship can both mount
+an Atlas reactor. This is why manufacturer data lives on the individual
+`ModulePlacement` (`manufacturer_id`) rather than on `ModuleType` or
+`ShipPersonality` — the same module type can exist with or without a
+manufacturer, and different placements of the same type can have
+different manufacturers. Discovering a manufacturer (via capture) and
+researching a locked module type are **two separate gates** on purpose:
+knowing "Atlas Heavy exists" and being able to "build a Weapon Hardpoint
+I" are different facts, and the ship builder only ever shows a
+manufacturer-flavored palette row once *both* are true.
+
 ## Known MCP/tooling gotchas (only relevant if using the godot-ai MCP tools)
 
 - **A brand-new asset file (never seen by the editor before) can silently
@@ -490,38 +695,43 @@ re-tune these numbers, that's the methodology to repeat, not pure math.
 
 ## Not yet started (no explicit user request yet — don't start without one)
 
-- **Give `pirate_light_one` (and possibly other compact pirates) an actual
-  severable appendage.** Explicitly flagged as a real gap: it currently has
-  zero severable points by construction (see "Per-module ship damage"
-  above), so the whole wing-detachment feature never shows up against it in
-  ordinary play.
-- Stat bonuses/penalties tied to a module's distance from the Core (the
-  "cockpit interference" idea from design discussion — sensors better far
-  out, power-hungry modules better close in, Struts doubling as power
-  relays) — deliberately deferred until the base detachment/balance system
-  has been played with more.
+- **Corporate or Ancient enemy ships.** Explicitly deferred by the user
+  ("we can do the enemy ships later") after the Version 0.5 gap-check —
+  every enemy in `scenes/enemies/` is currently a Pirate variant or the
+  generic missile cruiser, so faction identity (art/tech/Manufacturers)
+  never actually shows up in combat for the other two factions.
+- Faction-specific/unique salvage — materials are still fully generic
+  across all three factions; only captured tech parts and (new)
+  manufacturer discovery carry any faction/manufacturer identity.
+- Buying from a known manufacturer once discovered — waits on a Version
+  0.6 station/trading system that doesn't exist yet.
+- Give `pirate_light_two`/`pirate_heavy_one` a severability audit —
+  `pirate_light_one` was fixed this session (see "Most recent session");
+  the others were never checked for the same "zero severable points"
+  blob issue.
 - Reactor/Battery/Command-Core-adjacent modules other than engines/weapons
   still have no *mechanical* effect when destroyed beyond losing the hex
   (no repair mechanic either).
-- Player weapon accuracy/spread — untouched on purpose this session.
+- Player weapon accuracy/spread — untouched on purpose.
 - More module types / a real data-driven (non-static) module catalog as
   `.tres` resources.
 - A planet catalog, multiple planet instances, orbit/parallax motion, or
   any planet-surface gameplay.
 - Anything in `vision.md` or later phases of `roadmap.md`/`Roadmap
-  v.2-v.9.md` (factions, warp gates, research, co-op).
+  v.2-v.9.md` (warp gates, research beyond reverse-engineering, co-op).
 
 ## Suggested next step
 
-No official next roadmap item has been decided yet — this session was spent
-reactively testing and rebalancing the per-module damage system the user
-chose earlier (engine failures → "real per-module damage"). The natural
-next step is for the **user to actually playtest current combat** (their
-own ship, real weapons, real pirates — not synthetic MCP tests) now that
-Hull/Heavy Hull/Core health and AI aim jitter have all changed, and report
-back whether it feels right, too easy, or still too fast. Concrete
-candidates already flagged and ready to pick up depending on that feedback:
-give `pirate_light_one` a real severable wing (small, self-contained), or
-continue the Core-distance stat-bonus idea if the base system feels solid.
-Do not start either without the user confirming which (or something else)
-first.
+Version 0.4 (Combat Evolution) is now essentially complete —
+`pirate_light_one`'s wing was the one known gap. Version 0.5 (Technology &
+Factions) has real substance now too (reverse engineering + Manufacturers
+both work end-to-end), but its one deliberately-deferred gap is enemy
+ships for Corporate/Ancient — faction identity is still cosmetic/tech-only
+in actual combat. No specific next item has been chosen yet; candidates on
+the table: build a Corporate or Ancient enemy ship (closes the biggest
+remaining Version 0.5 gap), audit `pirate_light_two`/`pirate_heavy_one` for
+the same severability issue `pirate_light_one` had, or have the **user
+actually playtest current combat** (real ship, real weapons, real
+pirates) now that per-module damage, wing severance, research gating, and
+Manufacturers have all landed without a real playtest pass. Do not start
+any of these without the user confirming which first.

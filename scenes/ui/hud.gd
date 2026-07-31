@@ -6,6 +6,7 @@ extends CanvasLayer
 @onready var _salvage_label: Label = $SalvageLabel
 @onready var _health_label: Label = $HealthLabel
 @onready var _energy_label: Label = $EnergyLabel
+@onready var _credits_label: Label = $CreditsLabel
 @onready var _damage_flash: ColorRect = $DamageFlash
 
 var _inventory: Inventory
@@ -22,6 +23,8 @@ func _ready() -> void:
 	_inventory = players[0].get_node("Inventory")
 	_inventory.materials_changed.connect(_on_materials_changed)
 	_update_salvage_label(_inventory.get_all_materials())
+	_inventory.credits_changed.connect(_on_credits_changed)
+	_update_credits_label(_inventory.get_credits())
 
 	_health = players[0].get_node("Health")
 	_health.health_changed.connect(_on_health_changed)
@@ -34,6 +37,14 @@ func _ready() -> void:
 
 func _on_materials_changed(totals: Dictionary) -> void:
 	_update_salvage_label(totals)
+
+
+func _on_credits_changed(amount: int) -> void:
+	_update_credits_label(amount)
+
+
+func _update_credits_label(amount: int) -> void:
+	_credits_label.text = "Credits: %d" % amount
 
 
 func _update_salvage_label(totals: Dictionary) -> void:

@@ -5,7 +5,9 @@ signal materials_changed(totals: Dictionary)
 signal captured_tech_changed(totals: Dictionary)
 signal research_unlocked(module_type_id: String)
 signal manufacturer_discovered(manufacturer_id: String)
+signal credits_changed(amount: int)
 
+var _credits: int = 0
 var _material_totals: Dictionary = {}
 ## module_type_id -> count. Distinct from _material_totals: these are
 ## specific captured tech parts (see Ship.capture_tech_part), spent one at a
@@ -22,6 +24,27 @@ var _researched_ids: Dictionary = {}
 ## manufacturer once a station/trading system exists is a deliberate future
 ## hook, not implemented yet.
 var _known_manufacturer_ids: Dictionary = {}
+
+
+func get_credits() -> int:
+	return _credits
+
+
+func add_credits(amount: int) -> void:
+	_credits += amount
+	credits_changed.emit(_credits)
+
+
+func has_credits(amount: int) -> bool:
+	return _credits >= amount
+
+
+func spend_credits(amount: int) -> bool:
+	if not has_credits(amount):
+		return false
+	_credits -= amount
+	credits_changed.emit(_credits)
+	return true
 
 
 func add_material(material_id: String, amount: int) -> void:

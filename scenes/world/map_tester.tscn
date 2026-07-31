@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_med_one.tscn" id="13_pirate_med"]
 [ext_resource type="PackedScene" path="res://scenes/world/planet.tscn" id="14_planet"]
 [ext_resource type="Script" uid="uid://bx1m1heuhcl5n" path="res://scenes/world/debug_tools.gd" id="15_debug_tools"]
+[ext_resource type="PackedScene" path="res://scenes/ui/trade_panel.tscn" id="16_trade_panel"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
 sky_top_color = Color(0.38, 0.45, 0.55, 1)
@@ -142,6 +143,8 @@ environment = SubResource("Environment_u02ng")
 [node name="UpgradePanel" parent="." unique_id=1122649445 instance=ExtResource("9_gc6po")]
 
 [node name="ShipBuilderPanel" parent="." unique_id=-523937815 instance=ExtResource("10_ja1me")]
+
+[node name="TradePanel" parent="." instance=ExtResource("16_trade_panel")]
 
 [node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
 script = ExtResource("10_ojmk8")
