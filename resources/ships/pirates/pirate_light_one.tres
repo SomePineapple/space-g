@@ -42,7 +42,13 @@ hex_coord = Vector2i(-1, -1)
 script = ExtResource("1_bris7")
 placement_id = "p_6_89848"
 module_type_id = "engine"
-hex_coord = Vector2i(2, -1)
+hex_coord = Vector2i(3, -2)
+
+[sub_resource type="Resource" id="Resource_wingstrut"]
+script = ExtResource("1_bris7")
+placement_id = "p_wing_strut"
+module_type_id = "strut"
+hex_coord = Vector2i(2, -2)
 
 [sub_resource type="Resource" id="Resource_1wuia"]
 script = ExtResource("1_bris7")
@@ -64,5 +70,5 @@ hex_coord = Vector2i(1, -2)
 
 [resource]
 script = ExtResource("2_agjf3")
-placements = Array[ExtResource("1_bris7")]([SubResource("Resource_fmcu5"), SubResource("Resource_tmd4l"), SubResource("Resource_alupn"), SubResource("Resource_8qhlp"), SubResource("Resource_smlud"), SubResource("Resource_6bbbq"), SubResource("Resource_sm28b"), SubResource("Resource_1wuia"), SubResource("Resource_3de6w"), SubResource("Resource_reactor")])
+placements = Array[ExtResource("1_bris7")]([SubResource("Resource_fmcu5"), SubResource("Resource_tmd4l"), SubResource("Resource_alupn"), SubResource("Resource_8qhlp"), SubResource("Resource_smlud"), SubResource("Resource_6bbbq"), SubResource("Resource_sm28b"), SubResource("Resource_1wuia"), SubResource("Resource_3de6w"), SubResource("Resource_reactor"), SubResource("Resource_wingstrut")])
 core_placement_id = "core"
