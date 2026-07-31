@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ShipPersonality" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/ai/ship_personality.gd" id="1_ship_personality"]
+
+[resource]
+script = ExtResource("1_ship_personality")
+display_name = "Corporate Alliance"
+is_player_controlled = false
+detection_range = 1000.0
+fire_range = 700.0
+keep_distance = 550.0
+aim_tolerance_deg = 8.0
+turn_response = 1.2
+suspicion_delay = 1.0
+retreats_when_too_close = false
+use_primary_weapon = true
+use_secondary_weapon = false
+health_multiplier = 1.2
+faction_id = "corporate"
