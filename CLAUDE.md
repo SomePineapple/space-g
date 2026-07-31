@@ -1,5 +1,20 @@
 # Space Game Prototype — Claude Instructions
 
+## Communication style
+
+Be extremely concise.
+
+- Do not narrate routine file reads, searches or command execution.
+- Do not explain obvious code changes unless asked.
+- Before working, give at most one short sentence describing the action.
+- After working, report only:
+  1. what changed,
+  2. whether verification passed,
+  3. anything requiring my decision.
+- Keep normal completion messages under 100 words.
+- Do not provide lengthy summaries after each edit.
+- Prefer acting over explaining.
+
 ## Project purpose
 
 This is a Godot 4 top-down space exploration and combat game.
