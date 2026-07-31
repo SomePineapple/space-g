@@ -562,14 +562,20 @@ func _spawn_thrusters() -> void:
 	for placement in ship_layout.get_thruster_placements():
 		var thruster: Node2D = engine_thruster_scene.instantiate()
 		add_child(thruster)
-		# Offset from the hex's center to its trailing (-X, "back of the
-		# ship") edge midpoint, so the flame visually bursts from the hex's
-		# own back edge instead of appearing to originate from its middle —
-		# see HexUtils.hex_corners for why -X is a flat edge, not a point.
+		# Offset from the hex's center toward its trailing vertex, so the
+		# flame visually bursts from the back tip of the hex instead of its
+		# middle. This is in hex-grid-local space (same space as hex_center,
+		# pre-_hull_renderer.rotation) — _hull_renderer.rotation is a fixed
+		# +90° twist between the hex grid's own authored axes and the ship's
+		# true movement-forward (+X) axis, so hex-grid-local "backward" is
+		# +Y (a vertex per HexUtils.hex_corners), not -X. Only the *position*
+		# needs that rotation applied (matching hex_center below) — the
+		# thruster's own rotation stays default (0) so the particle's local
+		# -X direction keeps pointing at the ship's real physics-backward,
+		# not doubly twisted by the hex grid's separate authoring offset.
 		var hex_center: Vector2 = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size)
-		var back_edge_offset: Vector2 = Vector2(-_hull_renderer.cell_size * HexUtils.SQRT3 * 0.5, 0.0)
-		thruster.position = (hex_center + back_edge_offset).rotated(_hull_renderer.rotation)
-		thruster.rotation = _hull_renderer.rotation
+		var back_vertex_offset: Vector2 = Vector2(0.0, _hull_renderer.cell_size)
+		thruster.position = (hex_center + back_vertex_offset).rotated(_hull_renderer.rotation)
 		_thrusters.append(thruster)
 		_thruster_placement_ids.append(placement.placement_id)
 
