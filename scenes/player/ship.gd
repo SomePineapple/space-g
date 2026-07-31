@@ -253,6 +253,16 @@ func _damage_module_at_point(amount: float, impact_point: Vector2) -> void:
 			_apply_module_damage(neighbor_placement, amount * module_splash_fraction)
 
 
+## Public entry point for a hardpoint to damage its own mount (e.g. a Black
+## Market Foundry weapon backfiring, see HardpointGun.malfunction_chance) —
+## reuses the exact same per-module damage pathway a normal hit uses, so a
+## bad enough malfunction streak can genuinely sever the weapon's own module.
+func damage_own_module(placement_id: String, amount: float) -> void:
+	var placement: ModulePlacement = ship_layout.get_placement_by_id(placement_id)
+	if placement != null:
+		_apply_module_damage(placement, amount)
+
+
 func _apply_module_damage(placement: ModulePlacement, amount: float) -> void:
 	if is_module_destroyed(placement.placement_id):
 		return
@@ -530,7 +540,7 @@ func _spawn_capturable_part_for(placement: ModulePlacement, module_type: ModuleT
 
 	part.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _hull_renderer.cell_size,
 		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE),
-		module_type.id, personality.faction_id)
+		module_type.id, personality.faction_id, placement.manufacturer_id)
 
 
 ## New max_energy keeps the same fraction full rather than resetting to full
@@ -599,6 +609,7 @@ func _spawn_hardpoint_guns() -> void:
 		gun.source_placement_id = placement.placement_id
 		for property_name in _weapon_upgrade_modifiers:
 			gun.set(property_name, gun.get(property_name) + _weapon_upgrade_modifiers[property_name])
+		_apply_manufacturer_modifiers(gun, placement)
 		_hardpoint_guns.append(gun)
 
 
@@ -619,7 +630,24 @@ func _spawn_missile_launchers() -> void:
 		launcher.source_placement_id = placement.placement_id
 		for property_name in _missile_upgrade_modifiers:
 			launcher.set(property_name, launcher.get(property_name) + _missile_upgrade_modifiers[property_name])
+		_apply_manufacturer_modifiers(launcher, placement)
 		_missile_launchers.append(launcher)
+
+
+## Applies a placement's manufacturer stat_modifiers (additive deltas, same
+## technique as the upgrade-tree modifiers above) to its spawned hardpoint
+## node. Also passes through Black Market Foundry's malfunction risk, if any
+## — see HardpointGun._apply_malfunction_damage.
+func _apply_manufacturer_modifiers(node: Node, placement: ModulePlacement) -> void:
+	var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(placement.manufacturer_id)
+	if manufacturer == null:
+		return
+	for property_name in manufacturer.stat_modifiers:
+		if property_name in node:
+			node.set(property_name, node.get(property_name) + manufacturer.stat_modifiers[property_name])
+	if "malfunction_chance" in node:
+		node.set("malfunction_chance", manufacturer.malfunction_chance)
+		node.set("malfunction_self_damage", manufacturer.malfunction_self_damage)
 
 
 ## Unlike guns/launchers, a winch hardpoint has a fixed facing rather than
@@ -806,9 +834,15 @@ func add_material(material_id: String, amount: int) -> void:
 	_inventory.add_material(material_id, amount)
 
 
-## Called by WinchBeam once it finishes reeling in a CapturedTechPart.
-func capture_tech_part(module_type_id: String) -> void:
+## Called by WinchBeam/TractorBeam once it finishes reeling in a
+## CapturedTechPart. A non-empty manufacturer_id also discovers that
+## manufacturer (see Inventory.discover_manufacturer) — separate from the
+## per-module research unlock, since knowing "Atlas Heavy exists" is a
+## different fact from "I can build a Weapon Hardpoint I."
+func capture_tech_part(module_type_id: String, manufacturer_id: String = "") -> void:
 	_inventory.add_captured_tech(module_type_id)
+	if not manufacturer_id.is_empty():
+		_inventory.discover_manufacturer(manufacturer_id)
 
 
 func apply_impulse(impulse: Vector2) -> void:

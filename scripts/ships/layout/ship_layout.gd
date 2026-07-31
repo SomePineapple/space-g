@@ -17,7 +17,7 @@ func total_mass() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.mass_contribution
+			total += module_type.mass_contribution + _manufacturer_stat_delta(placement, "mass_contribution")
 	return total
 
 
@@ -44,7 +44,8 @@ func total_energy_generation() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.energy_generation * _core_distance_energy_multiplier(placement)
+			var base: float = module_type.energy_generation + _manufacturer_stat_delta(placement, "energy_generation")
+			total += base * _core_distance_energy_multiplier(placement)
 	return total
 
 
@@ -53,8 +54,20 @@ func total_energy_capacity() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.energy_capacity_contribution * _core_distance_energy_multiplier(placement)
+			var base: float = module_type.energy_capacity_contribution + _manufacturer_stat_delta(placement, "energy_capacity_contribution")
+			total += base * _core_distance_energy_multiplier(placement)
 	return total
+
+
+## Reactor/Battery have no live spawned node (unlike weapons/thrusters), so a
+## manufacturer's stat_modifiers for them are applied right here at the total
+## level rather than by mutating a node's properties post-spawn — see
+## Manufacturer.stat_modifiers.
+func _manufacturer_stat_delta(placement: ModulePlacement, field_name: String) -> float:
+	var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(placement.manufacturer_id)
+	if manufacturer == null:
+		return 0.0
+	return manufacturer.stat_modifiers.get(field_name, 0.0)
 
 
 ## Hex-grid distance from the Core's placement to this one. Anchor-cell to
@@ -179,7 +192,7 @@ func get_place_rejection_reason(module_type_id: String, anchor_hex: Vector2i, ro
 	return ""
 
 
-func place(module_type_id: String, anchor_hex: Vector2i, rotation_steps: int) -> ModulePlacement:
+func place(module_type_id: String, anchor_hex: Vector2i, rotation_steps: int, manufacturer_id: String = "") -> ModulePlacement:
 	if not can_place(module_type_id, anchor_hex, rotation_steps):
 		return null
 
@@ -188,6 +201,7 @@ func place(module_type_id: String, anchor_hex: Vector2i, rotation_steps: int) ->
 	placement.module_type_id = module_type_id
 	placement.hex_coord = anchor_hex
 	placement.rotation_steps = posmod(rotation_steps, 6)
+	placement.manufacturer_id = manufacturer_id
 	placements.append(placement)
 
 	if module_type_id == ModuleCatalog.CORE_TYPE_ID:

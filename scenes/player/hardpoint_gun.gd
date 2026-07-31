@@ -13,6 +13,12 @@ extends Node2D
 ## one exists and firing will play it automatically.
 @export var fire_sound: AudioStream = null
 
+## Black Market Foundry only (see Manufacturer.malfunction_chance) — zero for
+## every other manufacturer/no manufacturer, meaning "never." Set by Ship
+## right after instancing, alongside the rest of the manufacturer modifiers.
+@export var malfunction_chance: float = 0.0
+@export var malfunction_self_damage: float = 0.0
+
 ## Tier scaling for bigger (multi-hex) hardpoints: bigger guns hit harder
 ## and kick more but cycle slower. Tier 1 (index 0) is a 1.0 no-op so
 ## existing single-hex hardpoints are unaffected.
@@ -142,6 +148,9 @@ func fire() -> Projectile:
 	if not _shooter.spend_energy(energy_cost):
 		return null
 	_cooldown_remaining = 1.0 / fire_rate
+	if malfunction_chance > 0.0 and randf() < malfunction_chance:
+		_shooter.damage_own_module(source_placement_id, malfunction_self_damage)
+		return null
 	return _execute_fire()
 
 

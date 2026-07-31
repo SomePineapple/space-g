@@ -44,6 +44,8 @@ var _inventory: Inventory
 var _player_ship: Ship
 
 var _selected_type_id: String = ""
+## Empty means "generic/no manufacturer" — see Manufacturer/ManufacturerCatalog.
+var _selected_manufacturer_id: String = ""
 var _pending_rotation: int = 0
 var _has_hover: bool = false
 var _last_hover_hex: Vector2i = Vector2i.ZERO
@@ -51,8 +53,12 @@ var _last_hover_hex: Vector2i = Vector2i.ZERO
 var _status_label: Label
 var _stats_label: Label
 var _grid: HexGridControl
+var _palette_container: VBoxContainer
+## Composite key ("module_type_id" for the generic row, "module_type_id::manufacturer_id"
+## for a manufacturer-flavored row) -> Button.
 var _palette_buttons: Dictionary = {}
-## module_type_id -> Button, only for ModuleType.requires_research entries.
+## module_type_id -> Button, only for ModuleType.requires_research entries
+## (manufacturer rows never get one — they only appear once already known).
 var _research_buttons: Dictionary = {}
 var _save_name_edit: LineEdit
 var _saved_list: ItemList
@@ -218,36 +224,18 @@ func _build_side_panel(panel: Control) -> void:
 	palette_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panel.add_child(palette_scroll)
 
-	var palette := VBoxContainer.new()
-	palette.custom_minimum_size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, 0)
-	palette.add_theme_constant_override("separation", PALETTE_BUTTON_GAP)
-	palette_scroll.add_child(palette)
+	_palette_container = VBoxContainer.new()
+	_palette_container.custom_minimum_size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, 0)
+	_palette_container.add_theme_constant_override("separation", PALETTE_BUTTON_GAP)
+	palette_scroll.add_child(_palette_container)
 
-	for module_type in ModuleCatalog.get_all():
-		var button := Button.new()
-		button.toggle_mode = true
-		# clip_text excludes the (sometimes long) cost string from the
-		# button's minimum-size calculation; without it a long enough cost
-		# string forces the ScrollContainer wider than SIDE_PANEL_WIDTH
-		# (ScrollContainer expands to fit content when horizontal scrolling
-		# is disabled), pushing the list and its scrollbar out past the
-		# neon-blue background on the right.
-		button.clip_text = true
-		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
-		button.pressed.connect(_on_palette_pressed.bind(module_type.id))
-		palette.add_child(button)
-		_palette_buttons[module_type.id] = button
-
-		if module_type.requires_research:
-			var research_button := Button.new()
-			research_button.pressed.connect(_on_research_pressed.bind(module_type.id))
-			palette.add_child(research_button)
-			_research_buttons[module_type.id] = research_button
-
+	_rebuild_palette()
 	if _inventory != null:
 		_inventory.captured_tech_changed.connect(func(_totals): _refresh_lock_state())
-	_refresh_lock_state()
+		# A newly discovered manufacturer adds whole new rows (not just a
+		# lock-state change on existing ones), so it needs a full rebuild
+		# rather than _refresh_lock_state()'s in-place text/disabled update.
+		_inventory.manufacturer_discovered.connect(func(_id): _rebuild_palette())
 
 	var save_row := HBoxContainer.new()
 	save_row.position = Vector2(side_x + SIDE_MARGIN, save_row_top)
@@ -276,6 +264,80 @@ func _build_side_panel(panel: Control) -> void:
 	_saved_list.size = Vector2(SIDE_PANEL_WIDTH - SIDE_MARGIN * 2, SIDE_SAVED_LIST_HEIGHT)
 	_saved_list.item_selected.connect(_on_saved_item_selected)
 	panel.add_child(_saved_list)
+
+
+## Only weapon/missile hardpoints and the two energy modules currently have
+## Manufacturer stat_modifiers wired up (see Ship._apply_manufacturer_modifiers/
+## ShipLayout._manufacturer_stat_delta) — matches the "Weapons + Reactor/Battery"
+## scope decision, not every module type.
+const MANUFACTURER_ELIGIBLE_TYPE_IDS: Array[String] = ["reactor_mk1", "battery_mk1"]
+
+
+func _module_type_takes_manufacturers(module_type: ModuleType) -> bool:
+	return module_type.hardpoint_category in ["weapon", "missile"] \
+		or module_type.id in MANUFACTURER_ELIGIBLE_TYPE_IDS
+
+
+## Composite key for a manufacturer-flavored palette row/button, distinct
+## from the generic row's plain module_type_id key.
+func _palette_key(module_type_id: String, manufacturer_id: String) -> String:
+	return module_type_id if manufacturer_id.is_empty() else "%s::%s" % [module_type_id, manufacturer_id]
+
+
+## Rebuilds the whole module palette from scratch. Needed (not just a
+## lock-state refresh) whenever a newly discovered manufacturer should add
+## brand new rows — see the manufacturer_discovered connection above.
+func _rebuild_palette() -> void:
+	for child in _palette_container.get_children():
+		child.queue_free()
+	_palette_buttons.clear()
+	_research_buttons.clear()
+
+	for module_type in ModuleCatalog.get_all():
+		var button := Button.new()
+		button.toggle_mode = true
+		# clip_text excludes the (sometimes long) cost string from the
+		# button's minimum-size calculation; without it a long enough cost
+		# string forces the ScrollContainer wider than SIDE_PANEL_WIDTH
+		# (ScrollContainer expands to fit content when horizontal scrolling
+		# is disabled), pushing the list and its scrollbar out past the
+		# neon-blue background on the right.
+		button.clip_text = true
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
+		button.pressed.connect(_on_palette_pressed.bind(module_type.id, ""))
+		_palette_container.add_child(button)
+		_palette_buttons[module_type.id] = button
+
+		if module_type.requires_research:
+			var research_button := Button.new()
+			research_button.pressed.connect(_on_research_pressed.bind(module_type.id))
+			_palette_container.add_child(research_button)
+			_research_buttons[module_type.id] = research_button
+
+		# A manufacturer row only makes sense once the base type itself is
+		# actually buildable — an "Atlas Railgun" row before Railgun itself
+		# is researched would be confusing (and un-placeable anyway).
+		var base_type_unlocked: bool = not module_type.requires_research \
+			or (_inventory != null and _inventory.is_researched(module_type.id))
+		if _inventory != null and base_type_unlocked and _module_type_takes_manufacturers(module_type):
+			for manufacturer_id in _inventory.get_known_manufacturer_ids():
+				var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
+				if manufacturer == null:
+					continue
+				var variant_button := Button.new()
+				variant_button.clip_text = true
+				variant_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				variant_button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
+				variant_button.toggle_mode = true
+				variant_button.text = "%s (%s)\n%s" % [
+					module_type.display_name, manufacturer.display_name, _format_costs(module_type.build_costs),
+				]
+				variant_button.pressed.connect(_on_palette_pressed.bind(module_type.id, manufacturer.id))
+				_palette_container.add_child(variant_button)
+				_palette_buttons[_palette_key(module_type.id, manufacturer.id)] = variant_button
+
+	_refresh_lock_state()
 
 
 ## Shows each palette entry's current lock/researched state — call whenever
@@ -314,13 +376,18 @@ func _on_research_pressed(module_type_id: String) -> void:
 	_refresh_lock_state()
 
 
-func _on_palette_pressed(module_type_id: String) -> void:
+func _on_palette_pressed(module_type_id: String, manufacturer_id: String = "") -> void:
 	_selected_type_id = module_type_id
+	_selected_manufacturer_id = manufacturer_id
 	_pending_rotation = 0
 	_grid.selected_placement_id = ""
+	var pressed_key: String = _palette_key(module_type_id, manufacturer_id)
 	for id in _palette_buttons:
-		_palette_buttons[id].button_pressed = (id == module_type_id)
-	_status_label.text = "Placing: %s (hover the grid, Rotate to orient, click to place)" % ModuleCatalog.get_by_id(module_type_id).display_name
+		_palette_buttons[id].button_pressed = (id == pressed_key)
+	var type_name: String = ModuleCatalog.get_by_id(module_type_id).display_name
+	var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
+	var placing_name: String = "%s (%s)" % [type_name, manufacturer.display_name] if manufacturer != null else type_name
+	_status_label.text = "Placing: %s (hover the grid, Rotate to orient, click to place)" % placing_name
 	_update_preview()
 
 
@@ -358,6 +425,7 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 	var existing: ModulePlacement = working_layout.get_placement_at(hex_coord)
 	if existing != null:
 		_selected_type_id = ""
+		_selected_manufacturer_id = ""
 		for id in _palette_buttons:
 			_palette_buttons[id].button_pressed = false
 		_grid.clear_preview()
@@ -385,7 +453,7 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_status_label.text = "Cannot place %s: need %s" % [type_to_place.display_name, _format_costs(type_to_place.build_costs)]
 		return
 
-	working_layout.place(_selected_type_id, hex_coord, _pending_rotation)
+	working_layout.place(_selected_type_id, hex_coord, _pending_rotation, _selected_manufacturer_id)
 	if _inventory != null:
 		_inventory.spend_materials(type_to_place.build_costs)
 	_status_label.text = "Placed %s." % type_to_place.display_name
@@ -511,6 +579,7 @@ func _on_load_pressed() -> void:
 	_grid.layout = working_layout
 	_grid.selected_placement_id = ""
 	_selected_type_id = ""
+	_selected_manufacturer_id = ""
 	for id in _palette_buttons:
 		_palette_buttons[id].button_pressed = false
 	_status_label.text = "Loaded '%s'." % _save_name_edit.text

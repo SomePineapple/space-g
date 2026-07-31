@@ -57,7 +57,7 @@ func _physics_process(delta: float) -> void:
 			_update_beam(part)
 
 			if part.global_position.distance_to(_ship.global_position) <= tech_part_collect_radius:
-				_ship.capture_tech_part(part.module_type_id)
+				_ship.capture_tech_part(part.module_type_id, part.manufacturer_id)
 				part.collect()
 
 	_cleanup_beams(active_pulled)

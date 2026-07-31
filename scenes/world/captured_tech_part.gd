@@ -16,6 +16,8 @@ const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.07, 0.9)
 
 var module_type_id: String = ""
 var faction_id: String = ""
+## Empty means "generic/no manufacturer" — see Manufacturer/ManufacturerCatalog.
+var manufacturer_id: String = ""
 
 var _cells: Array[Vector2i] = []
 var _colors: Array[Color] = []
@@ -35,7 +37,7 @@ func _ready() -> void:
 
 func setup(cells: Array[Vector2i], colors: Array[Color], textures: Array[Texture2D], rotation_steps: int,
 		cell_size: float, drift_velocity: Vector2, spin: float,
-		source_module_type_id: String, source_faction_id: String) -> void:
+		source_module_type_id: String, source_faction_id: String, source_manufacturer_id: String = "") -> void:
 	_cells = cells
 	_colors = colors
 	_textures = textures
@@ -45,6 +47,7 @@ func setup(cells: Array[Vector2i], colors: Array[Color], textures: Array[Texture
 	_spin = spin
 	module_type_id = source_module_type_id
 	faction_id = source_faction_id
+	manufacturer_id = source_manufacturer_id
 	queue_redraw()
 
 
