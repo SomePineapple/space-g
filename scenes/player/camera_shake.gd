@@ -7,13 +7,21 @@ extends Camera2D
 ## Ship layout extent (see Ship.get_layout_extent()) at which zoom is
 ## max_zoom — tuned to the starter ship's size.
 @export var reference_ship_extent: float = 66.0
-@export var min_zoom: float = 0.35
-## Capped below 1.0 so even the smallest ship keeps a wide view of the
-## region (pirates, home base) rather than a tight close-up from the start.
-@export var max_zoom: float = 0.6
+## Widened 50% (divided by 1.5) versus the original ship-size-only range so
+## the default view shows more of the surroundings.
+@export var min_zoom: float = 0.35 / 1.5
+@export var max_zoom: float = 0.6 / 1.5
 @export var zoom_response: float = 3.0
 
+## Scroll wheel zoom-in/out on top of the ship-size-driven base zoom.
+@export var scroll_zoom_step: float = 0.05
+## Closest the player can scroll in, regardless of ship size — the old
+## max_zoom (0.6), i.e. roughly a 6-hex ship's default zoom.
+@export var scroll_max_zoom: float = 0.6
+
 var _shake_strength: float = 0.0
+var _base_zoom: float = 1.0
+var _manual_zoom_offset: float = 0.0
 var _target_zoom: float = 1.0
 var _last_known_health: float = -1.0
 
@@ -42,9 +50,34 @@ func _on_destroyed() -> void:
 	_shake_strength = destroyed_shake_strength
 
 
+## Public hook for one-off camera kicks from outside (e.g. WarpGate's speed
+## lane jump) that aren't tied to taking damage or being destroyed.
+func add_shake(amount: float) -> void:
+	_shake_strength = maxf(_shake_strength, amount)
+
+
 func _on_layout_applied() -> void:
 	var extent: float = maxf(_ship.get_layout_extent(), 1.0)
-	_target_zoom = clampf(reference_ship_extent / extent, min_zoom, max_zoom)
+	_base_zoom = clampf(reference_ship_extent / extent, min_zoom, max_zoom)
+	_update_target_zoom()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_manual_zoom_offset += scroll_zoom_step
+			_update_target_zoom()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_manual_zoom_offset -= scroll_zoom_step
+			_update_target_zoom()
+
+
+## Scroll can zoom in up to scroll_max_zoom but never out past _base_zoom
+## (the current ship's size-driven zoom) — so the ship's own size always
+## sets the furthest-out view, and growing the ship pulls an under-cap
+## zoom back up with it.
+func _update_target_zoom() -> void:
+	_target_zoom = clampf(_base_zoom + _manual_zoom_offset, _base_zoom, scroll_max_zoom)
 
 
 func _process(delta: float) -> void:

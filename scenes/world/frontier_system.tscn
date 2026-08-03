@@ -1,0 +1,107 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/world/starfield_layer.gd" id="1_starfield"]
+[ext_resource type="Texture2D" path="res://art/backgrounds/bg_space.png" id="1_bg_image"]
+[ext_resource type="PackedScene" path="res://scenes/player/ship.tscn" id="2_ship"]
+[ext_resource type="PackedScene" path="res://scenes/world/asteroid.tscn" id="3_asteroid"]
+[ext_resource type="Script" path="res://scenes/player/ship_input.gd" id="4_input"]
+[ext_resource type="Script" path="res://scenes/player/camera_shake.gd" id="5_camera"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="6_hud"]
+[ext_resource type="PackedScene" path="res://scenes/world/warp_gate.tscn" id="7_gate"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_frontier"]
+sky_top_color = Color(0.25, 0.2, 0.35, 1)
+sky_horizon_color = Color(0.5, 0.35, 0.45, 1)
+ground_bottom_color = Color(0.15, 0.1, 0.2, 1)
+ground_horizon_color = Color(0.5, 0.35, 0.45, 1)
+
+[sub_resource type="Sky" id="Sky_frontier"]
+sky_material = SubResource("ProceduralSkyMaterial_frontier")
+
+[sub_resource type="Environment" id="Environment_frontier"]
+background_mode = 3
+sky = SubResource("Sky_frontier")
+ambient_light_source = 3
+glow_enabled = true
+glow_intensity = 1.5
+glow_strength = 1.2
+glow_bloom = 0.2
+glow_blend_mode = 0
+
+[node name="Frontier System" type="Node2D"]
+
+[node name="SpaceBackground" type="ParallaxBackground" parent="."]
+
+[node name="DeepBackground" type="ParallaxLayer" parent="SpaceBackground"]
+motion_scale = Vector2(0.02, 0.02)
+motion_mirroring = Vector2(13376, 7528)
+
+[node name="Image" type="Sprite2D" parent="SpaceBackground/DeepBackground"]
+scale = Vector2(2, 2)
+texture = ExtResource("1_bg_image")
+
+[node name="DeepStars" type="ParallaxLayer" parent="SpaceBackground"]
+motion_scale = Vector2(0.05, 0.05)
+script = ExtResource("1_starfield")
+star_count = 2000
+field_size = Vector2(6000, 3600)
+min_star_size = 1.0
+max_star_size = 1.3
+min_brightness = 0.15
+max_brightness = 0.35
+random_seed = 7
+flicker_chance = 0.12
+
+[node name="FarStars" type="ParallaxLayer" parent="SpaceBackground"]
+motion_scale = Vector2(0.2, 0.2)
+script = ExtResource("1_starfield")
+star_count = 2000
+field_size = Vector2(6000, 3600)
+max_star_size = 1.3
+max_brightness = 0.6
+random_seed = 8
+flicker_chance = 0.1
+
+[node name="MidStars" type="ParallaxLayer" parent="SpaceBackground"]
+motion_scale = Vector2(0.35, 0.35)
+script = ExtResource("1_starfield")
+star_count = 2000
+field_size = Vector2(6000, 3600)
+max_star_size = 1.7
+min_brightness = 0.45
+max_brightness = 1.2
+random_seed = 9
+flicker_chance = 0.04
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_frontier")
+
+[node name="Ship" parent="." groups=["player_ship"] instance=ExtResource("2_ship")]
+drops_salvage = false
+
+[node name="PlayerInput" type="Node" parent="Ship"]
+script = ExtResource("4_input")
+
+[node name="ShipCamera" type="Camera2D" parent="Ship"]
+process_callback = 0
+position_smoothing_enabled = true
+script = ExtResource("5_camera")
+
+[node name="Asteroid1" parent="." instance=ExtResource("3_asteroid")]
+position = Vector2(400, -180)
+random_seed = 101
+
+[node name="Asteroid2" parent="." instance=ExtResource("3_asteroid")]
+position = Vector2(-320, 260)
+random_seed = 102
+
+[node name="Asteroid3" parent="." instance=ExtResource("3_asteroid")]
+position = Vector2(200, 380)
+random_seed = 103
+
+[node name="HUD" parent="." instance=ExtResource("6_hud")]
+
+[node name="ReturnGate" parent="." instance=ExtResource("7_gate")]
+position = Vector2(0, -150)
+destination_scene = "res://scenes/world/map_tester.tscn"
+destination_arrival_node_name = "WarpGateFrontier"

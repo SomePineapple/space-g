@@ -142,6 +142,9 @@ func _ready() -> void:
 	_health.health_changed.connect(_on_health_changed)
 	_base_hull_modulate = _hull_renderer.modulate
 
+	if is_in_group("player_ship"):
+		GameState.apply(self)
+
 
 func apply_layout(new_layout: ShipLayout) -> void:
 	ship_layout = new_layout
@@ -790,6 +793,23 @@ func get_locked_target() -> Node2D:
 	if _locked_target != null and not is_instance_valid(_locked_target):
 		_locked_target = null
 	return _locked_target
+
+
+## Counter rather than a bool so overlapping nebula zones don't prematurely
+## clear each other's effect when one is exited while still inside another.
+var _nebula_depth: int = 0
+
+
+func enter_nebula() -> void:
+	_nebula_depth += 1
+
+
+func exit_nebula() -> void:
+	_nebula_depth = maxi(_nebula_depth - 1, 0)
+
+
+func is_in_nebula() -> bool:
+	return _nebula_depth > 0
 
 
 ## Only current < last-known counts as damage — configure() (ship rebuilds

@@ -2,7 +2,9 @@ extends ParallaxLayer
 
 @export var star_count: int = 120
 @export var field_size: Vector2 = Vector2(1024, 1024)
-@export var min_star_size: float = 1.0
+## Kept above ~1px so stars don't alias to on/off between frames on
+## smaller/lower-res screens as the parallax layer scrolls sub-pixel amounts.
+@export var min_star_size: float = 1.2
 @export var max_star_size: float = 2.0
 @export var min_brightness: float = 0.4
 @export var max_brightness: float = 1.0

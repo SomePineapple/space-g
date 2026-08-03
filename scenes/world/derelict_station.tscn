@@ -1,0 +1,164 @@
+[gd_scene format=3 uid="uid://c6d60eop53qba"]
+
+[ext_resource type="Texture2D" uid="uid://crv7raqboncmr" path="res://art/backgrounds/bg_space.png" id="1_bg_image"]
+[ext_resource type="Script" uid="uid://g4010rlocqis" path="res://scenes/world/starfield_layer.gd" id="1_starfield"]
+[ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="2_ship"]
+[ext_resource type="Script" uid="uid://cs8kwphh2annm" path="res://scenes/player/ship_input.gd" id="3_input"]
+[ext_resource type="Script" uid="uid://8u7j81y053pb" path="res://scenes/player/camera_shake.gd" id="4_camera"]
+[ext_resource type="PackedScene" uid="uid://b1u7j380lkpgc" path="res://scenes/ui/hud.tscn" id="5_hud"]
+[ext_resource type="PackedScene" path="res://scenes/world/warp_gate.tscn" id="6_gate"]
+[ext_resource type="PackedScene" uid="uid://cm5q1ttarc2ny" path="res://scenes/world/salvage.tscn" id="7_salvage"]
+[ext_resource type="Texture2D" uid="uid://dn4j3b42pr28q" path="res://resources/exports/corporate/corporate_space_station.png" id="8_station_tex"]
+[ext_resource type="Texture2D" uid="uid://c4u08vjemw1fe" path="res://resources/exports/pirates/pirate_space_station.png" id="9_pirate_station_tex"]
+[ext_resource type="Texture2D" uid="uid://dcc8d0jkk6dqs" path="res://resources/exports/ancient/ancient_space_station.png" id="10_ancient_station_tex"]
+[ext_resource type="Texture2D" uid="uid://dh2kf3v68bpj7" path="res://resources/exports/corporate/corporate_large_station.png" id="11_corporate_large_station_tex"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_derelict"]
+sky_top_color = Color(0.08, 0.08, 0.1, 1)
+sky_horizon_color = Color(0.18, 0.15, 0.15, 1)
+ground_bottom_color = Color(0.05, 0.05, 0.06, 1)
+ground_horizon_color = Color(0.18, 0.15, 0.15, 1)
+
+[sub_resource type="Sky" id="Sky_derelict"]
+sky_material = SubResource("ProceduralSkyMaterial_derelict")
+
+[sub_resource type="Environment" id="Environment_derelict"]
+background_mode = 3
+sky = SubResource("Sky_derelict")
+ambient_light_source = 3
+glow_enabled = true
+glow_intensity = 1.0
+glow_bloom = 0.1
+glow_blend_mode = 0
+
+[node name="Derelict Station" type="Node2D" unique_id=446905050]
+
+[node name="SpaceBackground" type="ParallaxBackground" parent="." unique_id=533580982]
+
+[node name="DeepBackground" type="ParallaxLayer" parent="SpaceBackground" unique_id=1868835910]
+motion_scale = Vector2(0.02, 0.02)
+motion_mirroring = Vector2(13376, 7528)
+
+[node name="Image" type="Sprite2D" parent="SpaceBackground/DeepBackground" unique_id=1535345470]
+scale = Vector2(2, 2)
+texture = ExtResource("1_bg_image")
+
+[node name="DeepStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=625249572]
+motion_scale = Vector2(0.05, 0.05)
+script = ExtResource("1_starfield")
+star_count = 2000
+field_size = Vector2(6000, 3600)
+min_star_size = 1.0
+max_star_size = 1.3
+min_brightness = 0.15
+max_brightness = 0.35
+random_seed = 31
+flicker_chance = 0.12
+
+[node name="FarStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=1022793316]
+motion_scale = Vector2(0.2, 0.2)
+script = ExtResource("1_starfield")
+star_count = 2000
+field_size = Vector2(6000, 3600)
+max_star_size = 1.3
+max_brightness = 0.6
+random_seed = 32
+flicker_chance = 0.1
+
+[node name="MidStars" type="ParallaxLayer" parent="SpaceBackground" unique_id=583439542]
+motion_scale = Vector2(0.35, 0.35)
+script = ExtResource("1_starfield")
+star_count = 2000
+field_size = Vector2(6000, 3600)
+max_star_size = 1.7
+min_brightness = 0.45
+max_brightness = 1.2
+random_seed = 33
+flicker_chance = 0.04
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=595819040]
+environment = SubResource("Environment_derelict")
+
+[node name="DerelictStation" type="Sprite2D" parent="." unique_id=629754459]
+self_modulate = Color(0.32, 0.34, 0.38, 1)
+texture_filter = 4
+position = Vector2(0, -200)
+rotation = 0.45
+scale = Vector2(0.35, 0.35)
+texture = ExtResource("8_station_tex")
+
+[node name="PirateStationWreck" type="Sprite2D" parent="." unique_id=978519287]
+self_modulate = Color(0.36, 0.28, 0.26, 1)
+texture_filter = 4
+position = Vector2(-620, 200)
+rotation = -0.3
+scale = Vector2(0.3, 0.3)
+texture = ExtResource("9_pirate_station_tex")
+
+[node name="AncientStationWreck" type="Sprite2D" parent="." unique_id=1185253531]
+self_modulate = Color(0.26, 0.3, 0.36, 1)
+texture_filter = 4
+position = Vector2(550, 350)
+rotation = 0.9
+scale = Vector2(0.28, 0.28)
+texture = ExtResource("10_ancient_station_tex")
+
+[node name="CorporateLargeStationWreck" type="Sprite2D" parent="." unique_id=1031731072]
+self_modulate = Color(0.3, 0.32, 0.34, 1)
+texture_filter = 4
+position = Vector2(50, 650)
+rotation = -0.15
+scale = Vector2(0.22, 0.22)
+texture = ExtResource("11_corporate_large_station_tex")
+
+[node name="Ship" parent="." unique_id=791115553 groups=["player_ship"] instance=ExtResource("2_ship")]
+drops_salvage = false
+
+[node name="PlayerInput" type="Node" parent="Ship" unique_id=1479296568]
+script = ExtResource("3_input")
+
+[node name="ShipCamera" type="Camera2D" parent="Ship" unique_id=722390592]
+process_callback = 0
+position_smoothing_enabled = true
+script = ExtResource("4_camera")
+
+[node name="Salvage1" parent="." unique_id=298861714 instance=ExtResource("7_salvage")]
+position = Vector2(-180, -120)
+rarity = 1
+
+[node name="Salvage2" parent="." unique_id=633440600 instance=ExtResource("7_salvage")]
+position = Vector2(160, -280)
+rarity = 2
+
+[node name="Salvage3" parent="." unique_id=1099634019 instance=ExtResource("7_salvage")]
+position = Vector2(-100, -320)
+
+[node name="Salvage4" parent="." unique_id=955529911 instance=ExtResource("7_salvage")]
+position = Vector2(220, -100)
+rarity = 3
+
+[node name="Salvage5" parent="." unique_id=1444424352 instance=ExtResource("7_salvage")]
+position = Vector2(40, -60)
+
+[node name="Salvage6" parent="." unique_id=437294556 instance=ExtResource("7_salvage")]
+position = Vector2(-60, -220)
+rarity = 1
+
+[node name="Salvage7" parent="." unique_id=825719805 instance=ExtResource("7_salvage")]
+position = Vector2(-560, 260)
+rarity = 2
+
+[node name="Salvage8" parent="." unique_id=220695335 instance=ExtResource("7_salvage")]
+position = Vector2(500, 420)
+rarity = 3
+
+[node name="Salvage9" parent="." unique_id=1671178981 instance=ExtResource("7_salvage")]
+position = Vector2(80, 580)
+rarity = 1
+
+[node name="HUD" parent="." unique_id=424539067 instance=ExtResource("5_hud")]
+
+[node name="ReturnGate" parent="." unique_id=1800039136 instance=ExtResource("6_gate")]
+position = Vector2(0, 350)
+destination_scene = "res://scenes/world/map_tester.tscn"
+destination_arrival_node_name = "WarpGateDerelictStation"

@@ -6,14 +6,429 @@ Purpose: bring a fresh chat up to speed without re-deriving context. Read this,
 explicitly brings it up.
 
 **Read "Most recent session" first** — it's the freshest context and covers
-work done after the rest of this file was last updated: reverse engineering
-and Manufacturers (both real Version 0.5 systems now), a real severable wing
-for `pirate_light_one`, and two bugs (debris art, thruster particles) found
-via live testing. The sections below it (mipmap fix/capturable tech/winch,
-faction weapon art/recoil, ship building, combat, per-module damage) are
-still accurate but predate that work.
+work done after the rest of this file was last updated: ship-size-aware
+camera zoom widened + scroll wheel zoom, and a starfield tiling/perf/aliasing
+pass. The sections below it (3 more abandoned-station wrecks + a second
+nebula, frame-stutter fix, Version 0.6 trading/station/warp-gates/new-
+locations/nebula, reverse engineering/Manufacturers, mipmap fix/capturable
+tech/winch, faction weapon art/recoil, ship building, combat, per-module
+damage) are still accurate but predate this work.
 
-## Most recent session (reverse engineering, pirate_light_one's wing, debris/thruster bug fixes, Manufacturers)
+## Most recent session (camera zoom rework + starfield tiling/perf fixes)
+
+Two related pieces of polish, both in `scenes/player/camera_shake.gd` and
+`scenes/world/starfield_layer.gd` (+ the 4 region scenes that use it:
+`map_tester`, `frontier_system`, `asteroid_field`, `derelict_station`). No
+MCP verification this session — changes are untested in the running editor,
+flagged to the user each time.
+
+- **Camera zoom widened + scroll wheel added** (`camera_shake.gd`). The
+  existing ship-size-driven zoom (`min_zoom`/`max_zoom`, computed from
+  `Ship.get_layout_extent()`) was widened 50% (both divided by 1.5) since it
+  wasn't zooming out far enough for big ships. Added `MOUSE_BUTTON_WHEEL_UP/
+  DOWN` handling in `_unhandled_input` that adjusts a `_manual_zoom_offset`
+  on top of the ship-size `_base_zoom`. **Went through two clamp-direction
+  iterations before landing on the right one** — first capped zoom-in at a
+  flat `scroll_max_zoom` and let zoom-out go arbitrarily far, then the user
+  clarified the actual intent: zoom-out should never exceed the ship's own
+  `_base_zoom` (so a bigger ship always shows more, and shrinking the ship
+  pulls an over-cap zoom back down automatically), while zoom-in is capped by
+  a flat `scroll_max_zoom` (0.6 — the old pre-widen max, roughly a 6-hex
+  ship's default). Final clamp: `clampf(_base_zoom + _manual_zoom_offset,
+  _base_zoom, scroll_max_zoom)`, recomputed both on scroll and on
+  `layout_applied`.
+- **Starfield pop-in on large-ship zoom-out, found by the user, not a
+  review**: with a big ship zoomed far out, stars wouldn't render on the far
+  side of the screen until the camera physically panned there. Cause:
+  `starfield_layer.gd` sets `motion_mirroring = field_size` per layer, and
+  Godot's `ParallaxLayer` mirroring only recomputes how many tiled repeats to
+  draw when the camera *pans*, not when zoom changes — so a zoomed-out view
+  wider than one `field_size` tile has visibly missing repeats until motion
+  triggers a recalculation. **Went through two size iterations balancing
+  coverage vs. performance**: first pass jumped `field_size` from
+  `(3500, 2000)` to `(9000, 5000)` with `star_count` scaled ~6.4x per layer
+  (5000/6400/4800/4200) to preserve density — user reported this caused a
+  "massive" perf hit. Settled on `field_size = (6000, 3600)` with a flat
+  `star_count = 2000` on every layer (previously varied 650-1000 per depth
+  layer) across all 4 scenes. **Known residual limitation**: at the most
+  extreme zoom-out (very large ship + wide monitor, e.g. 1920x1080 at the
+  ~0.233 zoom floor needs ~8240x4635 world units visible) the tile is still
+  smaller than the view, so the original pop-in can partially resurface in
+  that edge case — accepted trade-off for performance, not fixed.
+- **Small-screen star flicker, also user-reported**: attributed to aliasing
+  — 1-2px `draw_circle` stars round to different pixel coverage frame-to-
+  frame as the parallax layer scrolls sub-pixel amounts. Tried
+  `antialiased=true` on both `draw_circle` calls plus raising the size floor
+  (`min_star_size` default 1.0 → 1.2; the smallest layer, DeepStars, raised
+  from `0.5`/`0.9` to `1.0`/`1.3` min/max across all 4 scenes) — the
+  antialiased circles caused a severe frame-rate regression (Godot's
+  per-primitive AA is CPU-tessellated per shape, expensive in bulk at
+  ~2000 stars/layer) and were reverted. **Left in place: the size-floor bump
+  only** (untested whether that alone is sufficient — not yet confirmed with
+  the user). If flicker persists, the next lever to try is project-wide
+  2D MSAA (Project Settings → Rendering → Anti-Aliasing) instead of
+  per-primitive AA, since it's hardware-accelerated once per frame rather
+  than tessellated per circle — not yet attempted.
+
+### Still open from this session
+- Confirm with the user whether the size-floor-only fix resolved the
+  small-screen flicker, or whether project-wide 2D MSAA is still needed.
+- The extreme-zoom-out starfield pop-in edge case (very large ship + wide
+  monitor) is a known, accepted gap, not fixed.
+- None of this session's changes have been run/verified in the editor yet.
+
+## Session before that (3 more abandoned-station wrecks + a second nebula)
+
+Small, focused follow-on to New Locations (`Roadmap v.2-v.9.md` Version 0.6),
+picked up from user-supplied art rather than a fresh feature request.
+
+- **Three new faction station images added as wrecks in `derelict_station.tscn`**:
+  `pirate_space_station.png`, `ancient_space_station.png`,
+  `corporate_large_station.png` (all brand-new files, never seen by the
+  editor before — confirmed via `filesystem_manage(op="search")` returning
+  empty `"type"` before a `scan()`). Added as three more darkened/tilted
+  `Sprite2D` wrecks alongside the existing `corporate_space_station.png`
+  one, each with its own faction-tinted `self_modulate` (pirate reddish,
+  ancient blue-grey, corporate grey), spaced apart with 3 extra `Salvage`
+  pickups nearby. **Same mipmap gotcha as the original faction-art batch**:
+  all three imported with `mipmaps/generate=false` by default, silently
+  defeating `ShipLayoutRenderer`'s linear-mipmap filter — fixed by flipping
+  to `true` in each `.import` and `filesystem_manage(op="reimport")`.
+- **Second nebula added** (`Nebula2` in `map_tester.tscn`), placed far from
+  the first (`(-9200, -7800)` vs. the original's `(8000, -6000)`) so their
+  6000-radius zones can't overlap, reached by a new teal-ringed speed-lane
+  gate pair (`SpeedGateToNebula2`/`SpeedGateFromNebula2`). Gave it a
+  distinct teal `tint_color` override on the instance — **the particle
+  cloud itself is still the same purple gradient as the first nebula**,
+  since `nebula.tscn`'s `Gradient_cloud` sub-resource isn't exposed as an
+  `@export`; only the screen tint differs between the two. Known, accepted
+  simplification, not a bug.
+- Verified live via the godot-ai MCP tools: ran `derelict_station.tscn` and
+  `map_tester.tscn`, teleported the ship to each new location via
+  `game_eval`, and screenshotted both — all three new wrecks render
+  correctly and distinctly, and the second nebula's cloud/tint/gate all work.
+  The `GameState`-not-found compile errors reported at each `project_run`
+  are the same stale editor-reload-cycle false alarm documented below (not
+  a real bug — never affected the actual running game).
+
+### Still open from this session
+- Roadmap Version 0.6 New Locations is now: asteroid fields ✓, derelict
+  stations ✓ (now with 4 wrecks total, one per faction/tier), nebulae ✓
+  (2 exist now), abandoned wrecks — arguably still not a *distinct*
+  location from "derelict stations," if the user wants a separate wreck
+  field that isn't station-shaped (e.g. destroyed ships, not stations).
+- The two nebulae's particle clouds are visually identical (only tint
+  differs) — would need a new `@export`-ed color/gradient on `nebula.gd`
+  to actually vary, not done since it wasn't asked for.
+
+## Session before that (frame stutter: cached render materials in tractor beam + warp gate)
+
+**Bug report**: user described an occasional ~0.5s stutter while just flying
+around, reportedly worse with larger ships. A previous session's performance
+check (see below) had looked at `time/fps`/`time/process`/`object/node_count`
+and found nothing — this session found the real cause by directly
+instrumenting the running game via the godot-ai MCP tools instead of relying
+on aggregate editor monitors (which, it turns out, reflect the whole editor
+process, not the isolated game — see "Tooling gotchas" below).
+
+- **Diagnosis method**: attached a throwaway `Node` (via `game_eval`,
+  `get_tree().root.add_child(...)`) running a script that logs to an array
+  whenever a frame's `delta` exceeds 50ms, capturing timestamp, node count,
+  draw calls, and ship velocity per spike. Had the user reproduce live while
+  polling the array afterward — two rounds, the second with an enriched
+  capture, caught it clearly.
+- **What the data showed**: not a quick 0.5s blip but sustained multi-second
+  freezes (one ran ~8.4s straight at ~7 FPS) with ship velocity at or near
+  zero and **draw calls/node count essentially flat throughout** — ruling out
+  a script-side O(n) loop or a spawn burst. Flat scene complexity + a
+  multi-second main-thread stall is the signature of Godot's Forward+/Vulkan
+  renderer compiling a shader/pipeline variant the first time it's actually
+  drawn, not a per-frame logic cost.
+- **Root cause found by code inspection**, not by direct pipeline profiling
+  (Godot doesn't expose that over this MCP setup): two places built a
+  **brand-new render material at runtime on every use** instead of reusing
+  one — `TractorBeam._additive_material()` (`scenes/player/tractor_beam.gd`)
+  called `CanvasItemMaterial.new()` twice per newly-tractored salvage/tech
+  part, and `WarpGate._spawn_speed_lines()` (`scenes/world/warp_gate.gd`)
+  called `ParticleProcessMaterial.new()`/`CanvasItemMaterial.new()` fresh on
+  every speed-lane dash. Each fresh material instance forces the renderer to
+  set up its pipeline again even though the properties never actually
+  changed (`ParticleProcessMaterial.direction` was the only per-call-varying
+  property in the warp gate case).
+- **Fix**: both now cache the material as a `static var`, built once and
+  reused (the warp gate's `direction` is mutated in place on the cached
+  instance before each dash rather than constructing a new material).
+- **Why this explains "worse with larger ships"**: not confirmed directly,
+  but a larger ship has more hex modules/turrets, so more distinct
+  faction/tier textures and particle setups get drawn for the first time as
+  the camera (which zooms out further for a larger ship — see
+  `camera_shake.gd`'s `_on_layout_applied`) pans across more of the scene —
+  plausibly more first-time shader-compile events queueing up, on top of the
+  two confirmed repeat-offender call sites above.
+- **Verified live**: same spike-monitor instrumentation, before (multiple
+  multi-second freeze clusters during 60s of normal play) and after (user
+  confirmed no reproduction after specifically mining asteroids and using a
+  speed-lane gate a few times, the two changed code paths).
+- **Tooling gotcha confirmed this session**: `editor_manage(op="monitors_get")`
+  reports the **editor process's** Performance singleton, not the isolated
+  running game's — in this project that showed ~23,700 nodes vs. the game's
+  real ~230, because it includes the entire editor UI. For real gameplay
+  numbers, read `Performance.get_monitor(...)` via `game_eval` inside the
+  running game instead.
+- **Non-issue investigated and ruled out**: `warp_gate.gd`/`ship.gd` showed
+  "Identifier not found: GameState" errors in `logs_read(source="editor")`,
+  looking like a regression of a previously-fixed autoload/type-resolution
+  bug (see "Most recent session before that" below). Confirmed via
+  `game_eval` that `GameState` resolves fine and the ship functions
+  correctly in the actual running game — this is editor-side reload-cycle
+  noise, not a live bug, consistent with an identical false alarm noted in
+  an earlier session for an unrelated script. Not fixed (nothing to fix);
+  documented here so it isn't re-investigated from scratch.
+
+### Still open from this session
+- The "worse with larger ships" correlation was the user's report, not
+  independently confirmed against a specific large ship — the fix addresses
+  the two confirmed repeat-offender material-allocation sites, which should
+  help regardless of ship size, but if stutters recur specifically tied to
+  ship size, the camera-zoom-scales-visible-content angle (see above) is the
+  next thing to check, not yet investigated further.
+- No general audit was done for other `Material.new()`/`Texture.new()`-style
+  per-event runtime allocations elsewhere in the codebase — only the two
+  spots that matched this specific symptom were fixed.
+
+## Most recent session before that (Version 0.6: trading, station, warp gates, new locations, nebula)
+
+Built out nearly all of Version 0.6 across several back-to-back requests, in
+order: Trading → station visual/interaction/repair → Warp Gates (both
+types) → New Locations (asteroid field, derelict station) → Nebula →
+several rounds of polish (speed-lane redesign, gate-to-gate arrival,
+performance check, cleanup). Roadmap status: **Trading, the station's
+trade/repair/build/research loop, and Warp Gates are done. New Locations is
+partial** — Asteroid Field and Derelict Station exist; wrecks and additional
+nebulae don't yet (only one nebula).
+
+### Trading + Credits
+- New `int` Credits currency on `Inventory` (`add_credits`/`spend_credits`/
+  `has_credits`/`get_credits`, `credits_changed` signal) — deliberately a
+  new currency, not material-for-material barter, chosen via
+  `AskUserQuestion`.
+- `Materials.DISPLAY_DATA` gained `sell_price`/`buy_price` per material;
+  `buy_price > sell_price` always, so round-tripping (sell then buy back)
+  strictly loses Credits like a normal trader spread.
+- `scenes/ui/trade_panel.gd`/`.tscn` — new `CanvasLayer` panel, same
+  `home_base`/`home_base_range` gating and `"menu_panel"` group pattern as
+  the existing upgrade/builder panels. Bound to `toggle_trade` (`T`).
+
+### Station: visual, interaction prompt, repair
+- The home base went from a bare `Marker2D` to `scenes/world/station.tscn`
+  (`corporate_space_station.png`), with a real asset pipeline: mipmap fix
+  (same `mipmaps/generate=false` issue as faction art before it), 4x scale,
+  `z_index = -1` so it draws behind the ship, bloom via `self_modulate` > 1
+  on an alpha-blended sprite (pushes already-bright cyan/white pixels past
+  the glow threshold — same trick `engine_thruster.tscn` uses via additive
+  blend, applied here to a normal sprite instead), and the source PNG was
+  cropped in-place (via a `game_eval`-scripted `Image.get_region()`/
+  `save_png()` — no Python/PIL available in this environment) to remove a
+  baked-in caption band the artist had left at the bottom.
+- **`.tscn` files cannot contain `#` comments** — confirmed directly:
+  writing one before a property line silently reverted that property to
+  its default with *no load error anywhere*, diagnosed only by comparing
+  file content to the live `game_eval`-read value. Applies to every `.tscn`
+  edit in this project, not just this one.
+- `scenes/ui/station_prompt.gd`/`.tscn` — simple always-present `CanvasLayer`
+  that shows "Near Corporate Station — U: Upgrades B: Build T: Trade" when
+  the ship is within `home_base_range`, so the three panels are discoverable
+  without already knowing the keybinds.
+- **Repair is a real mechanic, not just a Credits sink.** Passive
+  module-regrowth (`Ship._advance_module_repair`, pre-existing) now caps at
+  `passive_repair_cap_fraction` (0.4, exported — "upgradable later" per the
+  user) of a module's max condition instead of always reaching 100% — a
+  module still becomes *operational* again once it hits the cap (exits
+  `_regrowing_placement_ids` there, not at full), it just isn't fully
+  healed. `Ship.repair_fully()` (paid, at the station) tops every attached
+  module to 100% and heals `Health` to match; cost is
+  `get_missing_health() * repair_cost_per_health` (both exported). Verified
+  live: passive regen stopped exactly at the 40% threshold and the module
+  went functional; the panel's Repair button then fully healed and deducted
+  the right Credits amount.
+
+### Warp Gates — two modes, one shared script (`scenes/world/warp_gate.gd`)
+`WarpGate.mode` is `GATE` (instant scene change, for destinations you can't
+reach any other way) or `SPEED_LANE` (in-scene high-speed dash). **Both are
+always built in pairs** — every gate references its partner (by scene node
+name for `GATE`, by `NodePath` for `SPEED_LANE`) so there's always a way
+back. This was retrofitted onto the first `SPEED_LANE` gate mid-session
+after the user pointed out it was one-way with no return.
+
+- **`GATE` mode** uses a new `GameState` autoload (`scripts/game_state.gd`)
+  to carry Credits/materials/captured-tech/research/manufacturers/
+  layout/health-fraction across `change_scene_to_file` (each region is a
+  separate scene, so the old tree — Ship, Inventory, everything — is
+  discarded outright). `Ship._ready()` calls `GameState.apply(self)` for
+  anything in the `"player_ship"` group. **Per-module condition is not
+  preserved across a warp** — only the aggregate Health fraction — a known,
+  accepted simplification.
+- **Gate arrival is now gate-to-gate, not scene-default-spawn.** Originally
+  a `GATE` warp landed wherever that scene's `Ship` node happened to sit.
+  Fixed with `WarpGate.destination_arrival_node_name` (set on the
+  *departing* gate) → `GameState.pending_arrival_node_name`, consumed once
+  in `GameState.apply()` by looking up that name in the new scene and
+  snapping the ship there — normally the paired gate. Also cleared
+  obstacles from around every gate on both ends (nudged two Home System
+  asteroids, moved Asteroid Field's return gate outside the cluster) so
+  "large ships can fit through," per explicit request.
+- **`SPEED_LANE` mode redesigned mid-session** per detailed feedback: holds
+  the ship 2.5s with camera shake ramping up (`Tween.tween_method` driving
+  the new `CameraShake.add_shake()` public hook from 0 up to a peak — the
+  shake *reads* as ramping because the tween's rising target outpaces the
+  camera's own per-frame decay early on, then overtakes it), then dashes at
+  a fixed **speed** (1600 px/s, not fixed duration — so distance changes
+  travel time, unlike the original version) with white additive
+  trail-particle "speed lines" shooting backward past the ship
+  (`local_coords = false` so they line up with true travel direction
+  regardless of ship rotation). **Camera lag during the dash was a real,
+  separate bug**: `Camera2D.position_smoothing_enabled` can't keep up with
+  a tweened position jump and visibly "lost" the ship — fixed by disabling
+  smoothing for the dash and restoring it after. Verified live: camera's
+  `get_screen_center_position()` matched ship position to within 0.003
+  units post-dash.
+- Player control is suspended for the whole hold+dash via a throwaway node
+  added to the `"menu_panel"` group (same mechanism the UI panels use) —
+  not a new suspension system.
+
+### New Locations — Asteroid Field, Derelict Station
+- `scenes/world/asteroid_field.tscn`: 14 densely-packed asteroids, richer
+  ore odds via two new exported thresholds on `asteroid.gd`
+  (`common_chance`/`electronics_chance`, defaults unchanged so existing
+  Home System asteroids look the same) rather than a second copy of the
+  script.
+- `scenes/world/derelict_station.tscn`: the same station art, darkened/
+  tilted (`self_modulate`, `rotation`) to read as abandoned, with 6
+  pre-placed `Salvage` pickups of mixed rarity. No trade/build panels — it's
+  not a functioning station.
+- **Real bug, found via screenshot, not review**: all three new region
+  scenes (`frontier_system`, `asteroid_field`, `derelict_station`) rendered
+  a flat grey background instead of black/starry. Cause: `map_tester.tscn`'s
+  actual background comes from a full-screen `bg_space.png` Image layer
+  (`ParallaxLayer > Sprite2D`, tiled via `motion_mirroring`) — the sparse
+  procedural `starfield_layer.gd` star-dot layers alone don't cover the
+  screen, and `Environment.background_mode = 3` is `BG_CANVAS` (not `BG_SKY`
+  — easy to misread), which falls through to Godot's default grey when
+  nothing covers a given pixel. All three new scenes had copied the star
+  layers but not the image layer. Fixed by adding it to all three.
+
+### Nebula (`scenes/world/nebula.gd`/`.tscn`)
+- A big `Area2D` zone: a drifting purple/magenta `GPUParticles2D` cloud
+  (additive blend) plus a translucent full-screen tint that fades in/out on
+  enter/exit. A genuine mechanic, not just visual: `Ship.is_in_nebula()`
+  (depth-counter, not a bool, so overlapping zones can't prematurely clear
+  each other) cuts `ship_input.gd`'s target-lock range to 35% while inside.
+- **Sizing was a two-step correction.** User asked for "1/20th the size it
+  should be" (literal 20x). Doing that literally (radius 900 → 18000) at
+  the original placement made the cloud's particle-emission volume reach
+  all the way back to spawn (~9600 units away, well inside an 18000-radius
+  sphere), washing the *entire* Home System in nebula tint/particles from
+  any vantage point — confirmed via screenshot. Settled on ~6-7x (radius
+  6000) instead: still a dramatic, multi-screen-filling landmark, but
+  contained to its own area. **Separately**, the first size pass also
+  scaled individual particle *scale* up right alongside the radius (to
+  50-110), which was wrong — particle size shouldn't track field radius,
+  only count/spread should — and produced a solid near-white blowout at
+  close range from additive overlap. Fixed by reverting particle scale to
+  a modest 15-30 and raising `amount` instead for density across the larger
+  area. Both mistakes were caught via live screenshots, not anticipated.
+- Reached via a `SPEED_LANE` pair (`SpeedGateToNebula`/`SpeedGateFromNebula`
+  in `map_tester.tscn`) — placed far from spawn but well inside the
+  now-uncapped region (see below).
+
+### Distance cap removed
+`RegionBoundary` (the node that gently pushed the player back inside a
+radius of the home base) was removed from `map_tester.tscn` entirely, per
+explicit request, once the nebula needed to sit far outside its old radius.
+The script (`region_boundary.gd`) is untouched on disk, just unused.
+Verified live: a ship placed at (5000, 5000) held position with zero
+velocity after 1s of no input.
+
+### Smaller changes this session
+- **Home System's two starting pirates were removed** from `map_tester.tscn`
+  per request. Couldn't literally "comment out" — `.tscn` has no comment
+  syntax (see above) — so the two `[node]` blocks were deleted instead;
+  their `ext_resource` entries were left in place so re-adding them is a
+  two-line paste.
+- **8 more asteroids** (`Asteroid9`–`16`) scattered around Home System,
+  further out than the original cluster, clear of every gate/station.
+- **Performance check, inconclusive.** User reported perceived slowdowns
+  while moving around. Checked `time/fps` (145, stable), `time/process`
+  (~2ms), and `object/node_count` (stable, not growing) both idle and while
+  moving — found nothing via these metrics. Reported this transparently
+  rather than guessing at a fix; if it recurs, knowing which scene and
+  whether it's a one-time stutter vs. sustained low FPS would narrow it
+  down a lot faster than another blind metrics pass.
+
+### Real bugs found this session (all via live testing, not review)
+1. **`trade_panel.gd`'s `_on_state_changed(_value)` connected directly to
+   `Health.health_changed`**, which emits two args (`current`, `max`) — every
+   hit while the panel existed threw a runtime "Method expected 1
+   argument(s)" error. Fixed with a dedicated `_on_health_changed(current,
+   max)` handler.
+2. **The `GameState` autoload corrupted GDScript's global class resolution
+   for the entire project** when its `capture`/`apply` methods were typed
+   `Ship`/`ShipLayout` — manifested as a completely unrelated compile error
+   in `ship.gd` itself (`Trying to assign value of type 'Resource' to a
+   variable of type 'ship_layout.gd'`), reproduced identically even in an
+   isolated `ship.tscn`-only run with the `GameState` autoload still
+   registered but nothing else changed. Root cause: **autoloads compile
+   before the project's other global classes are guaranteed registered** —
+   a static type hint to a project-defined class inside an autoload script
+   can corrupt type resolution for that class everywhere, not just fail
+   locally. **Durable rule: keep autoload script parameters/returns
+   untyped (`Node`/`Resource`/`Variant`), never a project `class_name`,
+   even though normal (non-autoload) scripts are fine with it.**
+3. Background-layer bug (New Locations section above) and the two nebula
+   sizing mistakes (Nebula section above) — all found via screenshot, not
+   caught by review beforehand.
+
+### Tooling gotchas confirmed/newly found this session
+- **Editing `project.godot` directly on disk while the editor is running
+  does not take effect** — the live editor doesn't pick up autoload/input
+  changes from an external file write. Manually adding `GameState` to
+  `[autoload]` this way left the editor's own `autoload_manage(op="list")`
+  still reporting it absent, and the *next* MCP write to `project.godot`
+  (an unrelated `autoload_manage`/`input_map_manage` call) silently
+  overwrote/dropped the manual edit. **Use `autoload_manage`/
+  `input_map_manage` for anything in `project.godot`, never a direct file
+  edit**, even though direct edits work fine for `.tscn`/`.gd` files.
+- **One-line `for x in y: ...` and `if cond: return a else: return b` style
+  control flow inside `game_eval` is unreliable** beyond the
+  already-known "can silently execute only once" — this session it also
+  intermittently returned wrong/empty results for `get_children()` loops
+  and `get_child_count()`-sized loops even when the equivalent
+  `get_child_count()` call alone reported the correct number. Prefer
+  `get_tree().get_nodes_in_group(...)` (reliable all session), direct
+  indexed access (`get_child(i)`), or multiple separate single-statement
+  `game_eval` calls over any loop/conditional built as one string.
+- A `game_eval` runtime error can leave the game in a debugger "break" that
+  then causes *later, unrelated* calls to report stale errors from the
+  original failure — already known, reconfirmed several times this
+  session; `project_manage(op="stop")` + `project_run` clears it.
+
+### Still open from this session
+- Per-module condition doesn't survive a `GATE` warp (only aggregate Health
+  fraction does) — acceptable for a travel mechanic, would matter if warping
+  became usable mid-combat.
+- New Locations is not finished: no wrecks, and only one nebula exists
+  (roadmap examples: asteroid fields ✓, derelict stations ✓, abandoned
+  wrecks ✗, nebulae — one exists, "more nebulae" not requested/built).
+- The performance concern was investigated but not resolved — see above.
+  Worth a fresh look with more specifics from the user (which scene,
+  stutter vs. sustained).
+- Home System's other gates (`WarpGateAsteroidField`,
+  `WarpGateDerelictStation`, both `SpeedGateDemo*`) got only a light
+  clearance pass, not the same explicit-distance audit as
+  `WarpGateFrontier`/`SpeedGateDemo` — probably fine, not verified as
+  rigorously.
+
+## Two sessions before that (reverse engineering, pirate_light_one's wing, debris/thruster bug fixes, Manufacturers)
 
 Five pieces of work, roughly in order:
 
@@ -717,21 +1132,32 @@ manufacturer-flavored palette row once *both* are true.
   `.tres` resources.
 - A planet catalog, multiple planet instances, orbit/parallax motion, or
   any planet-surface gameplay.
+- A wreck field that isn't station-shaped (destroyed ships, not stations) —
+  "abandoned wrecks" and "derelict stations" are arguably the same location
+  type right now (4 station wrecks in one scene); see "Most recent session".
 - Anything in `vision.md` or later phases of `roadmap.md`/`Roadmap
-  v.2-v.9.md` (warp gates, research beyond reverse-engineering, co-op).
+  v.2-v.9.md` (research beyond reverse-engineering, co-op). **Warp gates
+  are done now** — remove from any future "not started" framing.
 
 ## Suggested next step
 
-Version 0.4 (Combat Evolution) is now essentially complete —
-`pirate_light_one`'s wing was the one known gap. Version 0.5 (Technology &
-Factions) has real substance now too (reverse engineering + Manufacturers
-both work end-to-end), but its one deliberately-deferred gap is enemy
-ships for Corporate/Ancient — faction identity is still cosmetic/tech-only
-in actual combat. No specific next item has been chosen yet; candidates on
-the table: build a Corporate or Ancient enemy ship (closes the biggest
-remaining Version 0.5 gap), audit `pirate_light_two`/`pirate_heavy_one` for
-the same severability issue `pirate_light_one` had, or have the **user
-actually playtest current combat** (real ship, real weapons, real
-pirates) now that per-module damage, wing severance, research gating, and
-Manufacturers have all landed without a real playtest pass. Do not start
-any of these without the user confirming which first.
+**Version 0.6 (The Living Universe) is essentially complete now**: Trading,
+the station's trade/repair/build/research loop, both Warp Gate types
+(gate-to-gate arrival, always-paired), and New Locations (Asteroid Field,
+Derelict Station with 4 faction wrecks, 2 nebulae) all work end-to-end and
+were verified live. The only arguable Version 0.6 gap left is whether
+"abandoned wrecks" should be a distinct non-station wreck field (see "Still
+open" above) — not confirmed as wanted. No specific next item has been
+chosen yet; candidates on the table: the reported-but-unresolved performance
+concern (get more specifics from the user first — see "Still open" in the
+frame-stutter session below), or pick up a Version 0.5 gap instead (no
+Corporate/Ancient enemy ship exists yet — see below). Version 0.4 (Combat
+Evolution) is complete. Version 0.5 (Technology & Factions) has real
+substance (reverse engineering + Manufacturers both work end-to-end) but its
+one deliberately-deferred gap is enemy ships for Corporate/Ancient — faction
+identity is still cosmetic/tech-only in actual combat. Also still on the
+table from before: audit `pirate_light_two`/`pirate_heavy_one` for the same
+severability issue `pirate_light_one` had, or have the **user actually
+playtest current combat** for the first time since per-module damage/wing
+severance/research gating/Manufacturers all landed. Do not start any of
+these without the user confirming which first.

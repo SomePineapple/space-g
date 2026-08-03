@@ -27,6 +27,13 @@ extends Node2D
 var _beam_visuals: Dictionary = {}
 var _time: float = 0.0
 
+## Shared across every beam line (glow + core, any number of simultaneously
+## pulled items) — a fresh CanvasItemMaterial per pickup used to force a new
+## renderer material/pipeline setup on every single tractor grab, causing a
+## real, reproducible hitch. The blend mode is the only property set and
+## never varies, so one cached instance is always correct to reuse.
+static var _additive_material_cache: CanvasItemMaterial
+
 
 func _physics_process(delta: float) -> void:
 	_time += delta
@@ -97,9 +104,10 @@ func _create_beam_visuals() -> Dictionary:
 
 
 func _additive_material() -> CanvasItemMaterial:
-	var additive := CanvasItemMaterial.new()
-	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	return additive
+	if _additive_material_cache == null:
+		_additive_material_cache = CanvasItemMaterial.new()
+		_additive_material_cache.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return _additive_material_cache
 
 
 func _cleanup_beams(active_salvage: Array) -> void:

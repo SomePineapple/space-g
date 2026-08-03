@@ -113,6 +113,17 @@ func research(module_type_id: String) -> bool:
 	return true
 
 
+func get_researched_ids() -> Array:
+	return _researched_ids.keys()
+
+
+## Bulk-restore for GameState after a scene change — bypasses research()'s
+## captured-tech requirement since the tech was already spent when this was
+## originally researched.
+func set_researched(module_type_id: String) -> void:
+	_researched_ids[module_type_id] = true
+
+
 func is_manufacturer_known(manufacturer_id: String) -> bool:
 	return _known_manufacturer_ids.get(manufacturer_id, false)
 

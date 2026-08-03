@@ -12,4 +12,3 @@ script = ExtResource("1_rtc2x")
 
 [node name="Health" type="Node" parent="." unique_id=1395964923]
 script = ExtResource("2_4jlyq")
-max_health = 40.0

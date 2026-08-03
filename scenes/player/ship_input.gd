@@ -3,6 +3,9 @@ extends Node
 ## Furthest a target (enemy ship or asteroid) can be from the mouse cursor
 ## to be lock-on-able.
 const MAX_LOCK_RANGE: float = 1200.0
+## Nebulae (see nebula.gd) scramble sensors — lock range is cut to this
+## fraction of MAX_LOCK_RANGE while the ship is inside one.
+const NEBULA_LOCK_RANGE_FRACTION: float = 0.35
 
 const LOCK_INDICATOR_SCENE: PackedScene = preload("res://scenes/ui/lock_on_indicator.tscn")
 
@@ -63,8 +66,11 @@ func _toggle_lock() -> void:
 ## than always picking the closest one to the player's own ship.
 func _find_nearest_lockable_to_cursor() -> Node2D:
 	var cursor: Vector2 = ship.get_global_mouse_position()
+	var effective_range: float = MAX_LOCK_RANGE
+	if ship.is_in_nebula():
+		effective_range *= NEBULA_LOCK_RANGE_FRACTION
 	var best: Node2D = null
-	var best_distance: float = MAX_LOCK_RANGE
+	var best_distance: float = effective_range
 	for target in get_tree().get_nodes_in_group("lockable"):
 		var distance: float = target.global_position.distance_to(cursor)
 		if distance < best_distance:
