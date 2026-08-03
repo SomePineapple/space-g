@@ -59,6 +59,18 @@ func total_energy_capacity() -> float:
 	return total
 
 
+## No distance-from-core falloff, unlike energy — cargo capacity is just
+## physical hold space, not power delivery, so where a Storage module sits
+## on the hull doesn't matter.
+func total_cargo_capacity() -> float:
+	var total: float = 0.0
+	for placement in placements:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type != null:
+			total += module_type.cargo_capacity_contribution + _manufacturer_stat_delta(placement, "cargo_capacity_contribution")
+	return total
+
+
 ## Reactor/Battery have no live spawned node (unlike weapons/thrusters), so a
 ## manufacturer's stat_modifiers for them are applied right here at the total
 ## level rather than by mutating a node's properties post-spawn — see
@@ -118,6 +130,10 @@ func get_radar_hardpoint_placements() -> Array[ModulePlacement]:
 
 func get_scanner_hardpoint_placements() -> Array[ModulePlacement]:
 	return _get_hardpoint_placements("scanner")
+
+
+func get_grinder_hardpoint_placements() -> Array[ModulePlacement]:
+	return _get_hardpoint_placements("grinder")
 
 
 ## Matches by ModuleType.hardpoint_category rather than a single fixed id,

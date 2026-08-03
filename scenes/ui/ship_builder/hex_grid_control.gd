@@ -58,6 +58,27 @@ func _draw() -> void:
 
 		if placement != null and hex_coord == placement.hex_coord:
 			var center: Vector2 = _axial_to_pixel(hex_coord)
+			# This "- 90" is a DELIBERATE, KNOWN mismatch — do not "fix" it by
+			# removing the offset. Without it, rotation_steps=0 points along
+			# raw +X (screen-right); with it, rotation_steps=0 points screen-up,
+			# which is what players expect an unrotated module to do and what
+			# this arrow has always shown.
+			#
+			# It cannot be made to exactly track the real hex-neighbor
+			# direction: HexUtils.rotate(Vector2i(1, 0), rotation_steps) only
+			# ever lands on 60°*rotation_steps (0/60/120/180/240/300 — verified
+			# live against a Mining Grinder's actual second/front hex), and
+			# none of those six angles is exactly "up" (-90°/270°). So this is
+			# a smooth, UX-only preview arrow, not a literal pointer at the
+			# real occupied front cell — for a multi-hex module (e.g. the
+			# Mining Grinder), the module's own second hex tile IS that real
+			# direction; for a single-hex fixed-facing hardpoint, the real
+			# in-flight direction is 60°*rotation_steps + Ship._hull_renderer.
+			# rotation (see docs/gotchas.md's "+90° fixed offset" entry) —
+			# expect it to look diagonal in-flight even when this arrow points
+			# straight up here. A previous session removed the "- 90" to make
+			# this arrow match the real hex math exactly; it was reverted by
+			# explicit request in favor of "still looks like it points up."
 			var angle: float = deg_to_rad(60.0 * placement.rotation_steps - 90.0)
 			var tip: Vector2 = center + Vector2(cos(angle), sin(angle)) * cell_size * 0.8
 			draw_line(center, tip, Color.WHITE, 3.0)

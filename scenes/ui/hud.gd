@@ -2,17 +2,21 @@ extends CanvasLayer
 
 @export var damage_flash_peak_alpha: float = 0.35
 @export var damage_flash_fade_duration: float = 0.35
+@export var storage_full_display_duration: float = 1.5
+@export var storage_full_fade_duration: float = 0.6
 
 @onready var _salvage_label: Label = $SalvageLabel
 @onready var _health_label: Label = $HealthLabel
 @onready var _energy_label: Label = $EnergyLabel
 @onready var _credits_label: Label = $CreditsLabel
 @onready var _damage_flash: ColorRect = $DamageFlash
+@onready var _storage_full_label: Label = $StorageFullLabel
 
 var _inventory: Inventory
 var _health: Health
 var _last_known_health: float = -1.0
 var _damage_flash_tween: Tween
+var _storage_full_tween: Tween
 
 
 func _ready() -> void:
@@ -22,7 +26,9 @@ func _ready() -> void:
 
 	_inventory = players[0].get_node("Inventory")
 	_inventory.materials_changed.connect(_on_materials_changed)
+	_inventory.cargo_capacity_changed.connect(_on_cargo_capacity_changed)
 	_update_salvage_label(_inventory.get_all_materials())
+	_inventory.storage_full.connect(_on_storage_full)
 	_inventory.credits_changed.connect(_on_credits_changed)
 	_update_credits_label(_inventory.get_credits())
 
@@ -39,6 +45,10 @@ func _on_materials_changed(totals: Dictionary) -> void:
 	_update_salvage_label(totals)
 
 
+func _on_cargo_capacity_changed(_capacity: float) -> void:
+	_update_salvage_label(_inventory.get_all_materials())
+
+
 func _on_credits_changed(amount: int) -> void:
 	_update_credits_label(amount)
 
@@ -52,7 +62,19 @@ func _update_salvage_label(totals: Dictionary) -> void:
 	for material_id in [Materials.STEEL_ALLOY, Materials.ELECTRONICS, Materials.REACTOR_COMPONENTS]:
 		var amount: int = totals.get(material_id, 0)
 		parts.append("%s: %d" % [Materials.display_name(material_id), amount])
+	parts.append("Cargo: %d/%.0f" % [_inventory.get_cargo_used(), _inventory.get_cargo_capacity()])
 	_salvage_label.text = "  |  ".join(parts)
+
+
+## Transient "storage full" cue — see Inventory.storage_full, fired whenever
+## Salvage pickup gets rejected for lack of cargo space.
+func _on_storage_full() -> void:
+	if _storage_full_tween:
+		_storage_full_tween.kill()
+	_storage_full_label.modulate.a = 1.0
+	_storage_full_tween = create_tween()
+	_storage_full_tween.tween_interval(storage_full_display_duration)
+	_storage_full_tween.tween_property(_storage_full_label, "modulate:a", 0.0, storage_full_fade_duration)
 
 
 ## Only current < last-known counts as damage — a ship rebuild in the

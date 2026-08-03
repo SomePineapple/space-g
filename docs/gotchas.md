@@ -22,11 +22,27 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   offset** between the hex grid's authored axes and the ship's true
   movement-forward (`+X`) — not zero, despite no rotation ever being authored
   on the node in any `.tscn`. hex-grid-local `+Y` (a vertex) maps to true
-  backward, not `-X`. Only ever apply this offset to a *position* transform
-  (like `hex_center`/collision/hardpoints already do) — never to another
-  node's own `rotation` property, since that node already inherits the ship's
-  real rotation through the scene tree; adding the offset there double-
-  applies it.
+  backward, not `-X`. Whether a spawned hardpoint node needs this offset
+  added to its own `rotation` (not just its `hex_center`-style position)
+  depends on what that node's facing is *supposed* to mean:
+  - If the facing is meant to point at a specific **hex-grid-authored
+    direction** — e.g. a fixed-facing hardpoint's front cell
+    (`HardpointWinch`/`HardpointGrinder`, `rotation = rotation_steps *
+    (PI/3) + _hull_renderer.rotation`) — the offset IS needed and does NOT
+    double-apply: the node is a sibling of `_hull_renderer` (both children
+    of `Ship`), so it never inherits `_hull_renderer`'s own local rotation
+    through the scene tree; only `Ship`'s own live rotation is inherited,
+    which is a separate, wanted effect. Verified live to 5 decimal places
+    against a mounted Mining Grinder's real occupied front hex — this
+    pattern is correct, don't "fix" it by removing the offset.
+  - If the facing is meant to align with the **ship's true physics-forward**
+    regardless of hex authoring (e.g. an engine thruster's particle
+    direction) — leave `rotation` at its default (0) and apply the offset
+    only to *position* (`hex_center`), same as `Ship._spawn_thrusters()`
+    already does; adding it to `rotation` here really would double-twist it.
+  See `scenes/ui/ship_builder/hex_grid_control.gd`'s per-placement rotation
+  arrow for the matching builder-side note — it deliberately does NOT track
+  the real hex-neighbor angle (see that comment for why).
 - **Constructing render resources (`Material.new()` etc.) fresh per-event
   instead of caching** forces the renderer to recompile a shader/pipeline
   variant on first draw — shows up as sustained multi-second stutters (flat
@@ -58,6 +74,25 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   `input_map_manage` can silently overwrite the manual edit. Always use
   `autoload_manage`/`input_map_manage` for anything in `project.godot`;
   direct file edits are fine for `.tscn`/`.gd`.
+- **Editing a `.tres` resource directly on disk while the editor holds a
+  stale cached copy of it (e.g. loaded by a script's `load()` call, not open
+  as a scene) can get silently reverted.** `project_run(autosave=true)`
+  (the default) persists the editor's in-memory state before launching, and
+  if that in-memory copy predates your disk edit, it overwrites your edit
+  right back to the old version — confirmed losing an added `ShipLayout`
+  placement this way. Fix: after editing such a `.tres`, call
+  `filesystem_manage(op="reimport", paths=[...])` then `scan()` *before* the
+  next `project_run` (or pass `autosave=false`) — this forces the editor to
+  drop the stale cache instead of writing it back over your change. Same
+  underlying cause as the `scene_open(force_reload=true)` fix below, but for
+  a `.tres` that isn't an open scene.
+- **A `game_eval` script mixing tabs and spaces for indentation across
+  multiple `\n`-joined lines fails with `Parser Error: Mixed use of tabs and
+  spaces for indentation` and parks the game in a debugger break** (same
+  recovery as any other eval-triggered break: `project_manage(op="stop")` +
+  `project_run`). Keep multi-line eval scripts indentation-free (single
+  top-level statements per line, no `for`/`if` blocks) or consistently
+  spaced — see the existing one-line-control-flow gotcha above.
 - **One-line `for x in y: ...` / `if a: return b else: return c` control flow
   inside `game_eval` is unreliable** — can silently execute only once, or
   return wrong/empty results even when an equivalent count-only call is

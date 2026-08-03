@@ -14,6 +14,7 @@ const WINCH_HARDPOINT_TYPE_ID: String = "winch_hardpoint"
 const TRACTOR_HARDPOINT_TYPE_ID: String = "tractor_beam_hardpoint"
 const RADAR_HARDPOINT_TYPE_ID: String = "radar_hardpoint"
 const SCANNER_HARDPOINT_TYPE_ID: String = "scanner_hardpoint"
+const GRINDER_HARDPOINT_TYPE_ID: String = "mining_grinder_hardpoint"
 
 const SINGLE_CELL: Array[Vector2i] = [Vector2i.ZERO]
 const LINE_2_CELLS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
@@ -173,6 +174,18 @@ static func get_all() -> Array[ModuleType]:
 	battery_type.is_capturable_tech = true
 	types.append(battery_type)
 
+	# Cargo storage (see ShipLayout.total_cargo_capacity/Ship._apply_layout_
+	# cargo_capacity). A plain stat contributor like Reactor/Battery, not a
+	# hardpoint category — storage has no facing/muzzle/HUD gate of its own,
+	# it just raises the cap Inventory.try_add_material() checks. No
+	# dedicated art yet — a generic flat-tinted hex, same approach as Strut.
+	# Brown/tan to stay distinct from every other module's color.
+	var storage_type: ModuleType = _make("storage_mk1", "Cargo Container", Color(0.6, 0.45, 0.3), SINGLE_CELL,
+		0.4, 30.0, 0.0, null, "", 1,
+		{Materials.STEEL_ALLOY: 8},
+		0.0, 0.0, null, false, 0.5, 0.35, 60.0)
+	types.append(storage_type)
+
 	# Corporate Alliance: standardised, industrial kinetic weapon. Tougher
 	# than a laser hardpoint of similar footprint since it's built to
 	# withstand its own recoil (see HardpointRailgun).
@@ -221,6 +234,21 @@ static func get_all() -> Array[ModuleType]:
 		0.2, 25.0, 0.0, null, "scanner", 1, {Materials.STEEL_ALLOY: 6, Materials.ELECTRONICS: 12})
 	types.append(scanner_type)
 
+	# Mining Grinder hardpoint (see HardpointGrinder/Ship._spawn_hardpoint_
+	# grinders) — a 2-hex line, like Railgun/Weapon Hardpoint II, so it has a
+	# distinct anchor (back) cell and front cell; the front cell (offset
+	# (1,0), rotated with the placement) is the actual contact/grind point.
+	# Toggled on/off by the player (Ship.toggle_grinder, "G") rather than
+	# always-on like the Tractor Beam, since it deals continuous damage and
+	# should require deliberate activation. No dedicated art yet — a generic
+	# flat-tinted hex. Lime-green to stay distinct from every warm-toned
+	# module (Weapon/Missile/Reactor/Storage) and from Radar's pure green.
+	var grinder_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Mining Grinder", Color(0.65, 0.85, 0.15), LINE_2_CELLS,
+		0.5, 30.0, 0.0, null, "grinder", 1,
+		{Materials.STEEL_ALLOY: 15, Materials.ELECTRONICS: 6},
+		0.0, 0.0, preload("res://scenes/player/hardpoint_grinder.tscn"))
+	types.append(grinder_type)
+
 	# Winch hardpoint (casts a physical rope — see HardpointWinch/WinchRope/
 	# Ship._spawn_hardpoint_winches) is disabled for now, per explicit user
 	# request — a good work-in-progress, not abandoned, just not offered as
@@ -248,7 +276,7 @@ static func _make(id: String, display_name: String, color: Color, footprint_cell
 		build_costs: Dictionary = {}, energy_generation: float = 0.0,
 		energy_capacity_contribution: float = 0.0, hardpoint_scene: PackedScene = null,
 		is_capturable_tech: bool = false, capture_health_fraction: float = 0.5,
-		capture_chance: float = 0.35) -> ModuleType:
+		capture_chance: float = 0.35, cargo_capacity_contribution: float = 0.0) -> ModuleType:
 	var type := ModuleType.new()
 	type.id = id
 	type.display_name = display_name
@@ -267,4 +295,5 @@ static func _make(id: String, display_name: String, color: Color, footprint_cell
 	type.is_capturable_tech = is_capturable_tech
 	type.capture_health_fraction = capture_health_fraction
 	type.capture_chance = capture_chance
+	type.cargo_capacity_contribution = cargo_capacity_contribution
 	return type

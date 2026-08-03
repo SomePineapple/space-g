@@ -48,6 +48,9 @@ extends Resource
 @export var energy_generation: float = 0.0
 ## Energy capacity this module adds to the ship's energy pool (batteries).
 @export var energy_capacity_contribution: float = 0.0
+## Cargo capacity this module adds to the ship's material storage (see
+## ShipLayout.total_cargo_capacity/Ship._apply_layout_cargo_capacity).
+@export var cargo_capacity_contribution: float = 0.0
 
 ## Weapon/missile hardpoints only. Which scene Ship spawns for this specific
 ## module type instead of its default hardpoint_gun_scene/

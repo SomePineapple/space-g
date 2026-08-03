@@ -52,6 +52,12 @@ var _drift_direction: Vector2 = Vector2.ZERO
 var _base_color: Color
 var _display_color: Color
 var _time: float = 0.0
+## Set when a pickup attempt is rejected for lack of cargo space, so
+## _process() can keep retrying while the ship sits overlapped instead of
+## the collection only ever getting one shot at body_entered — otherwise
+## discarding cargo to make room wouldn't free a salvage node already
+## touching the hull until it drifted away and back.
+var _pending_pickup_body: Node = null
 
 @onready var _visual: Sprite2D = $Visual
 
@@ -86,6 +92,15 @@ func _process(delta: float) -> void:
 		rotation += SPIKE_ROTATION_SPEED * _spike_count * delta
 		queue_redraw()
 
+	if _pending_pickup_body != null:
+		if is_instance_valid(_pending_pickup_body) and overlaps_body(_pending_pickup_body):
+			if _try_collect(_pending_pickup_body):
+				_pending_pickup_body = null
+		else:
+			_pending_pickup_body = null
+		if _pending_pickup_body == null and not (is_dangerous or _spike_count > 0):
+			set_process(false)
+
 
 ## Higher rarities get a spikier star silhouette layered over the glow
 ## sprite, so rarity reads from shape alone, not just color.
@@ -117,8 +132,22 @@ func pull_toward(target_position: Vector2, speed: float, delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if not body.is_in_group("player_ship"):
 		return
-	if body.has_method("add_material"):
+	_try_collect(body)
+
+
+## Attempts to hand this salvage's material to body. Returns false without
+## freeing the node if cargo is full (see try_add_material) — the node is
+## left in place, overlapping the ship, and _process() retries every frame
+## until capacity frees up or the ship moves away.
+func _try_collect(body: Node) -> bool:
+	if body.has_method("try_add_material"):
+		if not body.try_add_material(material_id, material_amount):
+			_pending_pickup_body = body
+			set_process(true)
+			return false
+	elif body.has_method("add_material"):
 		body.add_material(material_id, material_amount)
+
 	if is_dangerous and body.has_method("take_damage"):
 		body.take_damage(danger_damage)
 	collected.emit(material_id, material_amount)
@@ -127,6 +156,7 @@ func _on_body_entered(body: Node) -> void:
 	# flush (body_entered), where freeing a CollisionObject2D synchronously
 	# triggers a physics server error.
 	queue_free.call_deferred()
+	return true
 
 
 ## Spawned detached (rather than as a child) so the sound survives this

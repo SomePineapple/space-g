@@ -6,9 +6,18 @@ signal captured_tech_changed(totals: Dictionary)
 signal research_unlocked(module_type_id: String)
 signal manufacturer_discovered(manufacturer_id: String)
 signal credits_changed(amount: int)
+signal cargo_capacity_changed(capacity: float)
+## Emitted when try_add_material() rejects a pickup for lack of space — a
+## live "storage full" cue for the HUD, distinct from materials_changed
+## (which only fires on an actual change).
+signal storage_full()
 
 var _credits: int = 0
 var _material_totals: Dictionary = {}
+## Total cargo capacity, recomputed by Ship whenever its layout changes (see
+## Ship._apply_layout_cargo_capacity) — kept here rather than derived on the
+## fly so try_add_material() has a cheap, always-current limit to check.
+var _cargo_capacity: float = 0.0
 ## module_type_id -> count. Distinct from _material_totals: these are
 ## specific captured tech parts (see Ship.capture_tech_part), spent one at a
 ## time to research/unlock a locked ModuleType (see research()).
@@ -58,6 +67,51 @@ func get_material_amount(material_id: String) -> int:
 
 func get_all_materials() -> Dictionary:
 	return _material_totals
+
+
+func set_cargo_capacity(capacity: float) -> void:
+	_cargo_capacity = capacity
+	cargo_capacity_changed.emit(_cargo_capacity)
+
+
+func get_cargo_capacity() -> float:
+	return _cargo_capacity
+
+
+func get_cargo_used() -> int:
+	var total: int = 0
+	for material_id in _material_totals:
+		total += _material_totals[material_id]
+	return total
+
+
+func has_cargo_space(amount: int) -> bool:
+	return get_cargo_used() + amount <= _cargo_capacity
+
+
+## Capacity-respecting collection path — used by Salvage pickup so a full
+## cargo hold rejects new material instead of silently exceeding capacity.
+## add_material() itself stays uncapped on purpose: refunds (ship builder
+## module removal), the debug resource cheat, and GameState's scene-change
+## restore all call it expecting it to never fail.
+func try_add_material(material_id: String, amount: int) -> bool:
+	if not has_cargo_space(amount):
+		storage_full.emit()
+		return false
+	add_material(material_id, amount)
+	return true
+
+
+## Discards up to amount of material_id, clamped to what's actually held.
+## Returns how much was actually discarded (0 if none was held).
+func discard_material(material_id: String, amount: int) -> int:
+	var available: int = get_material_amount(material_id)
+	var discarded: int = mini(available, amount)
+	if discarded <= 0:
+		return 0
+	_material_totals[material_id] = available - discarded
+	materials_changed.emit(_material_totals)
+	return discarded
 
 
 func has_materials(costs: Dictionary) -> bool:

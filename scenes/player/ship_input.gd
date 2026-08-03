@@ -45,6 +45,9 @@ func _physics_process(_delta: float) -> void:
 	if Input.is_action_just_pressed("scan"):
 		ship.toggle_scan()
 
+	if Input.is_action_just_pressed("toggle_grinder"):
+		ship.toggle_grinder()
+
 
 ## Any "menu_panel"-grouped CanvasLayer (ship builder, upgrade panel) being
 ## open suspends ship control entirely, so R/X/etc. can be reused as menu

@@ -513,6 +513,15 @@ func _on_remove_pressed() -> void:
 	var removed_placement: ModulePlacement = working_layout.get_placement_by_id(_grid.selected_placement_id)
 	var removed_type: ModuleType = ModuleCatalog.get_by_id(removed_placement.module_type_id)
 
+	# Prevent removing a Storage module while it would leave currently-held
+	# cargo over the new capacity — cargo is never deleted to make it fit, so
+	# the player has to discard cargo first (see CargoPanel) instead.
+	if _inventory != null and removed_type.cargo_capacity_contribution > 0.0:
+		var capacity_after_removal: float = _current_cargo_capacity() - removed_type.cargo_capacity_contribution
+		if _inventory.get_cargo_used() > capacity_after_removal:
+			_status_label.text = "Cannot remove %s: discard cargo first, current cargo exceeds the reduced capacity." % removed_type.display_name
+			return
+
 	working_layout.remove(_grid.selected_placement_id)
 	_grid.selected_placement_id = ""
 
@@ -525,6 +534,15 @@ func _on_remove_pressed() -> void:
 	_refresh()
 
 
+## Only used to read base_energy_generation/base_energy_capacity/
+## base_cargo_capacity so the builder's stats match what the ship will
+## actually have once applied — the working layout's own totals don't
+## include that baseline.
+func _current_cargo_capacity() -> float:
+	var base_capacity: float = _player_ship.base_cargo_capacity if _player_ship != null else 0.0
+	return base_capacity + working_layout.total_cargo_capacity()
+
+
 func _refresh() -> void:
 	_grid.refresh()
 
@@ -532,9 +550,12 @@ func _refresh() -> void:
 	var base_capacity: float = _player_ship.base_energy_capacity if _player_ship != null else 0.0
 	var energy_generation: float = base_generation + working_layout.total_energy_generation()
 	var energy_capacity: float = base_capacity + working_layout.total_energy_capacity()
+	var cargo_capacity: float = _current_cargo_capacity()
+	var cargo_used: int = _inventory.get_cargo_used() if _inventory != null else 0
 
-	_stats_label.text = "Max Health: %d   Mass: %.2f   Energy: +%.0f/s (cap %.0f)" % [
-		working_layout.total_max_health(), working_layout.total_mass(), energy_generation, energy_capacity]
+	_stats_label.text = "Max Health: %d   Mass: %.2f   Energy: +%.0f/s (cap %.0f)   Cargo: %d/%.0f" % [
+		working_layout.total_max_health(), working_layout.total_mass(), energy_generation, energy_capacity,
+		cargo_used, cargo_capacity]
 
 
 func _format_costs(costs: Dictionary) -> String:

@@ -14,174 +14,309 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (Points of Interest — Phase 2.3)
+## Most recent session (Phase 4.1 Basic Mining Grinder)
 
-Implements a user-supplied "Phase 2 — Information and Discovery / 2.3 Basic
-points of interest" spec (not part of `roadmap.md`/`Roadmap v.2-v.9.md`, same
-ad-hoc spec family as Radar/Scanner above). Deliberately built to use only
-existing systems — no new architecture framework.
+Implements a user-supplied "4.1 Basic grinder" spec: a close-range,
+contact-operation mining tool that damages asteroids, breaks off
+collectible ore fragments, and plugs into the existing Tractor Beam/Storage
+pipeline from the two sessions below rather than building a parallel
+collection path.
 
-- **Four distinct POI types shipped** (spec required 3): **Small Pirate
-  Camp** (combat + salvage), **Distress Signal** (salvage), **Abandoned
-  Ship/Wreck** (salvage), **Scenic Formation** (discovery only, no reward).
-  The spec's "Wrecks" and "Abandoned ships" bullets were deliberately merged
-  into one type (same physical shape/mechanic — building both would have
-  been pure duplication), and "Simple derelict structures" wasn't built as a
-  fifth, separate type for the same reason. Confirmed via `AskUserQuestion`
-  before building: no standalone "derelict ship" art exists in the project
-  (only individual hex-module textures and the large station textures
-  `derelict_station.tscn` already reuses), so all new wreck-like visuals
-  reuse existing hull/cockpit module PNGs (tinted, scaled up) rather than
-  needing new art — same reuse technique the derelict station wrecks already
-  established.
-- **New `scripts/world/poi_camp.gd`** (`PoiCamp extends Node2D`): marks
-  itself into radar's existing `"enemy_camp"` group (radar_display.gd
-  required **zero changes** — that category and `"distress_beacon"` were
-  wired but unused since the Radar session). Combat and reward needed no new
-  code at all: pirate ships already default to `State.IDLE` and only
-  escalate once the player is close/hostile (`ship_ai.gd`), and
-  `Ship._finish_destruction()` already drops `Salvage` on death. The script's
-  only job is tracking its ship children via `tree_exiting` and calling
-  `remove_from_group("enemy_camp")` once all are dead — this is the
-  "exhausted state, radar contact clears" requirement.
-- **New `scripts/world/distress_signal.gd`** + `scenes/world/distress_signal.tscn`:
-  joins `"distress_beacon"` (radar-only, deliberately **not** in the
-  `"scannable"` group — a live signal is Radar's domain, not Scanner's "off
-  the grid" domain, preserving the hard Radar/Scanner boundary rule from the
-  Scanner session). Holds child `Salvage` nodes; a hand-drawn pulsing beacon
-  light (`_draw()`, no new particle/texture asset) stops once every child
-  Salvage is collected, and the node leaves `"distress_beacon"` at the same
-  moment — resolved distress calls go quiet instead of pinging forever.
-- **New `scenes/world/abandoned_ship.tscn`**: `scannable.gd` component,
-  `scan_category = "Wreck"` (same category the derelict-station wrecks use —
-  intentional, it's the same kind of object, just a single standalone hulk
-  instead of a whole dead station). Two child `Salvage` nodes, no respawn.
-- **New `scenes/world/scenic_formation.tscn`**: `scannable.gd`,
-  `scan_category = "Ancient Formation"`. Ancient faction's command-core
-  texture (tinted teal, scaled up) plus two decorative asteroid instances for
-  a "formation" read. Discovery-only — no Salvage children, satisfies the
-  spec's "provide combat, salvage, **or** discovery" via discovery alone.
-- **Placement**: all four hand-placed directly in `map_tester.tscn` at fresh
-  coordinates 1800–3600 units from home base (Pirate Camp (2600,-1800),
-  Distress Signal (1800,1800), Abandoned Ship (3200,1200), Scenic Formation
-  (-1800,-1900)) — reachable by direct flight, no new warp gates needed.
-  Not a data-driven spawner (unlike `RegionSpawner`) — four hand-placed
-  instances didn't justify a generation framework, same call already made for
-  nebulae/gates elsewhere in this map.
-- **Verified live** via godot-ai MCP: clean launch, no new errors/warnings.
-  Confirmed group membership for all four (`enemy_camp`, `distress_beacon`,
-  `scannable`×2) via `game_eval`; killed both camp pirates via direct damage
-  and confirmed salvage dropped + camp left `"enemy_camp"`; collected both
-  distress-signal salvage pieces via a direct `_on_body_entered` call and
-  confirmed the beacon left `"distress_beacon"`; ran real `Scanner` pulses
-  against the wreck and the formation and got back `"Wreck"` /
-  `"Ancient Formation"` at the correct distances. One self-inflicted debugger
-  break mid-session from a bad `game_eval` script (out-of-bounds array index)
-  — recovered via `project_manage(op="stop")` + relaunch, not a real bug (see
-  `docs/gotchas.md` if this recurs: a `game_eval` runtime error parks the
-  game in a debugger break that does not resume on its own).
-
-### Still open from this session
-- POI placement is hand-picked, not reusable generation/configuration in the
-  `RegionType`/`RegionSpawner` sense — acceptable for 4 instances, would need
-  revisiting if many more POIs are added later.
-- Pirate Camp uses a fixed roster of exactly 2 pre-existing pirate scenes
-  (`pirate_light_one`, `pirate_med_one`), not a configurable count/mix.
-- Resource deposits and "unknown structures" (from the original Scanner 2.2
-  spec list) still have no live instances — unrelated to this session, just
-  still an open gap from before.
-- Visual scale for the reused hull/cockpit module textures was tuned by eye
-  from one screenshot pass, not a deliberate art pass.
-
-## Session before that (Scanner — Phase 2.2, plus a radar rework)
-
-Implements a user-supplied "Phase 2 — Information and Discovery / 2.2
-Scanner" spec (not part of `roadmap.md`/`Roadmap v.2-v.9.md`, same as the
-Radar session before it). Went through several real design pivots based on
-live user feedback within the session — the sequence matters for
-understanding *why* the current shape looks the way it does, not just what
-it is.
-
-- **Iteration 1 (built, then substantially reworked):** a single-target
-  channel scan — press scan, nearest not-yet-identified object in range,
-  a few seconds to complete, then identified permanently. Asteroids rolled
-  a placeholder "Common"/"Dense"/"Rare" composition category.
-- **Pivot to long-range list scan** (explicit user choice via
-  `AskUserQuestion`, over an alternative "player writes their own guess into
-  a memory/journal" design that was **explicitly deferred, not built** —
-  worth remembering if revisited later): one press → short channel (1.5s)
-  → reports the closest 5 objects + distance in one shot, not a
-  continuously-updating display. This is the current shape.
-- **Asteroid naming pivot:** "Common/Dense/Rare" was dropped entirely per
-  explicit user request — asteroids are now reported as **count-based
-  clusters** ("Asteroid" for a lone rock, "Asteroid Cluster (6)" otherwise),
-  proximity-grouped (300-unit single-link chaining) so a dense field doesn't
-  fill every result slot with the same handful of nearby rocks. Asteroid.gd
-  no longer carries any individual scan-identity state at all.
-- **Scope correction:** briefly added the home station as scannable
-  ("Station"), then **reverted on explicit instruction** — Scanner is
-  deliberately "off the grid" objects only (derelicts/natural phenomena),
-  never active/living infrastructure. `station.tscn` is back to a bare
-  Sprite2D with no script.
-- **Radar/Scanner boundary correction:** also briefly added asteroid-cluster
-  blips to RadarDisplay (reusing the same clustering idea, sized by count
-  instead of text), then **fully reverted on explicit instruction** — radar
-  must never show anything Scanner identifies. RadarDisplay is back to
-  exactly its prior 5 categories (Ship/Station/ElectronicSignal/EnemyCamp/
-  DistressBeacon), no asteroid awareness at all.
-- **Range tuning, done live by feel via direct user correction** (not
-  math): Scanner range went 1200 → 3600 (off-screen asteroids were going
-  undetected). Radar range, which had been bumped to 6000 mid-session for
-  the (since-reverted) cluster feature, was explicitly pulled back down to
-  1800 — **radar is now the short-range one, Scanner is the long-range one**,
-  the reverse of how they first shipped in the Radar session. Don't "fix"
-  this back without checking — it was a deliberate, repeated correction.
-- **Final layout:** RadarDisplay bottom-right (its original spot), now with
-  a persistent "Range: 1800" text label under the circle (new, not
-  reverted) making the outer ring's meaning explicit. ScannerDisplay
-  (progress bar + result list) top-right — was briefly swapped with radar's
-  position mid-session, corrected back on explicit instruction. The two
-  never overlap.
-- **New `scripts/world/scannable.gd`**: generic duck-typed component
-  (`scan_category`, `is_identified`, `mark_identified()`, `identified`
-  signal) for objects with no script of their own — attached to
-  `planet.tscn` ("Planet") and all 4 derelict-station wreck sprites
-  ("Wreck"). Asteroid implements the same surface's spirit directly instead
-  (a node can only have one script) but no longer needs individual
-  identity — see naming pivot above. **Reused again in the POI session
-  above** for the new Abandoned Ship and Scenic Formation POIs.
-- **New `scenes/player/scanner.gd`** (`Scanner extends Node2D`), a child of
-  `ship.tscn` like `TractorBeam`. Gathers two kinds of result per pulse:
-  individual `"scannable"` group members (Planet/Wreck, tracked
-  identified/already-known across pulses) and separately-clustered
-  `"asteroid"` group members (always fresh, no persistent identity).
-  `toggle_scan()` doubles as start/cancel; `Ship.toggle_scan()`/
-  `get_scanner()` expose it. New `"scan"` input action, bound to **V**.
-- **Verified live repeatedly** via the godot-ai MCP tools across every
-  pivot above: clean launches throughout, `game_eval` used to directly
-  inspect Scanner/Radar internal state (cluster counts, blip categories,
-  result contents) rather than just trusting the code, plus one real
-  screenshot confirming final UI placement. No errors introduced at any
-  point — only the same pre-existing warnings from before this session
-  (case-mismatch scene path, integer-division in `hex_utils.gd`/
-  `hex_grid_control.gd`, a `scale`-shadows-`Control.scale` warning in
-  `radar_display.gd` that predates this session's edits).
+- **New hex module, 2-cell footprint** (`ModuleCatalog.GRINDER_HARDPOINT_TYPE_ID`
+  = `"mining_grinder_hardpoint"`, `hardpoint_category="grinder"`,
+  `LINE_2_CELLS` — the same footprint constant Railgun/Weapon Hardpoint II
+  already use). This is the first hardpoint in the project to combine "spawns
+  a real world node" (like Tractor Beam/guns) with "occupies 2 hexes" (like
+  Railgun) — the anchor (back) cell is cosmetic, the front cell (footprint
+  offset `(1,0)`, rotated with the placement) is the actual grind/contact
+  point. Lime-green (`Color(0.65, 0.85, 0.15)`), checked against the existing
+  palette per the standing rule — every warm hue (red/orange/yellow/brown)
+  was already taken by Weapon/Missile/Reactor/Storage. No dedicated art yet
+  — generic flat-tinted hex, same as every other undecorated hardpoint.
+- **`scenes/player/hardpoint_grinder.gd`/`.tscn`**: modeled directly on
+  `HardpointTractorBeam` (energy-draining pull-model node) but **player-
+  toggled, not always-on** — the spec explicitly calls for a G-key toggle
+  since continuous damage shouldn't run passively the way a passive tractor
+  pull does. `Ship._grinder_active: bool` is flipped by `toggle_grinder()`
+  and pulled every physics frame by each mounted `HardpointGrinder` via
+  `Ship.is_grinder_active()` (same pull-model as `is_module_destroyed`,
+  chosen so a grinder that mounts/repairs mid-toggle picks up current state
+  immediately rather than needing a fresh key press). While toggled on and
+  an `Asteroid` sits within `contact_range` (55, measured from the asteroid's
+  own surface via `get_winch_radius()`, not its center) of the Muzzle: drains
+  `energy_cost_per_second` (7) from the shared pool same "spend-or-stop" as
+  Tractor Beam/Winch, applies `damage_per_second` (14) via plain
+  `Asteroid.take_damage()` — **deliberately not `take_damage_at()`**, since
+  that method's knockback/scatter-velocity mechanic (built for one-off
+  weapon hits) would make a *held* grind fight the asteroid drifting away
+  every frame — and breaks off one collectible ore fragment every
+  `fragment_interval` (1.0s) while grinding continues.
+- **Fragments are real `Salvage` instances**, not a direct cargo grant —
+  spawned at a point between the Muzzle and the asteroid, same rarity odds
+  as a normal kill-drop (`Asteroid._roll_ore_rarity()` renamed to public
+  `roll_ore_rarity()` so the grinder can call it without duplicating the
+  COMMON/ELECTRONICS/ENERGY bands). Being ordinary `Salvage` nodes in the
+  `"salvage"` group means the entire existing pipeline applies with zero new
+  code: the Tractor Beam pulls them from range, self-collection via hull
+  overlap works, `try_add_material`/`storage_full`/the Cargo screen's
+  capacity limit all apply unchanged. Nothing here duplicates a reward —
+  each fragment is a distinct spawn, and the asteroid's own final on-death
+  salvage (unchanged, still exactly one per `_finish_destruction()`) is a
+  separate, later event once the fragment loop has already been chipping
+  away at Health.
+- **Visual feedback**: a pulsing orange `Line2D` beam from Muzzle to the
+  asteroid while actively grinding, same technique (and the same "cache the
+  additive `CanvasItemMaterial`, don't allocate one per event" gotcha) as
+  the Tractor Beam's own beam. Audio explicitly deferred per the spec ("audio
+  will come later").
+- **Weapons deliberately not nerfed to make this satisfy "standard weapons
+  are less effective/unsuitable for mining."** A gun only ever yields
+  material on an asteroid's final kill (one salvage per tier, unchanged);
+  the grinder yields fragments continuously *while the asteroid is still
+  alive*, so it's strictly more resource-efficient per second without
+  touching weapon damage numbers — see "Decisions made" below.
+- **Starter ship** (`resources/ships/starter_ship_layout.tres`) gained one
+  Mining Grinder at anchor `(2,1)`/`rotation_steps=1` (front cell `(3,0)`) —
+  the only two adjacent free cells left touching the existing hull cluster
+  after Tractor/Radar/Scanner/Storage filled every inner-ring hex; this
+  puts the module 3 hex-steps from the Core, physically at the hull's outer
+  edge, which is fine (equipment doesn't need to sit centrally) but is worth
+  knowing when reasoning about `contact_range` reach from the ship's own
+  center.
+- **New input action `toggle_grinder`** (**G**, previously unbound),
+  matching the existing `toggle_<noun>` convention (`toggle_scan`,
+  `toggle_cargo`), wired in `ship_input.gd` on the just-pressed edge.
+- **Verified live** via godot-ai MCP end-to-end: spawned a real asteroid at
+  the grinder's actual Muzzle position (not the ship's center — the two are
+  ~120 units apart given the outer-ring mount point above, a real trap hit
+  once during this session's own testing), toggled grinding on, and
+  confirmed Health draining, a SMALL-tier asteroid actually dying, and
+  cargo (`Inventory.get_cargo_used()`) rising by the correct fragment +
+  kill-drop amounts. Separately confirmed the Tractor Beam pulling a
+  grinder-style `Salvage` fragment in from 180 units away (within its
+  250 max_range) into cargo. Clean launches throughout, no new
+  errors/warnings in either the editor or game log across the whole test
+  session. Hit and worked around the documented `game_eval` tabs/spaces
+  parser gotcha twice more (still current — any indented `if`/`for` block
+  in an eval string needs consistent tabs, not spaces, or the game parks in
+  a debugger break requiring `project_manage(op="stop")` + a fresh
+  `project_run`).
+- **Follow-up in the same session: user reported the beam exiting a
+  different hex face than the builder's rotation arrow suggested.**
+  Investigated end-to-end with live numeric verification (not just hand
+  math, which was genuinely error-prone here — `HexUtils.rotate()`'s output
+  order does not match `HexUtils.HEX_DIRECTIONS`' own array order, a real
+  trap): confirmed via `game_eval` that `HardpointGrinder`'s actual mounted
+  rotation matches the true occupied front-hex direction to 5 decimal
+  places — **the beam itself was never wrong.** The real bug was
+  `hex_grid_control.gd`'s per-placement rotation arrow using `60° *
+  rotation_steps - 90°`, an arbitrary "point up by default" formula that
+  doesn't correspond to any real hex-neighbor angle (only 0/60/120/180/240/
+  300° are ever real), so it could point up to 90° away from a module's own
+  real front hex. **Per explicit user request, the fix was reverted** —
+  the `- 90°` is being kept on purpose so an unrotated module still visually
+  reads as "facing up" in the builder, which matters more for UX than exact
+  hex-math accuracy on a decorative preview arrow. The tradeoff (and why the
+  real front-hex direction for a multi-hex module is the module's own
+  second hex tile, not this arrow) is now spelled out in a comment right at
+  the formula, plus a corresponding `docs/gotchas.md` entry so a future
+  agent doesn't "helpfully" re-remove the offset. Also corrected that same
+  `docs/gotchas.md` entry's older, overly-broad claim ("never add the +90°
+  offset to another node's own `.rotation`") — that claim was written
+  narrowly around the thruster case and doesn't hold for a fixed-facing
+  hardpoint's rotation (Winch/Grinder), which genuinely needs it and is
+  confirmed correct.
 
 ### Still open from this session
-- Range values (Scanner 3600, radar 1800) were corrected live by direct user
-  feedback through several rounds, not a systematic playtest pass — treat as
-  "current, deliberately chosen" rather than "final."
-- Scanner's result list is text-only (category — distance), no icon/color
-  coding per category the way radar blips have shape/color.
-- The deferred "player writes their own guess" memory/journal design
-  (option 1 from the original pivot) is unstarted, not rejected — flagged
-  as a separate, bigger feature if picked up later.
+- No dedicated art for the Mining Grinder hex — generic flat-tinted hex like
+  every other undecorated hardpoint.
+- Audio feedback explicitly deferred by the spec itself ("audio will come
+  later") — only the visual beam exists.
+- Numbers (`contact_range` 55, `damage_per_second` 14, `energy_cost_per_second`
+  7, `fragment_interval` 1.0) are first-pass, not tuned against real play —
+  same caveat as every other hex module's initial numbers in this project.
+- "One generic mining speed (upgradable?)" — only the flat generic speed was
+  built; no upgrade path exists yet (mirrors the Tractor Beam's identical
+  "multi-target upgradable later" deferral).
+- No AI/pirate ship carries a Grinder or minds one — irrelevant today, same
+  scope note as every other hardpoint session.
+
+## Session before that (Phase 3.2 Storage capacity + 3.3 Storage module)
+
+Implements a user-supplied "Phase 3 — Physical Salvage and Cargo / 3.2
+Storage capacity" and "3.3 Storage module" spec together in one pass (the
+user explicitly asked for both at once since they're directly related).
+Builds on the Tractor Beam session directly below — salvage collection
+already existed, this session caps it.
+
+- **Cargo capacity lives on `Inventory`** (`scenes/player/inventory.gd`):
+  `_cargo_capacity: float`, `get_cargo_capacity()`/`get_cargo_used()` (sum of
+  `_material_totals`)/`has_cargo_space(amount)`. Recomputed by `Ship`
+  whenever its layout changes (`Ship._apply_layout_cargo_capacity()`, called
+  from `_apply_ship_layout()` alongside the existing energy-capacity
+  recompute) — same "baseline + layout total, preserve nothing to preserve
+  here" shape as `max_energy`. `base_cargo_capacity` (100) is a new `@export`
+  on `Ship`, mirroring `base_energy_capacity`.
+- **Two parallel collection paths, deliberately kept separate:**
+  `Inventory.add_material()` stays completely uncapped — used by ship-builder
+  refunds, the debug resource cheat, and `GameState`'s scene-change restore,
+  all of which must never fail. A new `Inventory.try_add_material()` is the
+  only capacity-checked path, used exclusively by `Salvage` pickup; it
+  returns false and emits a new `storage_full` signal instead of exceeding
+  capacity. `Ship` exposes both as thin wrappers (`add_material` unchanged,
+  new `try_add_material`/`discard_material`). This means a refund or the
+  debug cheat *can* push cargo over capacity (allowed, matches "no resources
+  silently deleted" — it just blocks further collection until it's back
+  under), but real salvage pickup never can.
+- **`Salvage.gd` pickup rewritten to reject cleanly instead of always
+  consuming.** `_on_body_entered` now calls `_try_collect(body)`, which uses
+  `try_add_material` if present. On rejection the salvage node is **not
+  freed** — it stays in the world, overlapping the ship, and a new
+  `_pending_pickup_body` + `_process()` retry keeps attempting the same
+  collection every frame until it succeeds (cargo freed up via discard) or
+  the body/overlap goes away (ship drifts off). Without this retry,
+  discarding cargo to make room wouldn't free a salvage piece already
+  sitting on the hull until it drifted away and back — confirmed via live
+  testing that the retry does pick it up the moment space frees, without
+  double-applying `is_dangerous` damage (that's now gated behind an actual
+  successful collect, not attempted on every rejected touch).
+- **New "Cargo Container" module** (`storage_mk1`,
+  `scripts/ships/modules/module_catalog.gd`): a plain stat contributor like
+  Reactor/Battery (`hardpoint_category=""`, +60 cargo capacity, 8 Steel
+  Alloy), not a hardpoint category — storage has no facing/muzzle/HUD gate of
+  its own, so unlike Tractor/Radar/Scanner it doesn't need the "pure
+  capability flag" treatment, just a new `ModuleType.cargo_capacity_contribution`
+  field (mirrors `energy_capacity_contribution`) summed by
+  `ShipLayout.total_cargo_capacity()`. No distance-from-core falloff (unlike
+  Reactor/Battery's energy penalty) — cargo capacity is just hold space, not
+  power delivery, so hex placement doesn't matter. No dedicated art —
+  generic flat-tinted hex (brown/tan, checked against the existing palette
+  per that standing rule), same as Strut/Tractor/Radar/Scanner.
+- **Ship builder module removal now blocks removing a Storage module if the
+  ship's *current* held cargo would exceed the reduced capacity**
+  (`ship_builder_panel.gd._on_remove_pressed`) — the chosen option from the
+  spec's "Prevent removal when over capacity, OR require explicit cargo
+  disposal" pair. Checked against the live `Inventory`'s actual usage (not
+  the in-progress `working_layout`, since the builder only applies to the
+  real ship on close) — the player has to discard cargo first via the new
+  Cargo screen. Builder's stats line also gained a `Cargo: used/capacity`
+  readout next to the existing Health/Mass/Energy numbers.
+- **New dedicated Cargo screen** (`scenes/ui/cargo_panel.gd`/`.tscn`,
+  instanced in `map_tester.tscn`): capacity readout, one row per material
+  with "Discard 10"/"Discard All" buttons, built procedurally matching
+  `trade_panel.gd`'s exact conventions (same background/row constants,
+  `"menu_panel"` group membership). Deliberately **not** gated to home-base
+  range like Trade/Builder — discarding cargo is something a player may need
+  mid-flight, not a base-only activity. New `toggle_cargo` input action
+  (**C**, previously unused).
+- **HUD feedback** (`scenes/ui/hud.gd`/`.tscn`): the existing always-on
+  SalvageLabel now appends `Cargo: used/capacity` to its live material
+  readout. New transient "STORAGE FULL" label (fades in instantly, holds,
+  fades out over ~2s total) triggered by `Inventory.storage_full`, same
+  `Tween`-based pattern as the existing damage flash.
+- **Starter ship** (`resources/ships/starter_ship_layout.tres`) gained one
+  Cargo Container at (2,0) — adjacent to `hull_a`, the only free neighbor
+  cell left once Tractor/Radar/Scanner filled every hex around the Core —
+  bringing the default ship to 160 total capacity so default play isn't
+  regressed.
+- **Real gotcha re-hit, now written into `docs/gotchas.md`:** editing
+  `starter_ship_layout.tres` directly on disk while the editor was running
+  got silently reverted by `project_run`'s default `autosave=true` writing
+  the editor's stale in-memory copy back over the disk edit — the exact
+  `.tres`-outside-an-open-scene staleness gotcha noted-but-not-yet-documented
+  after the previous session. Recovered by re-applying the edit, then
+  `filesystem_manage(op="reimport")` + `scan()` before the next
+  `project_run` (passed `autosave=false` from then on this session) — now
+  captured as a permanent gotchas.md entry instead of a one-off note here.
+  Also hit and documented a second new gotcha: a multi-line `game_eval`
+  script mixing tabs/spaces parks the game in a debugger break.
+- **Verified live** via godot-ai MCP: `has_cargo_space`/`try_add_material`
+  accept under capacity and reject over it without altering `_material_totals`;
+  a real spawned `Salvage` node sitting on the ship gets rejected while full
+  (stays alive, `_pending_pickup_body` set) and is auto-collected the frame
+  enough cargo is discarded to fit it (confirmed via the reference going
+  null/freed); HUD's `Cargo: x/y` and the "STORAGE FULL" flash both update
+  live. Ship-builder removal-blocking and stats-readout logic were verified
+  by code review, not exercised through the builder's UI directly this
+  session (no UI automation available) — flagged as untested-in-editor.
+
+### Still open from this session
+- No dedicated art for the Cargo Container hex — generic flat-tinted hex.
+- Discard is fixed-quantity (10) or all — no arbitrary-amount input field.
+- Ship builder's removal-block and stats-readout changes weren't exercised
+  through the actual builder UI this session (only verified by reading the
+  code) — worth a real playtest pass placing/removing Storage modules.
+- Captured tech parts remain a separate, uncapped bucket — cargo capacity
+  only applies to `_material_totals` (Steel Alloy/Electronics/Reactor
+  Components), by design (see Inventory's own doc comment on that
+  distinction), not extended to tech parts.
+- No pirate/AI ship carries a Storage module or has any cargo-capacity
+  concept — irrelevant today since only the player ship's Inventory is ever
+  read, same scope note as every other hex-module session before this one.
 
 ## Earlier sessions (compressed)
 
 Newest first. Full narrative/iteration detail for these lives in git history;
 what's below is what still matters for picking related work back up.
 
+- **Tractor Beam + Radar/Scanner as hex modules (Phase 3.1):** moved the
+  always-on `TractorBeam` off `ship.tscn` onto a real hex module
+  (`tractor_beam_hardpoint`, `scenes/player/hardpoint_tractor_beam.gd`) —
+  after two explicit pivots (player-held single-key version reverted to
+  always-on; multi-target-at-once narrowed to exactly one target,
+  "upgradable later") landed on: always active while mounted/intact, single
+  nearest valid target (`Salvage`/`CapturedTechPart`) in range with clear
+  line of sight, drops safely if blocked/out of range/energy. Radar and
+  Scanner got the same treatment but as a **"pure capability flag"**
+  instead (no spawned node — `Ship.has_radar()`/`has_scanner()` just check
+  for an intact hardpoint of that category; `radar_hardpoint`/
+  `scanner_hardpoint`, HUD hides live on loss/repair). Radar recolored green
+  (was too close to Engine/Tractor's blues), Scanner given magenta. Starter
+  ship gained one of each. Two real bugs fixed: a freed-instance-into-typed-
+  parameter crash (fix: `is_instance_valid()` inline at the call site, not
+  inside a helper — this pattern recurs, see `HardpointGrinder`/
+  `HardpointTractorBeam`), and a `.tres`-outside-an-open-scene stale-cache
+  issue (now in `docs/gotchas.md`). Verified live throughout.
+- **Points of Interest (Phase 2.3):** implements a user-supplied "Phase 2 —
+  Information and Discovery / 2.3 Basic points of interest" spec, built
+  entirely from existing systems (no new framework). Four hand-placed types
+  in `map_tester.tscn`: **Small Pirate Camp** (`scripts/world/poi_camp.gd`,
+  radar `"enemy_camp"`, clears once all pirates die — combat/reward needed
+  zero new code, reusing existing idle-AI/salvage-drop behavior), **Distress
+  Signal** (`distress_signal.gd`/`.tscn`, radar `"distress_beacon"`, clears
+  once its child Salvage is collected), **Abandoned Ship** (`scannable.gd`,
+  `"Wreck"` category, reused hull/cockpit art tinted/scaled), **Scenic
+  Formation** (`scannable.gd`, `"Ancient Formation"`, discovery-only, no
+  reward). "Wrecks"/"Abandoned ships" spec bullets were deliberately merged
+  into one type; "Simple derelict structures" wasn't built as a separate
+  fifth (would have been pure duplication) — confirmed via
+  `AskUserQuestion` first. Every POI stayed strictly on one side of the
+  Radar/Scanner boundary rule (camp/distress = radar-only, wreck/formation =
+  scanner-only). Not a data-driven spawner — four hand-placed instances
+  didn't justify one. Verified live (group membership, kill-clears-camp,
+  collect-clears-beacon, real Scanner pulses against both scannables).
+
+Newest first. Full narrative/iteration detail for these lives in git history;
+what's below is what still matters for picking related work back up.
+
+- **Scanner (Phase 2.2) + a radar rework:** implements a user-supplied
+  "Phase 2.2 Scanner" spec. Went through several live pivots: single-target
+  identify-scan → long-range list scan (one press, 1.5s channel, closest-5
+  results — the current shape; a "player writes their own guess"
+  memory/journal alternative was explicitly deferred, not built);
+  Common/Dense/Rare asteroid composition → count-based clusters ("Asteroid
+  Cluster (6)"), proximity-grouped; briefly added then reverted both a
+  scannable home station and asteroid-cluster radar blips, establishing the
+  **hard Radar/Scanner boundary rule** (radar = live faction/activity,
+  short-range; Scanner = off-the-grid identification, long-range) — Radar
+  pulled down to 1800, Scanner pushed out to 3600, the reverse of their
+  original launch numbers (don't revert without checking). New
+  `scripts/world/scannable.gd` (generic duck-typed component — reused again
+  by the POI session below and by the later hex-module session).
+  `scenes/player/scanner.gd` (`Scanner extends Node2D`) originally shipped
+  as a fixed `ship.tscn` child, same as `TractorBeam` at the time — both
+  were later turned into hex modules, see the most recent session. Verified
+  live throughout, no errors.
 - **Radar (Phase 2.1 broad-detection sweep display):** implements a
   user-supplied "Phase 2.1 Radar" spec. New `scenes/ui/radar_display.gd`
   (`extends Control`), child of the always-on HUD `CanvasLayer`, built
@@ -374,16 +509,30 @@ system (reactors/batteries, thrust and weapon energy costs), a 4-archetype
 pirate AI (Raider/Gunship/Missile Boat/Scout) with an Idle→Suspicious→Alert
 state machine, real per-module ship damage with wing detachment, data-driven
 world regions, asteroid size tiers/splitting, better AI navigation, a
-sweep-reveal radar paired with a long-range list scanner, and four basic
+sweep-reveal radar paired with a long-range list scanner, four basic
 points of interest (pirate camp, distress signal, abandoned wreck, scenic
-formation). **Version 0.1–0.4 of `Roadmap v.2-v.9.md` are done; Version 0.5
-(reverse engineering + Manufacturers) has real substance but Corporate/
-Ancient enemy ships are an explicitly deferred gap; Version 0.6 (trading,
-station, warp gates, new locations, nebula) is essentially complete.** Radar
-(2.1), Scanner (2.2) and Points of Interest (2.3) are all implemented from a
-user-supplied "Phase 2" spec that isn't part of either tracked roadmap file —
-see the sessions above for their current shape; Radar/Scanner numbers were
-revised multiple times in-session and are current, not first-draft.
+formation), a single-target tractor beam, cargo storage capacity with a
+placeable Storage module, and a toggleable Mining Grinder that damages
+asteroids and breaks off collectible ore fragments. **Version 0.1–0.4 of
+`Roadmap v.2-v.9.md` are done; Version 0.5 (reverse engineering +
+Manufacturers) has real substance but Corporate/Ancient enemy ships are an
+explicitly deferred gap; Version 0.6 (trading, station, warp gates, new
+locations, nebula) is essentially complete.** Radar (2.1), Scanner (2.2) and
+Points of Interest (2.3) are all implemented from a user-supplied "Phase 2"
+spec that isn't part of either tracked roadmap file; Tractor Beam (3.1),
+Storage capacity/module (3.2/3.3), and the Mining Grinder (4.1) are from a
+separate, later user-supplied spec series (not either tracked roadmap file
+either) — see the sessions above for their current shape; Radar/Scanner
+numbers were revised multiple times in-session and are current, not
+first-draft. **Tractor Beam, Radar, Scanner and the Mining Grinder are hex
+modules** rather than fixed ship/HUD components — losing the hex disables
+the capability, and the starter ship carries one of each so default play is
+unaffected. **Cargo capacity is likewise a hex module** (Storage Container)
+but stacks additively on top of a baseline rather than gating a capability
+on/off — losing it just shrinks the cargo hold, it doesn't zero it out. The
+**Mining Grinder is the only hardpoint so far that's both a spawned world
+node (like Tractor Beam) and a 2-cell footprint (like Railgun)**, and the
+only one that's player-toggled (**G**) rather than always-on.
 
 ### Ship building (done, wired into the flyable ship)
 - Hex-grid (axial coordinates) layout data model under `scripts/ships/...`:
@@ -398,7 +547,7 @@ revised multiple times in-session and are current, not first-draft.
 - Per-module build costs (`ModuleType.build_costs`) checked against
   `Inventory`. Saving/loading custom ships to disk works.
 
-### Economy / energy
+### Economy / energy / cargo
 - `scripts/economy/materials.gd` + `scenes/player/inventory.gd`
   (Dictionary-based multi-material pool).
 - Energy: `ModuleType.energy_generation`/`energy_capacity_contribution`,
@@ -406,6 +555,58 @@ revised multiple times in-session and are current, not first-draft.
   weapon fire, and tractor beam all draw from the same pool. **AI ships use
   the exact same energy system as the player.**
 - Numpad 5 (`debug_add_resources`) adds 1000 of each material — dev-only.
+  Bypasses cargo capacity on purpose (see Cargo capacity below).
+- **Cargo capacity** (Phase 3.2/3.3): `Inventory.get_cargo_capacity()`/
+  `get_cargo_used()` (sum of `_material_totals`), recomputed by
+  `Ship._apply_layout_cargo_capacity()` from `base_cargo_capacity` (100) +
+  `ShipLayout.total_cargo_capacity()` (sum of `ModuleType.
+  cargo_capacity_contribution`, no distance-from-core falloff unlike
+  energy). New **Storage Container** module (`storage_mk1`, +60 capacity, a
+  plain stat contributor like Reactor/Battery, not a hardpoint category).
+  Two collection paths: `Inventory.add_material()` stays uncapped (ship-
+  builder refunds, the debug cheat above, `GameState` restore all rely on it
+  never failing); `Inventory.try_add_material()` is the only capacity-
+  checked path, used exclusively by `Salvage` pickup, emitting `storage_full`
+  on rejection. Dedicated Cargo screen (`cargo_panel.gd`/`.tscn`, **C** key,
+  not home-base-gated) shows per-material totals with Discard 10/Discard
+  All buttons; HUD shows a live `Cargo: used/capacity` readout plus a
+  transient "STORAGE FULL" flash. Ship builder blocks removing a Storage
+  module if current cargo would exceed the reduced capacity.
+
+### Mining (Phase 4.1 Basic grinder)
+- `scenes/player/hardpoint_grinder.gd`/`.tscn`: a 2-cell hex module
+  (`hardpoint_category="grinder"`, `ModuleCatalog.LINE_2_CELLS`), **player-
+  toggled** via `Ship.toggle_grinder()`/`is_grinder_active()` (**G** —
+  `ship_input.gd`), unlike every other passive hardpoint. While toggled on
+  and an `Asteroid` is within `contact_range` (55, from the asteroid's own
+  surface) of the front cell's Muzzle: drains `energy_cost_per_second` (7)
+  from the shared pool, applies `damage_per_second` (14) via plain
+  `Asteroid.take_damage()` (not `take_damage_at()` — no knockback while
+  held), and breaks off one `Salvage` ore fragment every `fragment_interval`
+  (1.0s), same rarity odds as a normal kill-drop
+  (`Asteroid.roll_ore_rarity()`, made public for this). Fragments are
+  ordinary `Salvage` nodes — the Tractor Beam, self-collection, and cargo
+  capacity all apply with zero extra code. Weapons aren't nerfed; the
+  grinder's edge is continuous partial yield vs. a gun's kill-only drop.
+  Starter ship carries one grinder at hex `(2,1)`/`rotation_steps=1`.
+
+### Salvage collection (Phase 3.1 Tractor Beam, Phase 3.2 capacity, Phase 4.1 mining)
+- `scenes/player/hardpoint_tractor_beam.gd`/`.tscn`: a hex module
+  (`hardpoint_category="tractor"`), always active while mounted and intact,
+  no player input. Locks onto the single nearest valid target (`Salvage` or
+  `CapturedTechPart`, groups `"salvage"`/`"capturable_tech"`) within
+  `max_range` (250) with a clear physics-raycast line of sight, pulls it in,
+  drops it safely if blocked/out of range/out of energy — **one target at a
+  time by design**, framed as a future upgrade path (more simultaneous
+  targets), not built. Costs energy/sec from the ship's shared pool while
+  actively pulling.
+- Salvage still self-collects via its own `Area2D.body_entered` once it
+  physically touches the ship (`scenes/world/salvage.gd`). Pickup now goes
+  through `try_add_material` (Storage session): a full cargo hold rejects
+  the item instead of consuming it — the Salvage node stays alive,
+  overlapping the ship, and retries every frame (`_pending_pickup_body`)
+  until capacity frees up or the ship drifts away. Nothing is ever silently
+  deleted on rejection.
 
 ### Combat
 - `hardpoint_gun.gd`/`hardpoint_missile_launcher.gd` + `missile.gd`:
@@ -447,12 +648,20 @@ ship's overall `Health` pool.
   Station, Electronic Signal, Enemy Camp, Distress Beacon — **Enemy Camp and
   Distress Beacon now have live instances** (see Points of Interest below);
   Electronic Signal still has none. Never shows anything Scanner identifies.
+  **Requires a Radar hardpoint** (green hex, `hardpoint_category="radar"`,
+  see most recent session) — `Ship.has_radar()` gates the whole display,
+  checked live every frame so losing/repairing the module shows/hides the
+  HUD immediately.
 - **Scanner** (`scenes/player/scanner.gd` + `scenes/ui/scanner_display.gd`):
   deliberate long-range pulse (V key), top-right UI, 3600-unit range,
   closest-5 results. Identifies Planet/Wreck/Ancient Formation individually
   (`scripts/world/scannable.gd`) and asteroids as count-named clusters
   ("Asteroid Cluster (6)"). Deliberately excludes the home station and
   anything radar-only (signals/camps/beacons) — "off the grid" objects only.
+  **Requires a Scanner hardpoint** (magenta hex, `hardpoint_category=
+  "scanner"`, see most recent session) — `toggle_scan()` refuses to start
+  without one, and an in-progress channel self-cancels if the module is
+  lost mid-scan.
 - **Points of Interest** (Phase 2.3, `map_tester.tscn`): four hand-placed
   destinations built entirely from existing systems. `scripts/world/poi_camp.gd`
   (Small Pirate Camp, radar `enemy_camp`), `scripts/world/distress_signal.gd`
@@ -530,6 +739,73 @@ ship's overall `Health` pool.
   three spec bullets describe the same physical shape/mechanic (a scannable
   hulk with finite salvage); building them separately would have been pure
   duplication.
+- **Tractor Beam, Radar and Scanner are hex modules, not fixed ship/HUD
+  components.** Two flavors of the same idea: Tractor Beam is a spawned
+  hardpoint node (needs a muzzle position/beam visual, like weapons/winch),
+  while Radar and Scanner are a "pure capability flag" — `Ship.has_radar()`/
+  `has_scanner()` just check the layout for an intact hardpoint of that
+  category, no spawned world node at all, since neither has a fixed facing
+  or world-space visual of its own. Apply the same flag pattern to any
+  future module that's really a sensor/HUD gate rather than a physical
+  object on the hull.
+- **Tractor Beam pulls exactly one target at a time**, not everything in
+  range at once — an explicit, repeated user correction (built multi-target
+  first, twice) framed as "upgradable later." Don't silently expand this
+  without a fresh request.
+- **New hardpoint module colors must be visually distinct from existing
+  ones** — Radar's first color was too close to Engine/Tractor Beam's blues
+  and had to be corrected. Check the existing palette in
+  `ModuleCatalog.get_all()` before picking a color for a new module type.
+- **Two separate material-add paths on `Inventory` by design:
+  `add_material()` uncapped, `try_add_material()` capacity-checked.**
+  Refunds (ship-builder removal), the debug resource cheat, and `GameState`
+  restore all call `add_material()` and must never fail — capacity is only
+  ever enforced on the one path real gameplay collection (Salvage pickup)
+  goes through. This means cargo *can* end up over capacity through those
+  other paths (allowed — nothing is ever deleted to force it back under),
+  it just blocks further real collection until it's back under again.
+- **A full cargo hold rejects Salvage pickup instead of destroying the
+  item** — the Salvage node stays alive in the world and retries every
+  frame it's still overlapping the ship until space frees up or it drifts
+  away. Never silently drop salvage on the floor of a full hold.
+- **Storage capacity is a plain stat contributor (like Reactor/Battery),
+  not a hardpoint category like Tractor/Radar/Scanner.** It has no
+  facing/muzzle/HUD gate of its own to need the "pure capability flag"
+  treatment — it just raises a number `try_add_material()` checks. Don't
+  give it a `hardpoint_category` or a `has_storage()`-style gate unless a
+  future spec actually needs one.
+- **The Mining Grinder is player-toggled (G), not always-on like the
+  Tractor Beam.** Deliberate: it deals continuous damage, so it needs
+  explicit activation the way a passive pull-in tool doesn't. Uses a
+  pull-model flag (`Ship.is_grinder_active()`, checked every frame by each
+  mounted grinder) rather than a pushed command, matching
+  `is_module_destroyed`'s existing convention — don't push a one-shot state
+  change to hardpoints, let them poll Ship each frame.
+- **The grinder damages asteroids via `take_damage()`, not `take_damage_at()`,
+  on purpose.** `take_damage_at()`'s knockback/scatter-velocity mechanic was
+  built for one-off weapon hits; applying it every frame during a *held*
+  grind would fight the asteroid drifting away out of contact range. Any
+  future continuous-damage-over-time module should default to plain
+  `take_damage()` for the same reason — only a discrete hit should knock
+  something back.
+- **Weapons were deliberately not nerfed to make the Grinder the better
+  mining tool.** A gun only yields material on an asteroid's final kill; the
+  Grinder yields fragments continuously while the asteroid is still alive,
+  which is strictly more resource-efficient per second without touching any
+  weapon stat. If a future request wants weapons *actively* worse at mining
+  (not just less efficient), that's a fresh, separate decision — don't
+  assume it's implied by this one.
+- **The ship builder's rotation-arrow indicator intentionally does NOT
+  track the real hex-neighbor direction.** It uses `60° * rotation_steps -
+  90°` so an unrotated module always visually points "up," even though the
+  actual 6 hex-neighbor directions never include exactly "up" (only
+  0/60/120/180/240/300°). This was found and briefly "fixed" (arrow made
+  hex-accurate) during the Mining Grinder investigation below, then
+  **explicitly reverted by the user** in favor of keeping the simpler
+  "points up by default" UX. For a multi-hex module, the module's own
+  second hex tile is the real ground truth for its front direction, not
+  this arrow — see the comment at `hex_grid_control.gd`'s arrow formula and
+  the matching `docs/gotchas.md` entry before touching this again.
 
 ## Not yet started (no explicit user request yet — don't start without one)
 
@@ -569,14 +845,42 @@ ship's overall `Health` pool.
   scene instances; only worth building if many more POIs are requested.
 - Anything in `vision.md` or later phases of `roadmap.md`/`Roadmap
   v.2-v.9.md` (research beyond reverse-engineering, co-op).
+- Dedicated art for the Tractor Beam, Radar, and Scanner hexes — all three
+  are still generic flat-tinted hexes (distinct colors, no sprite).
+- Tractor Beam's multi-target upgrade — explicitly framed as "for later"
+  when the single-target limit was imposed, nothing designed yet for what
+  unlocks it (a second hardpoint? a per-hardpoint upgrade tier?).
+- Dedicated art for the Storage Container hex — generic flat-tinted hex like
+  the other undecorated hardpoints.
+- Arbitrary-amount cargo discard (currently fixed 10 or all) — no numeric
+  input field on the Cargo screen.
+- Capacity/cargo effects for captured tech parts — that bucket stays
+  separate and uncapped by design, not extended by the Storage session.
+- Dedicated art for the Mining Grinder hex — generic flat-tinted hex.
+- Mining Grinder audio feedback — explicitly deferred by the 4.1 spec
+  itself ("audio will come later").
+- Mining Grinder upgrade path ("one generic mining speed (upgradable?)") —
+  only the flat generic speed was built, no upgrade tier/tree exists.
+- Grinder damage/effectiveness against ships — the spec explicitly scoped
+  this to asteroids only ("maybe ships later").
 
 ## Suggested next step
 
 No specific next item has been chosen yet. Candidates on the table, most
 relevant first:
+- Playtest the Mining Grinder for real feel — `contact_range` (55),
+  `damage_per_second` (14), `energy_cost_per_second` (7), and
+  `fragment_interval` (1.0s) are all first-pass numbers only checked via
+  scripted MCP testing (spawned asteroid, toggled grinder, watched
+  Health/cargo), not flown by a human. Also worth deciding whether "one
+  generic mining speed (upgradable?)" should get an actual upgrade tier now
+  that the base tool exists.
 - A real playtest pass on Radar (1800) / Scanner (3600) range and Scanner's
   1.5s channel/5-result-cap feel, now that both have been corrected several
   times by feel rather than tuned in one deliberate pass.
+- Playtest the Tractor Beam's single-target pull speed/range/energy cost
+  for real feel, now that it's mounted on a hex rather than always-on —
+  same "corrected by feel, not one deliberate pass" caveat as Radar/Scanner.
 - A pass through the Dense/Dangerous Belt region specifically with the
   current AI navigation (tightest asteroid packing, not yet re-checked).
 - Audit `pirate_light_two`/`pirate_heavy_one` for the same severability
@@ -595,5 +899,11 @@ relevant first:
   signal/wreck reward sizing, whether the reused hull/cockpit art actually
   reads well at normal play zoom, not just the screenshot pass done this
   session).
+- Playtest cargo capacity/Storage module for real feel — 160 starting
+  capacity, 60/module, 100 base were first-pass numbers, not tuned against
+  actual play (how fast salvage fills a hold on a real run, whether hitting
+  "STORAGE FULL" happens often enough to matter). Also exercise the ship
+  builder's Storage removal-block and Cargo/used stats readout through the
+  actual UI — verified by code review this session, not clicked through.
 
 Do not start any of these without the user confirming which first.

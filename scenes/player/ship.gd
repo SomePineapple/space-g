@@ -31,6 +31,7 @@ signal energy_changed(current: float, max_energy: float)
 @export var hardpoint_missile_launcher_scene: PackedScene = preload("res://scenes/player/hardpoint_missile_launcher.tscn")
 @export var hardpoint_winch_scene: PackedScene = preload("res://scenes/player/hardpoint_winch.tscn")
 @export var hardpoint_tractor_beam_scene: PackedScene = preload("res://scenes/player/hardpoint_tractor_beam.tscn")
+@export var hardpoint_grinder_scene: PackedScene = preload("res://scenes/player/hardpoint_grinder.tscn")
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
@@ -71,6 +72,9 @@ const DETACH_SPIN_RANGE: float = 2.0
 ## and battery modules add on top of this baseline.
 @export var base_energy_generation: float = 10.0
 @export var base_energy_capacity: float = 50.0
+## Cargo capacity available even with no Storage modules installed, matching
+## the same "baseline + layout total" shape as base_energy_capacity above.
+@export var base_cargo_capacity: float = 100.0
 ## Energy/sec spent thrusting at full non-boosted throttle. Deliberately at
 ## or below base_energy_generation so cruising is sustainable forever on
 ## base power alone — firing weapons or boosting is what actually draws the
@@ -92,6 +96,12 @@ var _hardpoint_guns: Array[HardpointGun] = []
 var _missile_launchers: Array[HardpointMissileLauncher] = []
 var _winch_hardpoints: Array[HardpointWinch] = []
 var _tractor_beam_hardpoints: Array[HardpointTractorBeam] = []
+var _grinder_hardpoints: Array[HardpointGrinder] = []
+## Toggled by Ship.toggle_grinder ("G" — see ship_input.gd), pulled every
+## frame by each mounted HardpointGrinder, same pull-model as
+## is_module_destroyed. Unlike the Tractor Beam, grinding needs deliberate
+## activation since it deals continuous damage.
+var _grinder_active: bool = false
 var _weapon_upgrade_modifiers: Dictionary = {}
 var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
@@ -163,6 +173,7 @@ func _apply_ship_layout() -> void:
 	_hull_renderer.set_layout(ship_layout)
 	_init_module_conditions()
 	_apply_layout_energy()
+	_apply_layout_cargo_capacity()
 	_apply_layout_thrust()
 	_spawn_thrusters()
 	_spawn_collision_shapes()
@@ -170,6 +181,7 @@ func _apply_ship_layout() -> void:
 	_spawn_missile_launchers()
 	_spawn_hardpoint_winches()
 	_spawn_hardpoint_tractor_beams()
+	_spawn_hardpoint_grinders()
 	layout_applied.emit()
 
 
@@ -614,6 +626,10 @@ func _apply_layout_energy() -> void:
 	energy_changed.emit(current_energy, max_energy)
 
 
+func _apply_layout_cargo_capacity() -> void:
+	_inventory.set_cargo_capacity(base_cargo_capacity + ship_layout.total_cargo_capacity())
+
+
 func _apply_layout_thrust() -> void:
 	thrust_force = ship_layout.total_thrust()
 	reverse_thrust_force = thrust_force * reverse_thrust_ratio
@@ -748,6 +764,39 @@ func _spawn_hardpoint_tractor_beams() -> void:
 		_tractor_beam_hardpoints.append(tractor_beam)
 
 
+## Same fixed-facing convention as _spawn_hardpoint_winches — the front cell
+## (the actual contact point, see HardpointGrinder) is a specific direction
+## out of the anchor cell, not aimed at anything, so it has to be set from
+## the placement's own rotation_steps rather than left at the default.
+func _spawn_hardpoint_grinders() -> void:
+	for grinder in _grinder_hardpoints:
+		grinder.queue_free()
+	_grinder_hardpoints.clear()
+
+	for placement in ship_layout.get_grinder_hardpoint_placements():
+		var grinder: HardpointGrinder = hardpoint_grinder_scene.instantiate()
+		add_child(grinder)
+		grinder.position = _hardpoint_center(placement)
+		grinder.rotation = float(placement.rotation_steps) * (PI / 3.0) + _hull_renderer.rotation
+		grinder.set_cell_size(_hull_renderer.cell_size)
+		grinder.setup(self)
+		grinder.source_placement_id = placement.placement_id
+		_grinder_hardpoints.append(grinder)
+
+
+## Toggled by the toggle_grinder input action ("G" — see ship_input.gd).
+## Every mounted, intact HardpointGrinder pulls this flag each physics frame
+## (same pull-model as is_module_destroyed) rather than being pushed a
+## one-shot command, so a grinder that mounts/repairs mid-toggle picks up
+## the current state immediately instead of needing a fresh key press.
+func toggle_grinder() -> void:
+	_grinder_active = not _grinder_active
+
+
+func is_grinder_active() -> bool:
+	return _grinder_active
+
+
 ## A destroyed/detached module's hex goes dark (see _on_module_destroyed/
 ## _detach_module), but its HardpointGun/HardpointMissileLauncher is a
 ## separate node positioned on top of that hex — without this it kept
@@ -766,6 +815,10 @@ func _set_hardpoint_visual_visible(placement_id: String, should_be_visible: bool
 	for tractor_beam in _tractor_beam_hardpoints:
 		if tractor_beam.source_placement_id == placement_id:
 			tractor_beam.visible = should_be_visible
+			return
+	for grinder in _grinder_hardpoints:
+		if grinder.source_placement_id == placement_id:
+			grinder.visible = should_be_visible
 			return
 
 
@@ -965,6 +1018,17 @@ func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector
 
 func add_material(material_id: String, amount: int) -> void:
 	_inventory.add_material(material_id, amount)
+
+
+## Capacity-respecting version of add_material() — see Inventory.try_add_material.
+## Used by Salvage pickup so a full cargo hold rejects the item instead of
+## silently exceeding capacity.
+func try_add_material(material_id: String, amount: int) -> bool:
+	return _inventory.try_add_material(material_id, amount)
+
+
+func discard_material(material_id: String, amount: int) -> int:
+	return _inventory.discard_material(material_id, amount)
 
 
 ## Called by WinchBeam/HardpointTractorBeam once it finishes reeling in a

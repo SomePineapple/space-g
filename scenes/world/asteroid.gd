@@ -153,7 +153,7 @@ func _finish_destruction() -> void:
 	explosion.effect_scale = destruction_explosion_scale
 
 	var salvage: Salvage = salvage_scene.instantiate()
-	salvage.rarity = _roll_ore_rarity()
+	salvage.rarity = roll_ore_rarity()
 	get_tree().current_scene.add_child(salvage)
 	salvage.global_position = global_position
 
@@ -189,7 +189,9 @@ func _spawn_fragments(child_tier: SizeTier) -> void:
 		fragment._scatter_velocity = direction * scatter_speed
 
 
-func _roll_ore_rarity() -> Salvage.Rarity:
+## Public so HardpointGrinder can roll the same ore odds for a mined
+## fragment as a normal kill-drop, instead of duplicating the bands.
+func roll_ore_rarity() -> Salvage.Rarity:
 	var roll: float = randf()
 	if roll < common_chance:
 		return Salvage.Rarity.COMMON

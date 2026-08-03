@@ -19,11 +19,12 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/station_prompt.tscn" id="18_station_prompt"]
 [ext_resource type="PackedScene" path="res://scenes/world/warp_gate.tscn" id="19_warp_gate"]
 [ext_resource type="PackedScene" path="res://scenes/world/nebula.tscn" id="22_nebula"]
-[ext_resource type="Script" path="res://scripts/world/region_spawner.gd" id="23_region_spawner"]
+[ext_resource type="Script" uid="uid://c6324wbmabbis" path="res://scripts/world/region_spawner.gd" id="23_region_spawner"]
 [ext_resource type="Resource" path="res://resources/regions/sparse_open_space.tres" id="24_sparse_open_space"]
 [ext_resource type="Resource" path="res://resources/regions/small_asteroid_cluster.tres" id="25_small_cluster"]
 [ext_resource type="Resource" path="res://resources/regions/dense_dangerous_belt.tres" id="26_dense_belt"]
-[ext_resource type="Script" path="res://scripts/world/poi_camp.gd" id="27_poi_camp"]
+[ext_resource type="PackedScene" path="res://scenes/ui/cargo_panel.tscn" id="27_cargo_panel"]
+[ext_resource type="Script" uid="uid://dxxtjrpwee6is" path="res://scripts/world/poi_camp.gd" id="27_poi_camp"]
 [ext_resource type="PackedScene" path="res://scenes/world/distress_signal.tscn" id="28_distress_signal"]
 [ext_resource type="PackedScene" path="res://scenes/world/abandoned_ship.tscn" id="29_abandoned_ship"]
 [ext_resource type="PackedScene" path="res://scenes/world/scenic_formation.tscn" id="30_scenic_formation"]
@@ -132,8 +133,8 @@ random_seed = 44
 
 [node name="Asteroid5" parent="." unique_id=333681126 instance=ExtResource("3_obean")]
 position = Vector2(900, -650)
-random_seed = 55
 size_tier = 0
+random_seed = 55
 
 [node name="Asteroid6" parent="." unique_id=686912246 instance=ExtResource("3_obean")]
 position = Vector2(-250, 650)
@@ -141,45 +142,45 @@ random_seed = 66
 
 [node name="Asteroid7" parent="." unique_id=2103680923 instance=ExtResource("3_obean")]
 position = Vector2(950, 150)
-random_seed = 77
 size_tier = 2
+random_seed = 77
 
 [node name="Asteroid8" parent="." unique_id=69543643 instance=ExtResource("3_obean")]
 position = Vector2(-850, 350)
 random_seed = 88
 
-[node name="Asteroid9" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid9" parent="." unique_id=56714239 instance=ExtResource("3_obean")]
 position = Vector2(1700, -100)
-random_seed = 9
 size_tier = 0
+random_seed = 9
 drift_velocity = Vector2(6, 3)
 
-[node name="Asteroid10" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid10" parent="." unique_id=1383359051 instance=ExtResource("3_obean")]
 position = Vector2(-1100, 900)
 random_seed = 19
 
-[node name="Asteroid11" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid11" parent="." unique_id=967083800 instance=ExtResource("3_obean")]
 position = Vector2(400, 1000)
 random_seed = 29
 
-[node name="Asteroid12" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid12" parent="." unique_id=1700752290 instance=ExtResource("3_obean")]
 position = Vector2(-1900, -300)
-random_seed = 39
 size_tier = 2
+random_seed = 39
 
-[node name="Asteroid13" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid13" parent="." unique_id=2047127192 instance=ExtResource("3_obean")]
 position = Vector2(1300, 1200)
 random_seed = 49
 
-[node name="Asteroid14" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid14" parent="." unique_id=1693183075 instance=ExtResource("3_obean")]
 position = Vector2(-450, -900)
 random_seed = 59
 
-[node name="Asteroid15" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid15" parent="." unique_id=1606183670 instance=ExtResource("3_obean")]
 position = Vector2(2000, 700)
 random_seed = 69
 
-[node name="Asteroid16" parent="." instance=ExtResource("3_obean")]
+[node name="Asteroid16" parent="." unique_id=1350267995 instance=ExtResource("3_obean")]
 position = Vector2(100, 1400)
 random_seed = 79
 
@@ -188,13 +189,15 @@ environment = SubResource("Environment_u02ng")
 
 [node name="HUD" parent="." unique_id=309546132 instance=ExtResource("8_0o3hu")]
 
-[node name="StationPrompt" parent="." instance=ExtResource("18_station_prompt")]
+[node name="StationPrompt" parent="." unique_id=151776347 instance=ExtResource("18_station_prompt")]
 
 [node name="UpgradePanel" parent="." unique_id=1122649445 instance=ExtResource("9_gc6po")]
 
 [node name="ShipBuilderPanel" parent="." unique_id=-523937815 instance=ExtResource("10_ja1me")]
 
 [node name="TradePanel" parent="." unique_id=1917666629 instance=ExtResource("16_trade_panel")]
+
+[node name="CargoPanel" parent="." unique_id=55175682 instance=ExtResource("27_cargo_panel")]
 
 [node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
 script = ExtResource("10_ojmk8")
@@ -206,143 +209,138 @@ script = ExtResource("15_debug_tools")
 position = Vector2(0, -80)
 rotation = -0.25830874
 
-[node name="WarpGateFrontier" parent="." instance=ExtResource("19_warp_gate")]
+[node name="WarpGateFrontier" parent="." unique_id=807161049 instance=ExtResource("19_warp_gate")]
 position = Vector2(600, -400)
 destination_scene = "res://scenes/world/frontier_system.tscn"
 destination_arrival_node_name = "ReturnGate"
 
-[node name="SpeedGateDemo" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateDemo" parent="." unique_id=1243900419 instance=ExtResource("19_warp_gate")]
 position = Vector2(-500, 300)
 mode = 1
-ring_color = Color(1.0, 0.6, 0.2, 1.0)
+ring_color = Color(1, 0.6, 0.2, 1)
 destination_marker_path = NodePath("../SpeedGateDemoReturn")
 
-[node name="SpeedGateDemoReturn" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateDemoReturn" parent="." unique_id=1301742171 instance=ExtResource("19_warp_gate")]
 position = Vector2(-1300, -900)
 mode = 1
-ring_color = Color(1.0, 0.6, 0.2, 1.0)
+ring_color = Color(1, 0.6, 0.2, 1)
 destination_marker_path = NodePath("../SpeedGateDemo")
 
-[node name="WarpGateAsteroidField" parent="." instance=ExtResource("19_warp_gate")]
+[node name="WarpGateAsteroidField" parent="." unique_id=1852195251 instance=ExtResource("19_warp_gate")]
 position = Vector2(-900, 600)
 destination_scene = "res://scenes/world/asteroid_field.tscn"
 destination_arrival_node_name = "ReturnGate"
 
-[node name="WarpGateDerelictStation" parent="." instance=ExtResource("19_warp_gate")]
+[node name="WarpGateDerelictStation" parent="." unique_id=890681891 instance=ExtResource("19_warp_gate")]
 position = Vector2(1400, 400)
 destination_scene = "res://scenes/world/derelict_station.tscn"
 destination_arrival_node_name = "ReturnGate"
 
-[node name="Nebula" parent="." instance=ExtResource("22_nebula")]
+[node name="Nebula" parent="." unique_id=348256074 instance=ExtResource("22_nebula")]
 position = Vector2(8000, -6000)
 
-[node name="SpeedGateToNebula" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateToNebula" parent="." unique_id=340004444 instance=ExtResource("19_warp_gate")]
 position = Vector2(-1600, 300)
 mode = 1
-ring_color = Color(1.0, 0.6, 0.2, 1.0)
+ring_color = Color(1, 0.6, 0.2, 1)
 destination_marker_path = NodePath("../SpeedGateFromNebula")
 
-[node name="SpeedGateFromNebula" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateFromNebula" parent="." unique_id=1649254998 instance=ExtResource("19_warp_gate")]
 position = Vector2(8000, -6300)
 mode = 1
-ring_color = Color(1.0, 0.6, 0.2, 1.0)
+ring_color = Color(1, 0.6, 0.2, 1)
 destination_marker_path = NodePath("../SpeedGateToNebula")
 
-[node name="Nebula2" parent="." instance=ExtResource("22_nebula")]
+[node name="Nebula2" parent="." unique_id=1343505528 instance=ExtResource("22_nebula")]
 position = Vector2(-9200, -7800)
 tint_color = Color(0.2, 0.7, 0.6, 0.12)
 
-[node name="SpeedGateToNebula2" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateToNebula2" parent="." unique_id=695251115 instance=ExtResource("19_warp_gate")]
 position = Vector2(-1800, -1600)
 mode = 1
-ring_color = Color(0.3, 1.0, 0.7, 1.0)
+ring_color = Color(0.3, 1, 0.7, 1)
 destination_marker_path = NodePath("../SpeedGateFromNebula2")
 
-[node name="SpeedGateFromNebula2" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateFromNebula2" parent="." unique_id=1565496905 instance=ExtResource("19_warp_gate")]
 position = Vector2(-9200, -8100)
 mode = 1
-ring_color = Color(0.3, 1.0, 0.7, 1.0)
+ring_color = Color(0.3, 1, 0.7, 1)
 destination_marker_path = NodePath("../SpeedGateToNebula2")
 
-[node name="SparseOpenSpaceRegion" type="Node2D" parent="."]
+[node name="SparseOpenSpaceRegion" type="Node2D" parent="." unique_id=1923145288]
+position = Vector2(9000, 7500)
 script = ExtResource("23_region_spawner")
 region_type = ExtResource("24_sparse_open_space")
 region_size = Vector2(5000, 4000)
 random_seed = 301
-position = Vector2(9000, 7500)
-keep_clear_points = Array[Vector2]([Vector2(0, 0)])
-keep_clear_radius = 350.0
 
-[node name="SpeedGateToSparse" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateToSparse" parent="." unique_id=532083615 instance=ExtResource("19_warp_gate")]
 position = Vector2(-2600, 1400)
 mode = 1
-ring_color = Color(0.6, 0.9, 1.0, 1.0)
+ring_color = Color(0.6, 0.9, 1, 1)
 destination_marker_path = NodePath("../SpeedGateFromSparse")
 
-[node name="SpeedGateFromSparse" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateFromSparse" parent="." unique_id=428825288 instance=ExtResource("19_warp_gate")]
 position = Vector2(9000, 7500)
 mode = 1
-ring_color = Color(0.6, 0.9, 1.0, 1.0)
+ring_color = Color(0.6, 0.9, 1, 1)
 destination_marker_path = NodePath("../SpeedGateToSparse")
 
-[node name="SmallAsteroidClusterRegion" type="Node2D" parent="."]
+[node name="SmallAsteroidClusterRegion" type="Node2D" parent="." unique_id=1389778779]
+position = Vector2(-9500, 8000)
 script = ExtResource("23_region_spawner")
 region_type = ExtResource("25_small_cluster")
 region_size = Vector2(900, 900)
 random_seed = 302
-position = Vector2(-9500, 8000)
-keep_clear_points = Array[Vector2]([Vector2(0, 0)])
 keep_clear_radius = 250.0
 
-[node name="SpeedGateToCluster" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateToCluster" parent="." unique_id=2026781883 instance=ExtResource("19_warp_gate")]
 position = Vector2(-2600, 1900)
 mode = 1
-ring_color = Color(1.0, 0.9, 0.4, 1.0)
+ring_color = Color(1, 0.9, 0.4, 1)
 destination_marker_path = NodePath("../SpeedGateFromCluster")
 
-[node name="SpeedGateFromCluster" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateFromCluster" parent="." unique_id=982993986 instance=ExtResource("19_warp_gate")]
 position = Vector2(-9500, 8000)
 mode = 1
-ring_color = Color(1.0, 0.9, 0.4, 1.0)
+ring_color = Color(1, 0.9, 0.4, 1)
 destination_marker_path = NodePath("../SpeedGateToCluster")
 
-[node name="DenseDangerousBeltRegion" type="Node2D" parent="."]
+[node name="DenseDangerousBeltRegion" type="Node2D" parent="." unique_id=1651657252]
+position = Vector2(500, 9500)
 script = ExtResource("23_region_spawner")
 region_type = ExtResource("26_dense_belt")
 region_size = Vector2(2200, 1400)
 random_seed = 303
-position = Vector2(500, 9500)
-keep_clear_points = Array[Vector2]([Vector2(0, 0)])
 keep_clear_radius = 300.0
 
-[node name="SpeedGateToDense" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateToDense" parent="." unique_id=1518100567 instance=ExtResource("19_warp_gate")]
 position = Vector2(-2600, 2400)
 mode = 1
-ring_color = Color(1.0, 0.3, 0.25, 1.0)
+ring_color = Color(1, 0.3, 0.25, 1)
 destination_marker_path = NodePath("../SpeedGateFromDense")
 
-[node name="SpeedGateFromDense" parent="." instance=ExtResource("19_warp_gate")]
+[node name="SpeedGateFromDense" parent="." unique_id=707714302 instance=ExtResource("19_warp_gate")]
 position = Vector2(500, 9500)
 mode = 1
-ring_color = Color(1.0, 0.3, 0.25, 1.0)
+ring_color = Color(1, 0.3, 0.25, 1)
 destination_marker_path = NodePath("../SpeedGateToDense")
 
-[node name="PirateCamp" type="Node2D" parent="."]
-script = ExtResource("27_poi_camp")
+[node name="PirateCamp" type="Node2D" parent="." unique_id=1333216204]
 position = Vector2(2600, -1800)
+script = ExtResource("27_poi_camp")
 
-[node name="Pirate1" parent="PirateCamp" instance=ExtResource("12_pirate_light")]
+[node name="Pirate1" parent="PirateCamp" unique_id=1665975400 instance=ExtResource("12_pirate_light")]
 position = Vector2(-80, 40)
 
-[node name="Pirate2" parent="PirateCamp" instance=ExtResource("13_pirate_med")]
+[node name="Pirate2" parent="PirateCamp" unique_id=1389034627 instance=ExtResource("13_pirate_med")]
 position = Vector2(90, -30)
 
-[node name="DistressSignal" parent="." instance=ExtResource("28_distress_signal")]
+[node name="DistressSignal" parent="." unique_id=88597054 instance=ExtResource("28_distress_signal")]
 position = Vector2(1800, 1800)
 
-[node name="AbandonedShip" parent="." instance=ExtResource("29_abandoned_ship")]
+[node name="AbandonedShip" parent="." unique_id=1350002954 instance=ExtResource("29_abandoned_ship")]
 position = Vector2(3200, 1200)
 
-[node name="ScenicFormation" parent="." instance=ExtResource("30_scenic_formation")]
+[node name="ScenicFormation" parent="." unique_id=966151972 instance=ExtResource("30_scenic_formation")]
 position = Vector2(-1800, -1900)
-
