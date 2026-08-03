@@ -19,6 +19,10 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/station_prompt.tscn" id="18_station_prompt"]
 [ext_resource type="PackedScene" path="res://scenes/world/warp_gate.tscn" id="19_warp_gate"]
 [ext_resource type="PackedScene" path="res://scenes/world/nebula.tscn" id="22_nebula"]
+[ext_resource type="Script" path="res://scripts/world/region_spawner.gd" id="23_region_spawner"]
+[ext_resource type="Resource" path="res://resources/regions/sparse_open_space.tres" id="24_sparse_open_space"]
+[ext_resource type="Resource" path="res://resources/regions/small_asteroid_cluster.tres" id="25_small_cluster"]
+[ext_resource type="Resource" path="res://resources/regions/dense_dangerous_belt.tres" id="26_dense_belt"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
 sky_top_color = Color(0.38, 0.45, 0.55, 1)
@@ -255,4 +259,67 @@ position = Vector2(-9200, -8100)
 mode = 1
 ring_color = Color(0.3, 1.0, 0.7, 1.0)
 destination_marker_path = NodePath("../SpeedGateToNebula2")
+
+[node name="SparseOpenSpaceRegion" type="Node2D" parent="."]
+script = ExtResource("23_region_spawner")
+region_type = ExtResource("24_sparse_open_space")
+region_size = Vector2(5000, 4000)
+random_seed = 301
+position = Vector2(9000, 7500)
+keep_clear_points = Array[Vector2]([Vector2(0, 0)])
+keep_clear_radius = 350.0
+
+[node name="SpeedGateToSparse" parent="." instance=ExtResource("19_warp_gate")]
+position = Vector2(-2600, 1400)
+mode = 1
+ring_color = Color(0.6, 0.9, 1.0, 1.0)
+destination_marker_path = NodePath("../SpeedGateFromSparse")
+
+[node name="SpeedGateFromSparse" parent="." instance=ExtResource("19_warp_gate")]
+position = Vector2(9000, 7500)
+mode = 1
+ring_color = Color(0.6, 0.9, 1.0, 1.0)
+destination_marker_path = NodePath("../SpeedGateToSparse")
+
+[node name="SmallAsteroidClusterRegion" type="Node2D" parent="."]
+script = ExtResource("23_region_spawner")
+region_type = ExtResource("25_small_cluster")
+region_size = Vector2(900, 900)
+random_seed = 302
+position = Vector2(-9500, 8000)
+keep_clear_points = Array[Vector2]([Vector2(0, 0)])
+keep_clear_radius = 250.0
+
+[node name="SpeedGateToCluster" parent="." instance=ExtResource("19_warp_gate")]
+position = Vector2(-2600, 1900)
+mode = 1
+ring_color = Color(1.0, 0.9, 0.4, 1.0)
+destination_marker_path = NodePath("../SpeedGateFromCluster")
+
+[node name="SpeedGateFromCluster" parent="." instance=ExtResource("19_warp_gate")]
+position = Vector2(-9500, 8000)
+mode = 1
+ring_color = Color(1.0, 0.9, 0.4, 1.0)
+destination_marker_path = NodePath("../SpeedGateToCluster")
+
+[node name="DenseDangerousBeltRegion" type="Node2D" parent="."]
+script = ExtResource("23_region_spawner")
+region_type = ExtResource("26_dense_belt")
+region_size = Vector2(2200, 1400)
+random_seed = 303
+position = Vector2(500, 9500)
+keep_clear_points = Array[Vector2]([Vector2(0, 0)])
+keep_clear_radius = 300.0
+
+[node name="SpeedGateToDense" parent="." instance=ExtResource("19_warp_gate")]
+position = Vector2(-2600, 2400)
+mode = 1
+ring_color = Color(1.0, 0.3, 0.25, 1.0)
+destination_marker_path = NodePath("../SpeedGateFromDense")
+
+[node name="SpeedGateFromDense" parent="." instance=ExtResource("19_warp_gate")]
+position = Vector2(500, 9500)
+mode = 1
+ring_color = Color(1.0, 0.3, 0.25, 1.0)
+destination_marker_path = NodePath("../SpeedGateToDense")
 

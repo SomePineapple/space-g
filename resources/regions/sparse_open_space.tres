@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RegionType" format=3]
+
+[ext_resource type="Script" path="res://scripts/world/region_type.gd" id="1_region_type"]
+
+[resource]
+script = ExtResource("1_region_type")
+display_name = "Sparse Open Space"
+asteroid_density = 3.0
+min_spacing = 500.0
+large_weight = 0.15
+medium_weight = 0.5
+small_weight = 0.35
+asteroid_tint = Color(0.9, 0.95, 1.05, 1.0)

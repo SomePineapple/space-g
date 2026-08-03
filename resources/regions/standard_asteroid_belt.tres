@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RegionType" format=3]
+
+[ext_resource type="Script" path="res://scripts/world/region_type.gd" id="1_region_type"]
+
+[resource]
+script = ExtResource("1_region_type")
+display_name = "Standard Asteroid Belt"
+asteroid_density = 22.0
+min_spacing = 140.0
+large_weight = 0.15
+medium_weight = 0.7
+small_weight = 0.15
+asteroid_tint = Color(1.0, 1.0, 1.0, 1.0)

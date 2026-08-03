@@ -6,15 +6,93 @@ Purpose: bring a fresh chat up to speed without re-deriving context. Read this,
 explicitly brings it up.
 
 **Read "Most recent session" first** — it's the freshest context and covers
-work done after the rest of this file was last updated: ship-size-aware
-camera zoom widened + scroll wheel zoom, and a starfield tiling/perf/aliasing
-pass. The sections below it (3 more abandoned-station wrecks + a second
-nebula, frame-stutter fix, Version 0.6 trading/station/warp-gates/new-
-locations/nebula, reverse engineering/Manufacturers, mipmap fix/capturable
-tech/winch, faction weapon art/recoil, ship building, combat, per-module
-damage) are still accurate but predate this work.
+work done after the rest of this file was last updated: asteroid size tiers,
+visual variants, deterministic splitting, and hit knockback. The sections
+below it (camera zoom rework + starfield tiling/perf/aliasing pass, 3 more
+abandoned-station wrecks + a second nebula, frame-stutter fix, Version 0.6
+trading/station/warp-gates/new-locations/nebula, reverse engineering/
+Manufacturers, mipmap fix/capturable tech/winch, faction weapon art/recoil,
+ship building, combat, per-module damage) are still accurate but predate this
+work.
 
-## Most recent session (camera zoom rework + starfield tiling/perf fixes)
+## Most recent session (asteroid size tiers, splitting, hit knockback)
+
+A user-supplied "1.2 Asteroid behaviour and variety" spec (not part of
+`roadmap.md`/`Roadmap v.2-v.9.md` — handed to Claude directly), all in
+`scenes/world/asteroid.gd` plus size-tier overrides on a few existing
+instances in `map_tester.tscn`/`asteroid_field.tscn`. Fully verified live via
+the godot-ai MCP tools.
+
+- **Three size tiers** (`SizeTier` enum: LARGE/MEDIUM/SMALL), each with its
+  own radius range, `Health`-configured max health, and (for LARGE/MEDIUM) a
+  next-tier-down split target. `@export`ed per instance, defaulting to
+  MEDIUM so every previously-placed asteroid that doesn't override it looks
+  the same as before.
+- **Four visual variants** (`AsteroidVariant`: rocky/icy/rusty/crystalline),
+  each with a distinct point count, silhouette irregularity and colour tint
+  — auto-picked from the asteroid's own `random_seed` rather than a manually
+  authored field, so a whole scene of un-touched asteroid instances still
+  shows visible variety with zero scene edits.
+- **Deterministic splitting**: on death, LARGE/MEDIUM asteroids spawn 2
+  next-tier-down fragments (`split_fragment_count`), offset around a random
+  base angle with a brief outward scatter velocity that decays back to zero
+  (`_scatter_velocity`/`scatter_decay`) so fragments visibly separate then
+  settle instead of overlapping. Fragment seeds/offsets are drawn from the
+  *same* `RandomNumberGenerator` instance the parent seeded in `_ready()` and
+  kept alive on `_rng` — since the sequence of calls made against it is fixed
+  by code order, a given `random_seed` always reproduces the same shape,
+  tint, rotation **and** split result, making it realistically testable.
+- **Slow rotation always on** (`_rotation_speed`, small random magnitude/sign
+  per instance) plus an **optional** author-set `drift_velocity` (default
+  `Vector2.ZERO` — most placed asteroids don't drift; one LARGE asteroid in
+  `map_tester.tscn` was given a small drift to demonstrate the feature).
+- **Hit knockback** (this session's second, user-requested piece): added
+  `Asteroid.take_damage_at(amount, hit_position)`, which `Projectile`
+  already prefers over plain `take_damage` when a body exposes it (same
+  mechanism `Ship`'s per-module hit resolution uses). It reuses the
+  split-fragment `_scatter_velocity`/`scatter_decay` mechanism rather than a
+  second movement system — a hit adds a small impulse away from the shot's
+  origin, clamped by `max_knockback_speed` so rapid fire can't build up
+  unbounded speed. Verified live via `game_eval`: a hit from one side nudged
+  the asteroid a few units the other way, and the nudge decayed to zero
+  within ~0.3s.
+- Removed the `Health` child's scene-level `max_health = 40.0` override in
+  `asteroid.tscn` — now meaningless/misleading since `Asteroid._ready()`
+  always calls `_health.configure(TIER_HEALTH[size_tier])`, which overwrites
+  it anyway.
+- **Verified live** via the godot-ai MCP tools in `map_tester.tscn`: clean
+  launch (no errors both times); force-killed a LARGE asteroid via
+  `game_eval` and confirmed two MEDIUM fragments spawned near its position;
+  confirmed a drift-enabled LARGE asteroid had moved consistent with its
+  `drift_velocity` over elapsed play time; confirmed knockback pushes the
+  asteroid away from the hit and decays back to a stop.
+- **Still `StaticBody2D`** — asteroids don't respond to normal physics
+  collision impulses (a ship just stops dead against one), and knockback is
+  a hand-rolled position nudge, not a real physics response. Splitting
+  spaces fragments apart via the scatter offset but doesn't guarantee zero
+  overlap against tightly-packed neighbors — accepted, not fixed.
+- **Committed together with several previously-uncommitted sessions' work**
+  at the user's explicit choice (asked via `AskUserQuestion` since
+  `map_tester.tscn` mixed this session's small size-tier edits with ~120
+  unrelated lines from the camera-zoom/starfield session below) — one commit
+  now contains this asteroid work *and* the camera zoom rework, starfield
+  perf fixes, warp gates, both nebulae, the 3 extra station wrecks, and the
+  new region scenes, all previously sitting uncommitted. See git log, not a
+  separate handover section, for the exact commit.
+
+### Still open from this session
+- No new material/reward types were added on purpose (task explicitly said
+  not to yet) — split fragments and full destructions all still drop the
+  same generic placeholder `Salvage` roll.
+- Asteroid belts using "different densities" was treated as a scene-authoring
+  concern, not a code feature — existing scenes already vary in density
+  (Home System sparse vs. `asteroid_field.tscn` dense); no new tooling was
+  added for it.
+- Knockback/split-scatter tuning (`hit_knockback_speed`, `max_knockback_speed`,
+  `scatter_speed`, `scatter_decay`) was verified functionally, not tuned by
+  feel in a real firefight.
+
+## Session before that (camera zoom rework + starfield tiling/perf fixes)
 
 Two related pieces of polish, both in `scenes/player/camera_shake.gd` and
 `scenes/world/starfield_layer.gd` (+ the 4 region scenes that use it:
@@ -1140,6 +1218,18 @@ manufacturer-flavored palette row once *both* are true.
   are done now** — remove from any future "not started" framing.
 
 ## Suggested next step
+
+Most recently: asteroid size tiers/variants/splitting/hit-knockback (a
+user-supplied spec outside the tracked roadmaps) is done and verified live.
+It was committed together with several previously-uncommitted sessions'
+work at the user's explicit choice — camera zoom rework, starfield
+perf/flicker fixes, warp gates, both nebulae, 3 extra station wrecks, and
+the new region scenes. **The camera-zoom/starfield-perf items specifically
+are still only "ran without errors this session" (map_tester loaded and
+played fine while testing asteroids), not feature-verified** — scroll-wheel
+zoom behavior and starfield tiling/flicker were not directly exercised this
+session; still worth confirming with the user per the "Still open" list
+below. No specific next item has been chosen yet.
 
 **Version 0.6 (The Living Universe) is essentially complete now**: Trading,
 the station's trade/repair/build/research loop, both Warp Gate types
