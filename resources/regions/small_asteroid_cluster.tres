@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_region_type")
 display_name = "Small Asteroid Cluster"
-asteroid_density = 45.0
-min_spacing = 130.0
+asteroid_density = 10.0
+min_spacing = 160.0
 large_weight = 0.1
 medium_weight = 0.5
 small_weight = 0.4

@@ -6,16 +6,192 @@ Purpose: bring a fresh chat up to speed without re-deriving context. Read this,
 explicitly brings it up.
 
 **Read "Most recent session" first** — it's the freshest context and covers
-work done after the rest of this file was last updated: asteroid size tiers,
-visual variants, deterministic splitting, and hit knockback. The sections
-below it (camera zoom rework + starfield tiling/perf/aliasing pass, 3 more
-abandoned-station wrecks + a second nebula, frame-stutter fix, Version 0.6
-trading/station/warp-gates/new-locations/nebula, reverse engineering/
-Manufacturers, mipmap fix/capturable tech/winch, faction weapon art/recoil,
-ship building, combat, per-module damage) are still accurate but predate this
-work.
+work done after the rest of this file was last updated: pirate AI
+navigation (obstacle/ship avoidance, stuck recovery, combat-distance
+hysteresis, de-aggro leash — `docs/aienemies.md` has the full design
+reference, read that before touching `ship_ai.gd`/`ai_navigator.gd` again).
+The sections below it (data-driven world regions, asteroid size
+tiers/splitting/knockback, camera zoom rework + starfield tiling/perf/
+aliasing pass, 3 more abandoned-station wrecks + a second nebula,
+frame-stutter fix, Version 0.6 trading/station/warp-gates/new-locations/
+nebula, reverse engineering/Manufacturers, mipmap fix/capturable tech/winch,
+faction weapon art/recoil, ship building, combat, per-module damage) are
+still accurate but predate this work.
 
-## Most recent session (asteroid size tiers, splitting, hit knockback)
+## Most recent session (Better AI navigation — obstacle/ship avoidance, stuck recovery, combat-distance hysteresis, de-aggro leash)
+
+Implements a user-supplied "1.4 Better AI navigation" spec (not part of
+`roadmap.md`/`Roadmap v.2-v.9.md`). Full design reference now lives in
+`docs/aienemies.md` — this section is a summary, not the source of truth
+for the steering math. No new archetypes (miners/salvagers/escorts) —
+explicitly out of scope per the spec.
+
+- **New `scripts/ships/ai/ai_navigator.gd`** (`AINavigator extends
+  RefCounted`, one instance per `ShipAI`): owns obstacle/ship-avoidance
+  steering, stuck detection, and recovery — split out from `ship_ai.gd`
+  deliberately, since "how to move without getting stuck" and "when to
+  fight" are different concerns.
+- **Steering**: every physics frame blends seek-the-target with an
+  avoidance vector (5-ray fan cast from the ship's own heading against
+  asteroids/ships, weighted by hit closeness, probe range scaled by the
+  ship's own `get_layout_extent()`) and a separation vector (pushes away
+  from other `"enemy_ship"`-group ships based on combined extents). Weapon
+  aim/fire gating still checks the real angle/distance to the target,
+  unaffected by any of this — confirmed combat in open space is unchanged.
+- **Two rounds of live-testing-driven oscillation fixes**, found by the
+  user actually watching a pirate behave, not by review:
+  1. Hiding directly behind an asteroid made the pirate visibly "jitter and
+     spin in a circle" instead of navigating around. Root cause: an
+     obstacle dead-ahead makes "steer away from hit point" point nearly
+     straight backward with no left/right signal, so recomputing a side
+     from near-zero noise every frame flipped randomly, and the old
+     cancellation fallback ("snap back to aim at the target") immediately
+     re-triggered avoidance — a fast seek/avoid loop. Fixed with a sticky
+     avoidance-side bias (commits to a side once the signal is clear, keeps
+     it while ambiguous, resets once clear of the obstacle) and holding the
+     current heading through cancellation instead of snapping back.
+  2. A **second, distinct bug** surfaced once close to the target: since
+     players and enemies share the `Ship` class, avoidance raycasts were
+     also treating the pursuit target itself as an obstacle to dodge once
+     in combat range — fighting the seek force with the same
+     ambiguous-dead-ahead problem, aimed at the one thing the ship was
+     trying to reach. Fixed by adding an `exclude_target` parameter through
+     `compute_desired_heading`/`compute_avoidance_vector`; `ShipAI` passes
+     the player.
+  3. A **third, separate residual jitter** persisted after both fixes when
+     weaving through several closely-spaced asteroids — the ship's current
+     heading picks the ray directions, which picks the desired heading,
+     which changes the heading next frame, and that reactive loop could
+     ping-pong between two nearby rocks fast enough to look like spinning
+     even with each individual decision being locally reasonable. Fixed by
+     rate-limiting the raw target angle itself (`MAX_TARGET_ANGLE_RATE`,
+     260°/s — set above every personality's own turn speed so it never
+     limits a genuine deliberate turn) before feeding it into the existing
+     heading-smoothing lerp. **This is the fix that actually resolved the
+     user's exact report** — the first two fixes were real bugs caught
+     along the way via live testing, not the reported symptom itself.
+- **Stuck detection/recovery**: tracks attempted-thrust vs. actual
+  displacement every 0.5s; two bad windows (1.0s of no progress) triggers a
+  1.1s reverse-thrust-and-turn recovery maneuver, turning away from
+  whatever the avoidance vector currently points away from. **Verified via
+  a direct, deterministic unit test** (freezing position while forcing
+  thrust input through `game_eval`), not an organic in-game reproduction —
+  every live asteroid-crossing/wedge scenario actually tried resolved via
+  avoidance steering alone, never needed recovery to fire.
+- **Movement-distance hysteresis and de-aggro leash** in `ship_ai.gd`:
+  approach/retreat/hold around `keep_distance` now uses a 40-unit
+  hysteresis band with sticky state instead of a single threshold (stops
+  thrust flip-flopping at the boundary); ALERT is no longer permanently
+  sticky — a `_update_leash()` check reverts to IDLE if the target stays
+  beyond `detection_range * 1.6` for 2.5s straight, so one stray hit no
+  longer means a pirate chases forever.
+- **Verified live** via the godot-ai MCP tools, repeatedly, across several
+  scenarios: a pirate crossing the full asteroid cluster in
+  `asteroid_field.tscn` to reach the player; a `pirate_heavy_one` (larger
+  hull, extent 174 vs. the raider's 134) doing the same, confirming
+  avoidance/separation scale correctly with ship size without any
+  per-ship tuning; two overlapping pirates separating to 200-540 units
+  apart while both chased the player; a pirate teleported far outside
+  leash range reverting from ALERT to IDLE; and the exact
+  hide-behind-an-asteroid reproduction, retested clean both with and
+  without the pirate's weapons active. No new errors/warnings in game or
+  editor logs across any run.
+
+### Still open from this session
+- Stuck-recovery's displacement threshold (18px/0.5s) is a fixed constant,
+  not scaled to ship mass/thrust — fine for every archetype tried
+  (including the heaviest pirate hull) but worth revisiting if a much
+  slower/heavier ship is added later.
+- Avoidance/separation/leash constants are first-pass values confirmed
+  correct, not tuned by feel across an extended playtest.
+- Not specifically re-verified against the Dense/Dangerous Belt region
+  (`docs/region_design.md`), which has the tightest asteroid packing in the
+  game — worth a pass there before calling this fully done.
+- `pirate_light_two`/`pirate_heavy_one` severability audit (see further
+  down) and the no-Corporate/Ancient-enemy-ship gap are both still
+  untouched, unrelated to this session.
+
+## Session before that (Basic world regions — data-driven asteroid density/zones)
+
+A user-supplied "1.3 Basic world regions" spec (not part of `roadmap.md`/
+`Roadmap v.2-v.9.md`). Full design reference now lives in
+`docs/region_design.md` — this section is a summary, not the source of
+truth for field values.
+
+- **Scope decision made via `AskUserQuestion`**: the user's own framing of
+  the task ("the universe should turn into a large grid with squares, each
+  square could be something") suggested a full grid-addressed universe.
+  Explicitly scoped down instead to a `RegionType` resource + `RegionSpawner`
+  node applied to a handful of handcrafted zones connected by warp/speed
+  gates — the same pattern the asteroid field/derelict station/nebula
+  already use — rather than building new world-addressing/streaming
+  architecture. The grid idea is **not started**, not rejected.
+- **`scripts/world/region_type.gd`** (`RegionType extends Resource`):
+  `asteroid_density` (per 1,000,000 sq. units, so reusable across different
+  area sizes), `min_spacing`, `large_weight`/`medium_weight`/`small_weight`
+  for `Asteroid.SizeTier`, and `asteroid_tint` (multiplied into each spawned
+  asteroid's `self_modulate` — same technique the faction station wrecks
+  use — for a region-distinct look independent of density).
+- **`scripts/world/region_spawner.gd`** (`RegionSpawner extends Node2D`):
+  rejection-samples asteroid positions in a `region_size` rectangle centered
+  on itself, seeded (`random_seed`) for determinism, respecting
+  `keep_clear_points`/`keep_clear_radius` so nothing spawns on the player's
+  arrival point. If a region's requested density can't physically fit at its
+  `min_spacing`, it gracefully spawns fewer rather than overlapping or
+  erroring — confirmed intentional behavior, not a bug, via live counts.
+- **Real bug found and fixed via live testing**: spawning from
+  `_ready()` intermittently threw "Parent node is busy setting up children"
+  on `add_child()` when the scene root was still adding its own children.
+  Fixed by deferring the whole spawn pass (`_spawn_region.call_deferred()`).
+  Also surfaced (again) the known `game_eval` gotcha that bare `for` loops in
+  an eval script can silently execute only once — a diagnostic query that
+  looked like "only 1 asteroid spawned per region" was actually just that
+  bug; `Array.filter(func(...): ...)` gave the real (correct) counts.
+- **`scenes/world/asteroid_field.tscn` refactored**: its 14 hand-placed
+  `Asteroid` nodes replaced by one `RegionSpawner` (Standard Asteroid Belt
+  data), tuned to land close to the original hand-authored count/feel
+  rather than derived from scratch. Existing `ReturnGate`/warp wiring
+  untouched.
+- **Three new zones added to `map_tester.tscn`** (Sparse Open Space, Small
+  Asteroid Cluster, Dense/Dangerous Belt), each a `RegionSpawner` placed far
+  from existing content and reached by a new speed-lane gate pair, same
+  convention as the two nebula gate pairs.
+- **Density tuned down twice this session.** First pass (Sparse 3.0/500,
+  Cluster 45.0/130, Standard 22.0/140, Dense 55.0/150 — density/min_spacing)
+  produced live counts of Sparse ~40-60, Cluster ~27, Standard 13, Dense 88
+  — the user flagged this as **way too many asteroids, "especially the dense
+  one,"** an overload-the-player concern, not a bug. Retuned to Sparse
+  0.75/600, Cluster 10.0/160, Standard 16.0/160, Dense 10.0/200, landing at
+  live counts Sparse 14, Cluster 8, Standard 10, Dense 31 — confirmed via
+  screenshot that Dense still reads as visibly tighter/harder to navigate
+  than Sparse without being a wall of rocks. **These specific density/
+  min_spacing numbers are the second-pass tuning the user approved, not a
+  first-guess placeholder** — don't casually revert to the first-pass values
+  if picking this back up.
+- **Verified live** via the godot-ai MCP tools, twice (once per tuning
+  pass): clean launches (no errors) in both `map_tester.tscn` and
+  `asteroid_field.tscn`; per-region asteroid counts checked directly;
+  determinism confirmed by force-reloading `map_tester.tscn` and getting an
+  identical count for the same region; confirmed zero asteroids spawn near
+  any of the 4 arrival points (3 new gates + the asteroid field's
+  `ReturnGate`); screenshots of Dense/Sparse/Standard belt all look correct
+  and visually distinct.
+
+### Still open from this session
+- `RegionType.display_name` isn't surfaced in any UI (no "entering X" HUD
+  notification) — data exists, nothing reads it yet, not asked for.
+- The grid-of-squares universe idea the user floated is unstarted — see
+  "Scope decision" above. Worth asking explicitly before assuming it's
+  wanted, since it's a materially bigger architecture change than this
+  session's work.
+- Dense/Dangerous Belt's rejection-sampling yield (31 asteroids) hasn't been
+  play-tested in actual combat/navigation, only observed via screenshot —
+  worth a real flythrough if "does dense feel appropriately dangerous"
+  matters before moving on.
+- No new materials/salvage/faction identity per region, and no per-region
+  background tint — both explicitly out of scope per the original spec.
+
+## Session before that (asteroid size tiers, splitting, hit knockback)
 
 A user-supplied "1.2 Asteroid behaviour and variety" spec (not part of
 `roadmap.md`/`Roadmap v.2-v.9.md` — handed to Claude directly), all in
@@ -1199,9 +1375,9 @@ manufacturer-flavored palette row once *both* are true.
 - Buying from a known manufacturer once discovered — waits on a Version
   0.6 station/trading system that doesn't exist yet.
 - Give `pirate_light_two`/`pirate_heavy_one` a severability audit —
-  `pirate_light_one` was fixed this session (see "Most recent session");
-  the others were never checked for the same "zero severable points"
-  blob issue.
+  `pirate_light_one` was fixed in the "reverse engineering, pirate_light_one's
+  wing, debris/thruster bug fixes, Manufacturers" session further down; the
+  others were never checked for the same "zero severable points" blob issue.
 - Reactor/Battery/Command-Core-adjacent modules other than engines/weapons
   still have no *mechanical* effect when destroyed beyond losing the hex
   (no repair mechanic either).
@@ -1212,14 +1388,31 @@ manufacturer-flavored palette row once *both* are true.
   any planet-surface gameplay.
 - A wreck field that isn't station-shaped (destroyed ships, not stations) —
   "abandoned wrecks" and "derelict stations" are arguably the same location
-  type right now (4 station wrecks in one scene); see "Most recent session".
+  type right now (4 station wrecks in one scene); see the "3 more
+  abandoned-station wrecks + a second nebula" session further down.
 - Anything in `vision.md` or later phases of `roadmap.md`/`Roadmap
   v.2-v.9.md` (research beyond reverse-engineering, co-op). **Warp gates
   are done now** — remove from any future "not started" framing.
 
 ## Suggested next step
 
-Most recently: asteroid size tiers/variants/splitting/hit-knockback (a
+Most recently: "1.4 Better AI navigation" (a user-supplied spec outside the
+tracked roadmaps) is done and verified live — see "Most recent session"
+above and `docs/aienemies.md` for the full design reference. No specific
+next item has been chosen yet; candidates left open by this session: a pass
+specifically in the Dense/Dangerous Belt region (tightest asteroid packing,
+not yet re-checked with the new avoidance system), or tuning the
+avoidance/separation/leash constants by feel across a longer playtest
+(current values are confirmed correct, not tuned for feel).
+
+Before that: "1.3 Basic world regions" (a user-supplied spec outside the
+tracked roadmaps) is done, tuned per user feedback, and verified live — see
+`docs/region_design.md` for the full design reference. The grid-of-squares
+universe idea the user floated during that task is unstarted and would need
+its own explicit go-ahead before beginning (it's a bigger architectural
+change than the scoped regions work).
+
+Before that: asteroid size tiers/variants/splitting/hit-knockback (a
 user-supplied spec outside the tracked roadmaps) is done and verified live.
 It was committed together with several previously-uncommitted sessions'
 work at the user's explicit choice — camera zoom rework, starfield

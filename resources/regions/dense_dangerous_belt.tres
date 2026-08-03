@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_region_type")
 display_name = "Dense/Dangerous Belt"
-asteroid_density = 55.0
-min_spacing = 150.0
+asteroid_density = 10.0
+min_spacing = 200.0
 large_weight = 0.35
 medium_weight = 0.45
 small_weight = 0.2

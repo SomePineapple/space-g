@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_region_type")
 display_name = "Sparse Open Space"
-asteroid_density = 3.0
-min_spacing = 500.0
+asteroid_density = 0.75
+min_spacing = 600.0
 large_weight = 0.15
 medium_weight = 0.5
 small_weight = 0.35
