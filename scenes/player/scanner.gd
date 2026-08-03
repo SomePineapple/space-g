@@ -18,6 +18,12 @@ extends Node2D
 ## grouped together (e.g. "Asteroid Cluster (6)"), not per-rock identity,
 ## since a dense field would otherwise fill every result slot with the same
 ## handful of nearby rocks.
+##
+## Requires a Scanner hardpoint (see ModuleCatalog.SCANNER_HARDPOINT_TYPE_ID)
+## — toggle_scan() refuses to start a new pulse without one, and an
+## already-channeling pulse cancels itself if the module is lost mid-scan
+## (destroyed in combat, removed in the builder), same "destroyed hardpoint
+## stops working" convention every other hardpoint follows.
 signal scan_started
 signal scan_progress_updated(fraction: float)
 signal scan_completed(results: Array[Dictionary])
@@ -34,7 +40,7 @@ signal scan_cancelled
 ## uses for its own, separate asteroid clustering).
 const ASTEROID_CLUSTER_MERGE_DISTANCE: float = 300.0
 
-@onready var _ship: Node2D = get_owner()
+@onready var _ship: Ship = get_owner()
 
 var _is_scanning: bool = false
 var _elapsed: float = 0.0
@@ -42,6 +48,10 @@ var _elapsed: float = 0.0
 
 func _physics_process(delta: float) -> void:
 	if not _is_scanning:
+		return
+
+	if not _ship.has_scanner():
+		_cancel()
 		return
 
 	_elapsed += delta
@@ -57,6 +67,9 @@ func _physics_process(delta: float) -> void:
 func toggle_scan() -> void:
 	if _is_scanning:
 		_cancel()
+		return
+
+	if not _ship.has_scanner():
 		return
 
 	_is_scanning = true

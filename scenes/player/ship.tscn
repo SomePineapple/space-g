@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://sv6hu5moclpv" path="res://scenes/player/ship.gd" id="1_yie7n"]
 [ext_resource type="Script" uid="uid://bh6o2tkx0yeqs" path="res://scenes/player/health.gd" id="8_5lh7k"]
 [ext_resource type="Script" path="res://scripts/ships/layout/ship_layout_renderer.gd" id="8_hullrend"]
-[ext_resource type="Script" uid="uid://ctj5a3nvasdd1" path="res://scenes/player/tractor_beam.gd" id="9_tf6ds"]
 [ext_resource type="Script" uid="uid://c44i8af67y8yp" path="res://scenes/player/inventory.gd" id="10_lrwcl"]
 [ext_resource type="Script" path="res://scenes/player/upgrade_manager.gd" id="11_lrwcl"]
 [ext_resource type="Script" path="res://scenes/player/scanner.gd" id="12_scanner"]
@@ -19,9 +18,6 @@ script = ExtResource("8_hullrend")
 script = ExtResource("8_5lh7k")
 
 [node name="HitSound" type="AudioStreamPlayer2D" parent="."]
-
-[node name="TractorBeam" type="Node2D" parent="." unique_id=2091864127]
-script = ExtResource("9_tf6ds")
 
 [node name="Inventory" type="Node" parent="." unique_id=1507446228]
 script = ExtResource("10_lrwcl")

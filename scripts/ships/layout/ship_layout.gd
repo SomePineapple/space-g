@@ -108,6 +108,18 @@ func get_winch_hardpoint_placements() -> Array[ModulePlacement]:
 	return _get_hardpoint_placements("winch")
 
 
+func get_tractor_hardpoint_placements() -> Array[ModulePlacement]:
+	return _get_hardpoint_placements("tractor")
+
+
+func get_radar_hardpoint_placements() -> Array[ModulePlacement]:
+	return _get_hardpoint_placements("radar")
+
+
+func get_scanner_hardpoint_placements() -> Array[ModulePlacement]:
+	return _get_hardpoint_placements("scanner")
+
+
 ## Matches by ModuleType.hardpoint_category rather than a single fixed id,
 ## so any tier of weapon/missile hardpoint is found without new lookup code.
 func _get_hardpoint_placements(hardpoint_category: String) -> Array[ModulePlacement]:

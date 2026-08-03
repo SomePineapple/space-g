@@ -38,7 +38,25 @@ placement_id = "missile_a"
 module_type_id = "missile_hardpoint"
 hex_coord = Vector2i(0, -1)
 
+[sub_resource type="Resource" id="Resource_tractor"]
+script = ExtResource("2_placement")
+placement_id = "tractor_a"
+module_type_id = "tractor_beam_hardpoint"
+hex_coord = Vector2i(-1, 1)
+
+[sub_resource type="Resource" id="Resource_radar"]
+script = ExtResource("2_placement")
+placement_id = "radar_a"
+module_type_id = "radar_hardpoint"
+hex_coord = Vector2i(1, 1)
+
+[sub_resource type="Resource" id="Resource_scanner"]
+script = ExtResource("2_placement")
+placement_id = "scanner_a"
+module_type_id = "scanner_hardpoint"
+hex_coord = Vector2i(-1, -1)
+
 [resource]
 script = ExtResource("1_layout")
-placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_hull_a"), SubResource("Resource_hull_b"), SubResource("Resource_engine"), SubResource("Resource_weapon"), SubResource("Resource_missile")])
+placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_hull_a"), SubResource("Resource_hull_b"), SubResource("Resource_engine"), SubResource("Resource_weapon"), SubResource("Resource_missile"), SubResource("Resource_tractor"), SubResource("Resource_radar"), SubResource("Resource_scanner")])
 core_placement_id = "core"

@@ -11,7 +11,7 @@ enum Rarity { COMMON, ELECTRONICS, ENERGY, EXPERIMENTAL, ARTEFACT }
 ## "visual_scale" and "spike_count" give higher rarities a bigger, spikier
 ## silhouette (0 spikes = plain glow, no overlay) so rarity reads at a
 ## glance without text — "pull_resistance" makes rarer salvage feel heavier
-## on the tractor beam (see TractorBeam._update_beam).
+## on the tractor beam (see HardpointTractorBeam._pull_target).
 const RARITY_DATA: Dictionary = {
 	Rarity.COMMON: {"color": Color(0.75, 0.78, 0.8), "material": Materials.STEEL_ALLOY, "amount": 10,
 		"visual_scale": 1.0, "spike_count": 0, "pull_resistance": 1.0},

@@ -11,6 +11,9 @@ const MISSILE_HARDPOINT_TYPE_ID: String = "missile_hardpoint"
 const RAILGUN_HARDPOINT_TYPE_ID: String = "railgun_hardpoint"
 const PHASE_LANCE_HARDPOINT_TYPE_ID: String = "phase_lance_hardpoint"
 const WINCH_HARDPOINT_TYPE_ID: String = "winch_hardpoint"
+const TRACTOR_HARDPOINT_TYPE_ID: String = "tractor_beam_hardpoint"
+const RADAR_HARDPOINT_TYPE_ID: String = "radar_hardpoint"
+const SCANNER_HARDPOINT_TYPE_ID: String = "scanner_hardpoint"
 
 const SINGLE_CELL: Array[Vector2i] = [Vector2i.ZERO]
 const LINE_2_CELLS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
@@ -190,6 +193,33 @@ static func get_all() -> Array[ModuleType]:
 	phase_lance_type.is_capturable_tech = true
 	phase_lance_type.requires_research = true
 	types.append(phase_lance_type)
+
+	# Tractor beam hardpoint (see HardpointTractorBeam/Ship._spawn_hardpoint_tractor_beams).
+	# No dedicated art yet — a generic flat-tinted hex, same approach as Strut.
+	var tractor_type: ModuleType = _make(TRACTOR_HARDPOINT_TYPE_ID, "Tractor Beam", Color(0.4, 0.75, 0.85), SINGLE_CELL,
+		0.2, 30.0, 0.0, null, "tractor", 1, {Materials.STEEL_ALLOY: 8, Materials.ELECTRONICS: 8})
+	types.append(tractor_type)
+
+	# Radar hardpoint (see RadarDisplay.has_radar/Ship.has_radar) — a pure
+	# capability flag, no per-hex spawned node or fixed facing needed (radar
+	# is an omnidirectional sensor centered on the ship, not a directional
+	# beam like the tractor beam), so unlike most hardpoints above it never
+	# gets a hardpoint_scene. No dedicated art yet — a generic flat-tinted
+	# hex, same approach as Strut/the tractor beam hardpoint. Green (matching
+	# RadarDisplay's own sweep/label color) rather than another blue/teal —
+	# distinct at a glance from Engine and the Tractor Beam hardpoint, which
+	# sat right next to it in the same blue family.
+	var radar_type: ModuleType = _make(RADAR_HARDPOINT_TYPE_ID, "Radar", Color(0.3, 1.0, 0.55), SINGLE_CELL,
+		0.2, 25.0, 0.0, null, "radar", 1, {Materials.STEEL_ALLOY: 6, Materials.ELECTRONICS: 10})
+	types.append(radar_type)
+
+	# Scanner hardpoint (see Scanner.has_scanner/Ship.has_scanner) — same
+	# "pure capability flag" shape as Radar: the pulse originates from the
+	# ship's own position, not a per-hex muzzle, so no spawned node or fixed
+	# facing is needed. No dedicated art yet — a generic flat-tinted hex.
+	var scanner_type: ModuleType = _make(SCANNER_HARDPOINT_TYPE_ID, "Scanner", Color(0.9, 0.35, 0.75), SINGLE_CELL,
+		0.2, 25.0, 0.0, null, "scanner", 1, {Materials.STEEL_ALLOY: 6, Materials.ELECTRONICS: 12})
+	types.append(scanner_type)
 
 	# Winch hardpoint (casts a physical rope — see HardpointWinch/WinchRope/
 	# Ship._spawn_hardpoint_winches) is disabled for now, per explicit user

@@ -30,6 +30,7 @@ signal energy_changed(current: float, max_energy: float)
 @export var hardpoint_gun_scene: PackedScene = preload("res://scenes/player/hardpoint_gun.tscn")
 @export var hardpoint_missile_launcher_scene: PackedScene = preload("res://scenes/player/hardpoint_missile_launcher.tscn")
 @export var hardpoint_winch_scene: PackedScene = preload("res://scenes/player/hardpoint_winch.tscn")
+@export var hardpoint_tractor_beam_scene: PackedScene = preload("res://scenes/player/hardpoint_tractor_beam.tscn")
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
 @export var reverse_speed_ratio: float = 0.35
@@ -90,6 +91,7 @@ var _collision_shapes: Array[CollisionPolygon2D] = []
 var _hardpoint_guns: Array[HardpointGun] = []
 var _missile_launchers: Array[HardpointMissileLauncher] = []
 var _winch_hardpoints: Array[HardpointWinch] = []
+var _tractor_beam_hardpoints: Array[HardpointTractorBeam] = []
 var _weapon_upgrade_modifiers: Dictionary = {}
 var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
@@ -167,6 +169,7 @@ func _apply_ship_layout() -> void:
 	_spawn_hardpoint_guns()
 	_spawn_missile_launchers()
 	_spawn_hardpoint_winches()
+	_spawn_hardpoint_tractor_beams()
 	layout_applied.emit()
 
 
@@ -728,6 +731,23 @@ func _spawn_hardpoint_winches() -> void:
 		_winch_hardpoints.append(winch)
 
 
+## Tractor beam hardpoints aim nowhere in particular (the beam always targets
+## whatever it finds, see HardpointTractorBeam) — spawned at the hardpoint's
+## hex center only, no fixed facing needed.
+func _spawn_hardpoint_tractor_beams() -> void:
+	for tractor_beam in _tractor_beam_hardpoints:
+		tractor_beam.queue_free()
+	_tractor_beam_hardpoints.clear()
+
+	for placement in ship_layout.get_tractor_hardpoint_placements():
+		var tractor_beam: HardpointTractorBeam = hardpoint_tractor_beam_scene.instantiate()
+		add_child(tractor_beam)
+		tractor_beam.position = _hardpoint_center(placement)
+		tractor_beam.setup(self)
+		tractor_beam.source_placement_id = placement.placement_id
+		_tractor_beam_hardpoints.append(tractor_beam)
+
+
 ## A destroyed/detached module's hex goes dark (see _on_module_destroyed/
 ## _detach_module), but its HardpointGun/HardpointMissileLauncher is a
 ## separate node positioned on top of that hex — without this it kept
@@ -742,6 +762,10 @@ func _set_hardpoint_visual_visible(placement_id: String, should_be_visible: bool
 	for launcher in _missile_launchers:
 		if launcher.source_placement_id == placement_id:
 			launcher.visible = should_be_visible
+			return
+	for tractor_beam in _tractor_beam_hardpoints:
+		if tractor_beam.source_placement_id == placement_id:
+			tractor_beam.visible = should_be_visible
 			return
 
 
@@ -870,6 +894,31 @@ func get_scanner() -> Scanner:
 	return _scanner
 
 
+## Radar is a pure capability flag (see ModuleCatalog.RADAR_HARDPOINT_TYPE_ID)
+## rather than a spawned hardpoint node — it has no fixed facing or world-space
+## visual of its own, it just gates whether RadarDisplay (the HUD) runs at
+## all. True if the layout has at least one radar hardpoint that isn't
+## currently destroyed/detached.
+func has_radar() -> bool:
+	if ship_layout == null:
+		return false
+	for placement in ship_layout.get_radar_hardpoint_placements():
+		if not is_module_destroyed(placement.placement_id):
+			return true
+	return false
+
+
+## Same "pure capability flag" shape as has_radar() — see
+## ModuleCatalog.SCANNER_HARDPOINT_TYPE_ID.
+func has_scanner() -> bool:
+	if ship_layout == null:
+		return false
+	for placement in ship_layout.get_scanner_hardpoint_placements():
+		if not is_module_destroyed(placement.placement_id):
+			return true
+	return false
+
+
 func take_damage(amount: float) -> void:
 	_time_since_last_damage = 0.0
 	_health.take_damage(amount)
@@ -918,7 +967,7 @@ func add_material(material_id: String, amount: int) -> void:
 	_inventory.add_material(material_id, amount)
 
 
-## Called by WinchBeam/TractorBeam once it finishes reeling in a
+## Called by WinchBeam/HardpointTractorBeam once it finishes reeling in a
 ## CapturedTechPart. A non-empty manufacturer_id also discovers that
 ## manufacturer (see Inventory.discover_manufacturer) — separate from the
 ## per-module research unlock, since knowing "Atlas Heavy exists" is a

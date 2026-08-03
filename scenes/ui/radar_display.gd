@@ -5,6 +5,11 @@ extends Control
 ## provide detailed object information." Also deliberately excludes anything
 ## Scanner identifies (asteroids, wrecks, planets, ...) — radar is live
 ## faction/activity detection, not passive terrain the scanner already covers.
+##
+## Requires a Radar hardpoint (see ModuleCatalog.RADAR_HARDPOINT_TYPE_ID) —
+## this whole display hides itself whenever the player's ship has none
+## mounted/intact, checked live every frame so losing (or repairing) the
+## module in combat shows/hides the HUD without a scene reload.
 enum Category { SHIP, STATION, ELECTRONIC_SIGNAL, ENEMY_CAMP, DISTRESS_BEACON }
 
 ## Which existing group each broad category is read from. "electronic_signal",
@@ -43,7 +48,7 @@ const BLIP_MATCH_DISTANCE: float = 150.0
 ## _build_range_label) — the outer ring is exactly this distance out.
 const RANGE_LABEL_HEIGHT: float = 18.0
 
-var _player: Node2D
+var _player: Ship
 var _sweep_angle: float = 0.0
 var _prev_sweep_angle: float = 0.0
 var _refresh_timer: float = 0.0
@@ -84,6 +89,11 @@ func _build_range_label(diameter: float) -> void:
 
 func _process(delta: float) -> void:
 	if _player == null:
+		visible = false
+		return
+
+	visible = _player.has_radar()
+	if not visible:
 		return
 
 	_prev_sweep_angle = _sweep_angle

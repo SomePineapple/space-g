@@ -3,8 +3,13 @@ extends Control
 ## Scan progress bar + resulting nearby-object list — the "clear progress
 ## feedback" and "readable result" halves of the scanner spec. Deliberately
 ## separate from RadarDisplay: radar never shows this level of detail.
+##
+## Requires a Scanner hardpoint (see ModuleCatalog.SCANNER_HARDPOINT_TYPE_ID)
+## — this whole display hides itself whenever the player's ship has none
+## mounted/intact, checked live every frame same as RadarDisplay.
 @export var result_display_duration: float = 5.0
 
+var _ship: Ship
 var _scanner: Scanner
 var _progress_bar: ProgressBar
 var _status_label: Label
@@ -17,6 +22,7 @@ func _ready() -> void:
 	if players.is_empty():
 		return
 
+	_ship = players[0]
 	_scanner = players[0].get_scanner()
 	_scanner.scan_started.connect(_on_scan_started)
 	_scanner.scan_progress_updated.connect(_on_scan_progress)
@@ -63,6 +69,15 @@ func _build_ui() -> void:
 
 
 func _process(delta: float) -> void:
+	if _ship == null:
+		return
+
+	if not _ship.has_scanner():
+		_progress_bar.visible = false
+		_status_label.visible = false
+		_results_container.visible = false
+		return
+
 	if not _results_container.visible:
 		return
 	_result_timer -= delta
