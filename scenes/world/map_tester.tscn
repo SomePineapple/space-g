@@ -23,6 +23,10 @@
 [ext_resource type="Resource" path="res://resources/regions/sparse_open_space.tres" id="24_sparse_open_space"]
 [ext_resource type="Resource" path="res://resources/regions/small_asteroid_cluster.tres" id="25_small_cluster"]
 [ext_resource type="Resource" path="res://resources/regions/dense_dangerous_belt.tres" id="26_dense_belt"]
+[ext_resource type="Script" path="res://scripts/world/poi_camp.gd" id="27_poi_camp"]
+[ext_resource type="PackedScene" path="res://scenes/world/distress_signal.tscn" id="28_distress_signal"]
+[ext_resource type="PackedScene" path="res://scenes/world/abandoned_ship.tscn" id="29_abandoned_ship"]
+[ext_resource type="PackedScene" path="res://scenes/world/scenic_formation.tscn" id="30_scenic_formation"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_aa3bo"]
 sky_top_color = Color(0.38, 0.45, 0.55, 1)
@@ -322,4 +326,23 @@ position = Vector2(500, 9500)
 mode = 1
 ring_color = Color(1.0, 0.3, 0.25, 1.0)
 destination_marker_path = NodePath("../SpeedGateToDense")
+
+[node name="PirateCamp" type="Node2D" parent="."]
+script = ExtResource("27_poi_camp")
+position = Vector2(2600, -1800)
+
+[node name="Pirate1" parent="PirateCamp" instance=ExtResource("12_pirate_light")]
+position = Vector2(-80, 40)
+
+[node name="Pirate2" parent="PirateCamp" instance=ExtResource("13_pirate_med")]
+position = Vector2(90, -30)
+
+[node name="DistressSignal" parent="." instance=ExtResource("28_distress_signal")]
+position = Vector2(1800, 1800)
+
+[node name="AbandonedShip" parent="." instance=ExtResource("29_abandoned_ship")]
+position = Vector2(3200, 1200)
+
+[node name="ScenicFormation" parent="." instance=ExtResource("30_scenic_formation")]
+position = Vector2(-1800, -1900)
 

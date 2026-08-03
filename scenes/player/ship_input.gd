@@ -42,6 +42,9 @@ func _physics_process(_delta: float) -> void:
 		ship.fire_winch()
 	ship.set_winch_reel_input(Input.is_action_pressed("fire_winch"))
 
+	if Input.is_action_just_pressed("scan"):
+		ship.toggle_scan()
+
 
 ## Any "menu_panel"-grouped CanvasLayer (ship builder, upgrade panel) being
 ## open suspends ship control entirely, so R/X/etc. can be reused as menu

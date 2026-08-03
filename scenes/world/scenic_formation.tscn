@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/scannable.gd" id="1_scannable"]
+[ext_resource type="Texture2D" uid="uid://byv5bll8r0su5" path="res://resources/exports/ancient/ancient_command_core.png" id="2_core"]
+[ext_resource type="PackedScene" uid="uid://cd0ebuq2rwalp" path="res://scenes/world/asteroid.tscn" id="3_asteroid"]
+
+[node name="ScenicFormation" type="Node2D"]
+script = ExtResource("1_scannable")
+scan_category = "Ancient Formation"
+
+[node name="Core" type="Sprite2D" parent="."]
+self_modulate = Color(0.55, 0.85, 0.95, 1)
+texture_filter = 4
+scale = Vector2(0.3, 0.3)
+texture = ExtResource("2_core")
+
+[node name="Asteroid1" parent="." instance=ExtResource("3_asteroid")]
+position = Vector2(-150, 110)
+random_seed = 501
+size_tier = 2
+
+[node name="Asteroid2" parent="." instance=ExtResource("3_asteroid")]
+position = Vector2(160, -90)
+random_seed = 502
+size_tier = 2

@@ -12,6 +12,7 @@
 [ext_resource type="Texture2D" uid="uid://c4u08vjemw1fe" path="res://resources/exports/pirates/pirate_space_station.png" id="9_pirate_station_tex"]
 [ext_resource type="Texture2D" uid="uid://dcc8d0jkk6dqs" path="res://resources/exports/ancient/ancient_space_station.png" id="10_ancient_station_tex"]
 [ext_resource type="Texture2D" uid="uid://dh2kf3v68bpj7" path="res://resources/exports/corporate/corporate_large_station.png" id="11_corporate_large_station_tex"]
+[ext_resource type="Script" path="res://scripts/world/scannable.gd" id="12_scannable"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_derelict"]
 sky_top_color = Color(0.08, 0.08, 0.1, 1)
@@ -86,6 +87,8 @@ position = Vector2(0, -200)
 rotation = 0.45
 scale = Vector2(0.35, 0.35)
 texture = ExtResource("8_station_tex")
+script = ExtResource("12_scannable")
+scan_category = "Wreck"
 
 [node name="PirateStationWreck" type="Sprite2D" parent="." unique_id=978519287]
 self_modulate = Color(0.36, 0.28, 0.26, 1)
@@ -94,6 +97,8 @@ position = Vector2(-620, 200)
 rotation = -0.3
 scale = Vector2(0.3, 0.3)
 texture = ExtResource("9_pirate_station_tex")
+script = ExtResource("12_scannable")
+scan_category = "Wreck"
 
 [node name="AncientStationWreck" type="Sprite2D" parent="." unique_id=1185253531]
 self_modulate = Color(0.26, 0.3, 0.36, 1)
@@ -102,6 +107,8 @@ position = Vector2(550, 350)
 rotation = 0.9
 scale = Vector2(0.28, 0.28)
 texture = ExtResource("10_ancient_station_tex")
+script = ExtResource("12_scannable")
+scan_category = "Wreck"
 
 [node name="CorporateLargeStationWreck" type="Sprite2D" parent="." unique_id=1031731072]
 self_modulate = Color(0.3, 0.32, 0.34, 1)
@@ -110,6 +117,8 @@ position = Vector2(50, 650)
 rotation = -0.15
 scale = Vector2(0.22, 0.22)
 texture = ExtResource("11_corporate_large_station_tex")
+script = ExtResource("12_scannable")
+scan_category = "Wreck"
 
 [node name="Ship" parent="." unique_id=791115553 groups=["player_ship"] instance=ExtResource("2_ship")]
 drops_salvage = false

@@ -2,7 +2,9 @@ extends Control
 
 ## Broad-detection radar. Deliberately reports category only (a colored/shaped
 ## blip), never specific object identity — see docs/roadmap "Radar should not
-## provide detailed object information."
+## provide detailed object information." Also deliberately excludes anything
+## Scanner identifies (asteroids, wrecks, planets, ...) — radar is live
+## faction/activity detection, not passive terrain the scanner already covers.
 enum Category { SHIP, STATION, ELECTRONIC_SIGNAL, ENEMY_CAMP, DISTRESS_BEACON }
 
 ## Which existing group each broad category is read from. "electronic_signal",
@@ -25,7 +27,7 @@ const CATEGORY_COLOR: Dictionary = {
 	Category.DISTRESS_BEACON: Color(0.4, 1.0, 0.5),
 }
 
-@export var detection_range: float = 2000.0
+@export var detection_range: float = 1800.0
 @export var refresh_interval: float = 0.25
 @export var sweep_speed: float = 1.5
 @export var radius: float = 75.0
@@ -37,12 +39,17 @@ const CATEGORY_COLOR: Dictionary = {
 ## contacts aren't tracked by identity, only position + category.
 const BLIP_MATCH_DISTANCE: float = 150.0
 
+## Reserved strip below the circle for the max-range readout (see
+## _build_range_label) — the outer ring is exactly this distance out.
+const RANGE_LABEL_HEIGHT: float = 18.0
+
 var _player: Node2D
 var _sweep_angle: float = 0.0
 var _prev_sweep_angle: float = 0.0
 var _refresh_timer: float = 0.0
 var _contacts: Array[Dictionary] = []
 var _blips: Array[Dictionary] = []
+var _range_label: Label
 
 
 func _ready() -> void:
@@ -50,14 +57,29 @@ func _ready() -> void:
 	if not players.is_empty():
 		_player = players[0]
 
-	custom_minimum_size = Vector2(radius * 2.0 + 10.0, radius * 2.0 + 10.0)
+	var diameter: float = radius * 2.0
+	custom_minimum_size = Vector2(diameter + 10.0, diameter + 10.0 + RANGE_LABEL_HEIGHT)
 	set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	offset_left = -(radius * 2.0 + 20.0)
-	offset_top = -(radius * 2.0 + 20.0)
+	offset_left = -(diameter + 20.0)
+	offset_top = -(diameter + 20.0 + RANGE_LABEL_HEIGHT)
 	offset_right = -10.0
 	offset_bottom = -10.0
 
+	_build_range_label(diameter)
 	_refresh_contacts()
+
+
+func _build_range_label(diameter: float) -> void:
+	_range_label = Label.new()
+	_range_label.text = "Range: %d" % int(detection_range)
+	_range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_range_label.position = Vector2(5.0, diameter + 12.0)
+	_range_label.size = Vector2(diameter, RANGE_LABEL_HEIGHT)
+	_range_label.add_theme_font_size_override("font_size", 13)
+	_range_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
+	_range_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_range_label.add_theme_constant_override("outline_size", 4)
+	add_child(_range_label)
 
 
 func _process(delta: float) -> void:

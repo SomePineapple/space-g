@@ -134,6 +134,7 @@ var _regrowing_placement_ids: Dictionary = {}
 @onready var _hull_renderer: ShipLayoutRenderer = $HullRenderer
 @onready var _inventory: Inventory = $Inventory
 @onready var _hit_sound_player: AudioStreamPlayer2D = $HitSound
+@onready var _scanner: Scanner = $Scanner
 
 
 func _ready() -> void:
@@ -857,6 +858,16 @@ func set_winch_reel_input(is_held: bool) -> void:
 	for winch in _winch_hardpoints:
 		if not is_module_destroyed(winch.source_placement_id):
 			winch.set_reel_input(is_held)
+
+
+## Toggled by the scan input action (see ship_input.gd) — starts scanning the
+## nearest valid target if idle, cancels an in-progress scan otherwise.
+func toggle_scan() -> void:
+	_scanner.toggle_scan()
+
+
+func get_scanner() -> Scanner:
+	return _scanner
 
 
 func take_damage(amount: float) -> void:

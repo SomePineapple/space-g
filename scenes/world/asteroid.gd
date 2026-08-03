@@ -75,6 +75,7 @@ var _rng: RandomNumberGenerator
 
 func _ready() -> void:
 	add_to_group("lockable")
+	add_to_group("asteroid")
 
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = random_seed

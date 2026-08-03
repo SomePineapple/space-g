@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/scannable.gd" id="1_scannable"]
+[ext_resource type="Texture2D" uid="uid://bsaprmp3rvvhf" path="res://resources/exports/pirates/pirate_hull_mk1.png" id="2_hull"]
+[ext_resource type="Texture2D" uid="uid://c8cs18ef8jhu" path="res://resources/exports/pirates/pirate_cockpit.png" id="3_cockpit"]
+[ext_resource type="PackedScene" uid="uid://cm5q1ttarc2ny" path="res://scenes/world/salvage.tscn" id="4_salvage"]
+
+[node name="AbandonedShip" type="Node2D"]
+script = ExtResource("1_scannable")
+scan_category = "Wreck"
+
+[node name="Hull" type="Sprite2D" parent="."]
+self_modulate = Color(0.32, 0.3, 0.28, 1)
+texture_filter = 4
+rotation = 0.35
+scale = Vector2(0.18, 0.18)
+texture = ExtResource("2_hull")
+
+[node name="Cockpit" type="Sprite2D" parent="."]
+self_modulate = Color(0.24, 0.24, 0.26, 1)
+texture_filter = 4
+position = Vector2(60, -70)
+rotation = -0.6
+scale = Vector2(0.11, 0.11)
+texture = ExtResource("3_cockpit")
+
+[node name="Salvage1" parent="." instance=ExtResource("4_salvage")]
+position = Vector2(-40, 30)
+rarity = 1
+
+[node name="Salvage2" parent="." instance=ExtResource("4_salvage")]
+position = Vector2(50, 60)
