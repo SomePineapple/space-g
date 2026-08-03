@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://b1u7j380lkpgc"]
 
 [ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_0mwgc"]
+[ext_resource type="Script" path="res://scenes/ui/radar_display.gd" id="2_radar"]
 
 [node name="HUD" type="CanvasLayer" unique_id=309546132]
 script = ExtResource("1_0mwgc")
@@ -59,3 +60,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 color = Color(1, 0.1, 0.1, 0)
+
+[node name="RadarDisplay" type="Control" parent="."]
+mouse_filter = 2
+script = ExtResource("2_radar")
