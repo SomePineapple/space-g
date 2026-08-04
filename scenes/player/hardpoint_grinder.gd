@@ -7,21 +7,34 @@ extends Node2D
 ## deliberate activation rather than running whenever mounted.
 ##
 ## While toggled on and a valid Asteroid sits within contact_range of the
-## Muzzle (the front hex of this 2-cell module — see ModuleCatalog.
-## GRINDER_HARDPOINT_TYPE_ID), it chips the asteroid's Health directly
+## Muzzle (reaching out from this single-hex module's facing edge — see
+## ModuleCatalog.GRINDER_HARDPOINT_TYPE_ID), it chips the asteroid's Health directly
 ## (Asteroid.take_damage, not take_damage_at — a held grind shouldn't also
 ## knock the target away every frame, unlike a one-off weapon hit) and, on a
-## fixed interval, breaks off one physical ore fragment (a Salvage instance,
-## same rarity odds as a normal kill-drop) at the contact point for the
-## Tractor Beam or the ship's own hull to collect. Draws energy/sec from the
-## shooter's pool the whole time it's actively touching a target, same
-## "spend or stop" pattern as the Tractor Beam and Winch.
+## fixed interval, breaks off one small physical ore fragment (a Salvage
+## instance, same material odds as a normal kill-drop but a smaller amount
+## per fragment — see fragment_yield_multiplier below) at the contact point
+## for the Tractor Beam or the ship's own hull to collect. Draws energy/sec
+## from the shooter's pool the whole time it's actively touching a target,
+## same "spend or stop" pattern as the Tractor Beam and Winch.
 
 @export var contact_range: float = 55.0
 @export var damage_per_second: float = 14.0
 @export var energy_cost_per_second: float = 7.0
 ## How often (seconds) a held grind breaks off one collectible ore fragment.
 @export var fragment_interval: float = 1.0
+## Per-fragment yield (Salvage.amount_multiplier) relative to a plain weapon
+## kill-drop's baseline amount. Deliberately well under 1.0 — a single chip
+## should be much smaller than the chunk released when the whole rock finally
+## breaks apart (still spawned separately by Asteroid._finish_destruction on
+## death, at the full baseline amount, however the asteroid was killed).
+## Mining still nets more material than a plain gun kill overall because the
+## fragments accumulate throughout the grind on top of that same final
+## kill-drop — the edge comes from the total across a full grind, not from
+## any one fragment outsizing a kill-drop. Tuned down from an earlier 1.5
+## (an individual fragment briefly outyielding a kill-drop) after live
+## feedback that mining one Large asteroid filled cargo far too fast.
+@export var fragment_yield_multiplier: float = 0.22
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
 @export var beam_color: Color = Color(1.0, 0.65, 0.15, 0.85)
 @export var beam_width: float = 3.0
@@ -60,13 +73,24 @@ func setup(shooter: Ship) -> void:
 	_shooter = shooter
 
 
-## Front-cell reach, set once by Ship right after instancing (see
+## Facing-vertex reach, set once by Ship right after instancing (see
 ## HardpointGun.set_cell_size for the same idea applied to a weapon muzzle).
-## The front hex's own centre sits ~0.87 cell-lengths out from this node's
-## origin (the footprint's centroid); the extra distance reaches roughly to
-## that hex's outer edge, where "contact" should actually start.
+## This node's origin is the single occupied hex's own centre (see
+## Ship._hardpoint_center); this node's own rotation (set by Ship right
+## after this, `rotation_steps * PI/3 + _hull_renderer.rotation`) points at
+## the hex's face — see docs/gotchas.md's "+90° fixed offset" entry — not at
+## the direction the builder's placement-facing arrow shows for the same
+## rotation_steps (hex_grid_control.gd's arrow is drawn without that
+## hull-renderer offset, deliberately, for its own unrelated screen-up UX
+## reason — see that file's comment). Converting the arrow's angle into this
+## node's rotation convention lands it at grinder.rotation - 90°, exactly one
+## hex vertex anticlockwise of the face grinder.rotation points at (cell_size
+## from centre — see HexUtils.hex_corners) — that's the vertex used here so
+## the beam visibly exits where the builder's arrow says "forward" is, per
+## explicit request/live verification (a -90°/+30° mix-up here previously
+## put the beam a full 120° off from the arrow).
 func set_cell_size(cell_size: float) -> void:
-	_muzzle.position = Vector2(cell_size * 1.6, 0.0)
+	_muzzle.position = Vector2(cell_size * 1.15, 0.0).rotated(deg_to_rad(-90.0))
 
 
 func _physics_process(delta: float) -> void:
@@ -135,16 +159,17 @@ func _grind(delta: float) -> void:
 
 
 ## Breaks one ore fragment off the asteroid at the contact point — a real
-## Salvage instance (same rarity odds Asteroid itself uses on a kill), not a
-## direct cargo grant, so it has to be physically collected (Tractor Beam or
-## drifting onto the hull) same as any other salvage. Guarded by
+## Salvage instance (same material odds Asteroid itself uses on a kill), not
+## a direct cargo grant, so it has to be physically collected (Tractor Beam
+## or drifting onto the hull) same as any other salvage. Guarded by
 ## is_instance_valid since the asteroid can be freed (health hit zero from
 ## this same grind tick) before this fires again next frame.
 func _spawn_fragment() -> void:
 	if not is_instance_valid(_active_target):
 		return
 	var fragment: Salvage = salvage_scene.instantiate()
-	fragment.rarity = _active_target.roll_ore_rarity()
+	fragment.material_id = _active_target.roll_ore_material()
+	fragment.amount_multiplier = fragment_yield_multiplier
 	get_tree().current_scene.add_child(fragment)
 	fragment.global_position = _muzzle.global_position.move_toward(_active_target.global_position, contact_range * 0.5)
 

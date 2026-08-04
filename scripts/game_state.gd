@@ -23,6 +23,11 @@ var _loaded_scene_cache: Dictionary = {}
 var _has_snapshot: bool = false
 var _credits: int = 0
 var _material_totals: Dictionary = {}
+var _component_totals: Dictionary = {}
+## key -> Array[ModuleInstance] — the real owned-module pool (Phase 8.1), not
+## just counts, so upgrade state on an owned-but-unplaced instance survives a
+## warp the same way a placed one already does via _ship_layout below.
+var _owned_module_pool: Dictionary = {}
 var _captured_tech_totals: Dictionary = {}
 var _researched_ids: Array = []
 var _known_manufacturer_ids: Array = []
@@ -65,10 +70,16 @@ func get_preloaded_scene(path: String) -> PackedScene:
 	return loaded
 
 
+func has_snapshot() -> bool:
+	return _has_snapshot
+
+
 func capture(ship: Node) -> void:
 	var inventory: Node = ship.get_node("Inventory")
 	_credits = inventory.get_credits()
 	_material_totals = inventory.get_all_materials().duplicate()
+	_component_totals = inventory.get_all_components().duplicate()
+	_owned_module_pool = inventory.get_all_owned_module_instances().duplicate()
 	_captured_tech_totals = inventory.get_all_captured_tech().duplicate()
 	_researched_ids = inventory.get_researched_ids()
 	_known_manufacturer_ids = inventory.get_known_manufacturer_ids()
@@ -93,6 +104,9 @@ func apply(ship: Node) -> void:
 	inventory.add_credits(_credits)
 	for material_id in _material_totals:
 		inventory.add_material(material_id, _material_totals[material_id])
+	for component_id in _component_totals:
+		inventory.add_component(component_id, _component_totals[component_id])
+	inventory.restore_owned_module_pool(_owned_module_pool.duplicate())
 	for module_type_id in _captured_tech_totals:
 		for i in _captured_tech_totals[module_type_id]:
 			inventory.add_captured_tech(module_type_id)

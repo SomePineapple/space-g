@@ -17,6 +17,5 @@ func _add_resources_to_player() -> void:
 		return
 
 	var inventory: Inventory = players[0].get_node("Inventory")
-	inventory.add_material(Materials.STEEL_ALLOY, debug_material_amount)
-	inventory.add_material(Materials.ELECTRONICS, debug_material_amount)
-	inventory.add_material(Materials.REACTOR_COMPONENTS, debug_material_amount)
+	for material_id in MaterialCatalog.ALL_IDS:
+		inventory.add_material(material_id, debug_material_amount)

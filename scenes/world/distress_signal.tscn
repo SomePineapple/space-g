@@ -30,3 +30,5 @@ rarity = 2
 [node name="Salvage2" parent="." instance=ExtResource("4_salvage")]
 position = Vector2(-30, 50)
 rarity = 1
+kind = 1
+component_id = "wiring"

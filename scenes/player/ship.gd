@@ -16,6 +16,21 @@ signal energy_changed(current: float, max_energy: float)
 @export var destruction_explosion_scale: float = 2.2
 @export var drops_salvage: bool = true
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
+## Combat kills drop a handful of raw-material salvage pieces rather than
+## just one (Phase 4.2) — each drop rolls its own rarity/material separately.
+@export var salvage_drop_count_min: int = 2
+@export var salvage_drop_count_max: int = 3
+## Phase 5.3: chance each combat kill-drop is an already-crafted component
+## instead of a raw material — lets destroyed ships/wrecks progress the
+## player through crafted components without mining+CraftingPanel, distinct
+## per source since these are per-instance exports (a plain pirate can be
+## tuned lower than a rare capital wreck). 0 on Asteroid/HardpointGrinder's
+## drops on purpose — mining stays raw-material-only, salvage is the
+## alternative route to components, not a duplicate of it.
+@export_range(0.0, 1.0) var component_drop_chance: float = 0.3
+## Of the drops that do roll a component, the fraction pulled from
+## ComponentCatalog.RARE_IDS instead of COMMON_IDS.
+@export_range(0.0, 1.0) var rare_component_chance: float = 0.25
 @export var hit_flash_color: Color = Color(1, 1, 1, 1)
 @export var hit_flash_duration: float = 0.12
 ## Left unassigned by default (no audio assets yet); assign a stream once
@@ -102,8 +117,6 @@ var _grinder_hardpoints: Array[HardpointGrinder] = []
 ## is_module_destroyed. Unlike the Tractor Beam, grinding needs deliberate
 ## activation since it deals continuous damage.
 var _grinder_active: bool = false
-var _weapon_upgrade_modifiers: Dictionary = {}
-var _missile_upgrade_modifiers: Dictionary = {}
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
@@ -156,7 +169,26 @@ func _ready() -> void:
 	_base_hull_modulate = _hull_renderer.modulate
 
 	if is_in_group("player_ship"):
+		# Only on a session's very first region (no snapshot yet) — a warp
+		# restore already carries forward whatever owned counts the player
+		# had, seeding again on top would hand out free duplicates.
+		if not GameState.has_snapshot():
+			_seed_starter_owned_modules()
 		GameState.apply(self)
+
+
+## Phase 5.2 "avoid soft-locking the player": grants one owned instance of
+## every module type/manufacturer combo on the starter loadout, in addition
+## to what's already physically installed, so removing a starter module in
+## the builder never leaves the player unable to re-place it (own-module
+## stock is separate from what's currently mounted). Only ever called once,
+## on a session's first region (see _ready()).
+func _seed_starter_owned_modules() -> void:
+	if ship_layout == null:
+		return
+	for placement in ship_layout.placements:
+		var key: String = Inventory.owned_module_key(placement.module_type_id, placement.manufacturer_id)
+		_inventory.add_owned_module(key)
 
 
 func apply_layout(new_layout: ShipLayout) -> void:
@@ -202,6 +234,27 @@ func get_layout_extent() -> float:
 			var local_pos: Vector2 = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
 			max_distance = maxf(max_distance, local_pos.length() + _hull_renderer.cell_size)
 	return max_distance
+
+
+## World-space position of the ship's Command Core hex — the point Salvage
+## must actually reach to self-collect via plain hull contact (see
+## Salvage._is_near_core), rather than any point on the hull. Falls back to
+## the ship's own origin if the layout somehow has no core yet (shouldn't
+## happen in practice — exactly one Core is an enforced layout rule).
+func get_core_global_position() -> Vector2:
+	if ship_layout == null or ship_layout.core_placement_id.is_empty():
+		return global_position
+	var core_placement: ModulePlacement = ship_layout.get_placement_by_id(ship_layout.core_placement_id)
+	if core_placement == null:
+		return global_position
+	var local_pos: Vector2 = HexUtils.axial_to_pixel(core_placement.hex_coord, _hull_renderer.cell_size).rotated(_hull_renderer.rotation)
+	return to_global(local_pos)
+
+
+## How close a drifting Salvage must get to the Core to self-collect via hull
+## contact — one hex-cell's reach, the same scale as any other module.
+func get_core_collect_radius() -> float:
+	return _hull_renderer.cell_size
 
 
 func _spawn_collision_shapes() -> void:
@@ -639,6 +692,56 @@ func _apply_layout_thrust() -> void:
 	reverse_max_speed = max_speed * reverse_speed_ratio
 
 
+## Applies one just-unlocked per-instance upgrade (Phase 8.1, see
+## UpgradeMenu) to the *live* ship. Deliberately narrower than
+## _apply_ship_layout() (the ship builder's full Apply): it only recomputes
+## the derived aggregate stats and, for a hardpoint with a live spawned node
+## (weapon/missile/tractor/grinder — see _find_hardpoint_node_for), pushes
+## the single new upgrade's modifiers onto that one node — it never touches
+## health/module-condition state or respawns anything. A full
+## _apply_ship_layout() would silently heal the ship to full and reset every
+## module's condition, which is correct for "I just rebuilt my ship at the
+## workbench" but not for "I bought one thruster upgrade". Radar/Scanner
+## have no per-placement spawned node at all (pure capability flags, see
+## Ship.has_radar/has_scanner) so upgrades targeting them are a no-op here —
+## not yet supported, see ModuleUpgradeCatalog for the current status.
+func apply_instance_upgrade_effect(placement: ModulePlacement, upgrade_node: ModuleUpgradeNode) -> void:
+	mass = ship_layout.total_mass()
+	_apply_layout_energy()
+	_apply_layout_cargo_capacity()
+	_apply_layout_thrust()
+
+	var target_node: Node = _find_hardpoint_node_for(placement.placement_id)
+	if target_node == null:
+		return
+
+	for property_name in upgrade_node.modifiers:
+		if property_name in target_node:
+			target_node.set(property_name, target_node.get(property_name) + upgrade_node.modifiers[property_name])
+
+
+## The live spawned hardpoint node for placement_id, across every hardpoint
+## kind that has one — weapon/missile/tractor/grinder. Null for anything
+## without a live node (winch — deliberately disabled, see ModuleCatalog —
+## or a non-hardpoint module type like Engine/Reactor, whose upgrades apply
+## purely through ShipLayout's aggregate totals instead, see
+## ShipLayout._instance_stat_delta).
+func _find_hardpoint_node_for(placement_id: String) -> Node:
+	for gun in _hardpoint_guns:
+		if gun.source_placement_id == placement_id:
+			return gun
+	for launcher in _missile_launchers:
+		if launcher.source_placement_id == placement_id:
+			return launcher
+	for tractor_beam in _tractor_beam_hardpoints:
+		if tractor_beam.source_placement_id == placement_id:
+			return tractor_beam
+	for grinder in _grinder_hardpoints:
+		if grinder.source_placement_id == placement_id:
+			return grinder
+	return null
+
+
 func _spawn_thrusters() -> void:
 	for thruster in _thrusters:
 		thruster.queue_free()
@@ -683,8 +786,7 @@ func _spawn_hardpoint_guns() -> void:
 		gun.apply_core_distance_bonus(ship_layout.distance_from_core(placement))
 		gun.setup(self)
 		gun.source_placement_id = placement.placement_id
-		for property_name in _weapon_upgrade_modifiers:
-			gun.set(property_name, gun.get(property_name) + _weapon_upgrade_modifiers[property_name])
+		_apply_instance_upgrade_modifiers(gun, placement)
 		_apply_manufacturer_modifiers(gun, placement)
 		_hardpoint_guns.append(gun)
 
@@ -704,8 +806,7 @@ func _spawn_missile_launchers() -> void:
 		launcher.apply_core_distance_bonus(ship_layout.distance_from_core(placement))
 		launcher.setup(self)
 		launcher.source_placement_id = placement.placement_id
-		for property_name in _missile_upgrade_modifiers:
-			launcher.set(property_name, launcher.get(property_name) + _missile_upgrade_modifiers[property_name])
+		_apply_instance_upgrade_modifiers(launcher, placement)
 		_apply_manufacturer_modifiers(launcher, placement)
 		_missile_launchers.append(launcher)
 
@@ -724,6 +825,25 @@ func _apply_manufacturer_modifiers(node: Node, placement: ModulePlacement) -> vo
 	if "malfunction_chance" in node:
 		node.set("malfunction_chance", manufacturer.malfunction_chance)
 		node.set("malfunction_self_damage", manufacturer.malfunction_self_damage)
+
+
+## Applies this placement's own ModuleInstance's unlocked upgrades (Phase
+## 8.1) to its freshly spawned hardpoint node — per-instance, unlike the old
+## ship-wide upgrade tree this replaced (which pushed one modifier set onto
+## every gun/launcher regardless of which one was actually upgraded). A
+## placement nobody's upgraded yet (instance == null) is a no-op, same
+## "existing modules remain valid without upgrades" guarantee ShipLayout's
+## _instance_stat_delta gives the non-hardpoint stats.
+func _apply_instance_upgrade_modifiers(node: Node, placement: ModulePlacement) -> void:
+	if placement.instance == null:
+		return
+	for upgrade_id in placement.instance.unlocked_upgrade_ids:
+		var upgrade_node: ModuleUpgradeNode = ModuleUpgradeCatalog.get_by_id(upgrade_id)
+		if upgrade_node == null:
+			continue
+		for property_name in upgrade_node.modifiers:
+			if property_name in node:
+				node.set(property_name, node.get(property_name) + upgrade_node.modifiers[property_name])
 
 
 ## Unlike guns/launchers, a winch hardpoint has a fixed facing rather than
@@ -761,6 +881,7 @@ func _spawn_hardpoint_tractor_beams() -> void:
 		tractor_beam.position = _hardpoint_center(placement)
 		tractor_beam.setup(self)
 		tractor_beam.source_placement_id = placement.placement_id
+		_apply_instance_upgrade_modifiers(tractor_beam, placement)
 		_tractor_beam_hardpoints.append(tractor_beam)
 
 
@@ -781,6 +902,7 @@ func _spawn_hardpoint_grinders() -> void:
 		grinder.set_cell_size(_hull_renderer.cell_size)
 		grinder.setup(self)
 		grinder.source_placement_id = placement.placement_id
+		_apply_instance_upgrade_modifiers(grinder, placement)
 		_grinder_hardpoints.append(grinder)
 
 
@@ -832,22 +954,6 @@ func _hardpoint_center(placement: ModulePlacement) -> Vector2:
 		center_local += HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
 	center_local /= occupied_cells.size()
 	return center_local.rotated(_hull_renderer.rotation)
-
-
-## Routes "Weapon" upgrade-tree modifiers to every mounted hardpoint gun
-## instead of a single fixed node, and remembers them so a ship rebuild
-## (e.g. from the builder) reapplies purchased upgrades to the new guns.
-func apply_weapon_modifier(property_name: String, delta: float) -> void:
-	_weapon_upgrade_modifiers[property_name] = _weapon_upgrade_modifiers.get(property_name, 0.0) + delta
-	for gun in _hardpoint_guns:
-		gun.set(property_name, gun.get(property_name) + delta)
-
-
-## Same as apply_weapon_modifier(), for "MissileLauncher" upgrade-tree entries.
-func apply_missile_modifier(property_name: String, delta: float) -> void:
-	_missile_upgrade_modifiers[property_name] = _missile_upgrade_modifiers.get(property_name, 0.0) + delta
-	for launcher in _missile_launchers:
-		launcher.set(property_name, launcher.get(property_name) + delta)
 
 
 func set_aim_target(target: Vector2) -> void:
@@ -1031,6 +1137,17 @@ func discard_material(material_id: String, amount: int) -> int:
 	return _inventory.discard_material(material_id, amount)
 
 
+func add_component(component_id: String, amount: int) -> void:
+	_inventory.add_component(component_id, amount)
+
+
+## Capacity-respecting version of add_component() — see Inventory.
+## try_add_component. Used by Salvage pickup (Phase 5.3 component drops) so
+## a full cargo hold rejects the item the same way a material drop would.
+func try_add_component(component_id: String, amount: int) -> bool:
+	return _inventory.try_add_component(component_id, amount)
+
+
 ## Called by WinchBeam/HardpointTractorBeam once it finishes reeling in a
 ## CapturedTechPart. A non-empty manufacturer_id also discovers that
 ## manufacturer (see Inventory.discover_manufacturer) — separate from the
@@ -1061,12 +1178,21 @@ func _finish_destruction() -> void:
 	explosion.effect_scale = destruction_explosion_scale
 
 	if drops_salvage:
-		var salvage: Salvage = salvage_scene.instantiate()
-		var rolled_rarity: Salvage.Rarity = _roll_salvage_rarity()
-		salvage.rarity = rolled_rarity
-		salvage.is_dangerous = randf() < _danger_chance_for_rarity(rolled_rarity)
-		get_tree().current_scene.add_child(salvage)
-		salvage.global_position = global_position
+		var drop_count: int = randi_range(salvage_drop_count_min, salvage_drop_count_max)
+		for i in drop_count:
+			var salvage: Salvage = salvage_scene.instantiate()
+			var rolled_rarity: Salvage.Rarity = _roll_salvage_rarity()
+			salvage.rarity = rolled_rarity
+			if randf() < component_drop_chance:
+				salvage.kind = Salvage.Kind.COMPONENT
+				salvage.component_id = _roll_combat_component()
+			else:
+				salvage.material_id = _roll_combat_material()
+			salvage.is_dangerous = randf() < _danger_chance_for_rarity(rolled_rarity)
+			get_tree().current_scene.add_child(salvage)
+			# Small scatter so multiple drops from one kill don't spawn stacked
+			# exactly on top of each other.
+			salvage.global_position = global_position + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0))
 
 	queue_free()
 
@@ -1075,9 +1201,9 @@ func _danger_chance_for_rarity(rolled_rarity: Salvage.Rarity) -> float:
 	match rolled_rarity:
 		Salvage.Rarity.COMMON:
 			return 0.05
-		Salvage.Rarity.ELECTRONICS:
+		Salvage.Rarity.UNCOMMON:
 			return 0.1
-		Salvage.Rarity.ENERGY:
+		Salvage.Rarity.RARE:
 			return 0.2
 		Salvage.Rarity.EXPERIMENTAL:
 			return 0.35
@@ -1092,13 +1218,27 @@ func _roll_salvage_rarity() -> Salvage.Rarity:
 	if roll < 0.55:
 		return Salvage.Rarity.COMMON
 	elif roll < 0.8:
-		return Salvage.Rarity.ELECTRONICS
+		return Salvage.Rarity.UNCOMMON
 	elif roll < 0.93:
-		return Salvage.Rarity.ENERGY
+		return Salvage.Rarity.RARE
 	elif roll < 0.99:
 		return Salvage.Rarity.EXPERIMENTAL
 	else:
 		return Salvage.Rarity.ARTEFACT
+
+
+## Combat kills have no "asteroid variant" to anchor a primary material, so
+## each drop rolls uniformly from all four raw materials (see
+## MaterialCatalog.ALL_IDS) independently of its rarity/amount tier.
+func _roll_combat_material() -> String:
+	return MaterialCatalog.ALL_IDS[randi_range(0, MaterialCatalog.ALL_IDS.size() - 1)]
+
+
+## See component_drop_chance/rare_component_chance — picks which component a
+## kill-drop that already rolled COMPONENT actually carries.
+func _roll_combat_component() -> String:
+	var pool: Array[String] = ComponentCatalog.RARE_IDS if randf() < rare_component_chance else ComponentCatalog.COMMON_IDS
+	return pool[randi_range(0, pool.size() - 1)]
 
 
 func set_thrust_input(thrust: float) -> void:

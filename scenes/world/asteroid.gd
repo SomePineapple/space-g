@@ -35,6 +35,16 @@ const VARIANT_TINT := {
 	AsteroidVariant.RUSTY: Color(1.15, 0.75, 0.6),
 	AsteroidVariant.CRYSTALLINE: Color(0.85, 1.05, 1.0),
 }
+## Phase 4.2 raw materials: each asteroid variant has one primary material
+## (see roll_ore_material) — chosen to loosely match each variant's own tint
+## above (Rusty's red-brown ~ Copper, Icy's pale blue ~ Nickel, Crystalline's
+## faceted look ~ rare Titanium, Rocky stays the plain baseline ~ Iron).
+static var VARIANT_PRIMARY_MATERIAL: Dictionary = {
+	AsteroidVariant.ROCKY: MaterialCatalog.IRON,
+	AsteroidVariant.RUSTY: MaterialCatalog.COPPER,
+	AsteroidVariant.ICY: MaterialCatalog.NICKEL,
+	AsteroidVariant.CRYSTALLINE: MaterialCatalog.TITANIUM,
+}
 
 @export var size_tier: SizeTier = SizeTier.MEDIUM
 @export var random_seed: int = 1
@@ -45,12 +55,12 @@ const VARIANT_TINT := {
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
 @export var asteroid_scene: PackedScene = preload("res://scenes/world/asteroid.tscn")
 @export var destruction_explosion_scale: float = 1.2
-## Cumulative ore-roll thresholds, matching _roll_ore_rarity's COMMON /
-## ELECTRONICS / ENERGY bands — exported so denser, richer clusters (e.g. an
-## asteroid field point of interest) can skew toward better ore without a
-## second copy of this script.
-@export_range(0.0, 1.0) var common_chance: float = 0.7
-@export_range(0.0, 1.0) var electronics_chance: float = 0.95
+## Chance a mined/kill-drop fragment matches this asteroid's own primary
+## material (see VARIANT_PRIMARY_MATERIAL) rather than one of the other three
+## — exported so denser, richer clusters (e.g. an asteroid field point of
+## interest) can skew purer or more mixed without a second copy of this
+## script.
+@export_range(0.0, 1.0) var primary_material_chance: float = 0.8
 @export var split_fragment_count: int = 2
 @export var scatter_speed: float = 90.0
 @export var scatter_decay: float = 120.0
@@ -66,6 +76,9 @@ const VARIANT_TINT := {
 var _radius: float = 0.0
 var _rotation_speed: float = 0.0
 var _scatter_velocity: Vector2 = Vector2.ZERO
+## Which AsteroidVariant this instance rolled — drives roll_ore_material's
+## primary material (see VARIANT_PRIMARY_MATERIAL).
+var _variant: AsteroidVariant = AsteroidVariant.ROCKY
 ## Kept alive past _ready so split fragments get deterministic seeds — the
 ## sequence of calls made against it is fixed by code order, so the same
 ## random_seed always produces the same shape, tint, rotation and (later)
@@ -81,6 +94,7 @@ func _ready() -> void:
 	_rng.seed = random_seed
 
 	var variant: int = _rng.randi_range(0, VARIANT_SHAPE.size() - 1)
+	_variant = variant
 	var shape: Dictionary = VARIANT_SHAPE[variant]
 	var point_count: int = shape.point_count
 	var irregularity: float = shape.irregularity
@@ -153,7 +167,7 @@ func _finish_destruction() -> void:
 	explosion.effect_scale = destruction_explosion_scale
 
 	var salvage: Salvage = salvage_scene.instantiate()
-	salvage.rarity = roll_ore_rarity()
+	salvage.material_id = roll_ore_material()
 	get_tree().current_scene.add_child(salvage)
 	salvage.global_position = global_position
 
@@ -178,8 +192,7 @@ func _spawn_fragments(child_tier: SizeTier) -> void:
 		var fragment: Asteroid = asteroid_scene.instantiate()
 		fragment.size_tier = child_tier
 		fragment.random_seed = _rng.randi_range(1, 1000000)
-		fragment.common_chance = common_chance
-		fragment.electronics_chance = electronics_chance
+		fragment.primary_material_chance = primary_material_chance
 		fragment.split_fragment_count = split_fragment_count
 		fragment.scatter_speed = scatter_speed
 		fragment.scatter_decay = scatter_decay
@@ -189,13 +202,14 @@ func _spawn_fragments(child_tier: SizeTier) -> void:
 		fragment._scatter_velocity = direction * scatter_speed
 
 
-## Public so HardpointGrinder can roll the same ore odds for a mined
-## fragment as a normal kill-drop, instead of duplicating the bands.
-func roll_ore_rarity() -> Salvage.Rarity:
-	var roll: float = randf()
-	if roll < common_chance:
-		return Salvage.Rarity.COMMON
-	elif roll < electronics_chance:
-		return Salvage.Rarity.ELECTRONICS
-	else:
-		return Salvage.Rarity.ENERGY
+## Public so HardpointGrinder can roll the same material odds for a mined
+## fragment as a normal kill-drop, instead of duplicating this logic.
+## primary_material_chance of the time returns this asteroid's own variant
+## primary material; otherwise picks uniformly among the other three, so a
+## rock is never guaranteed pure but is mostly one material.
+func roll_ore_material() -> String:
+	var primary: String = VARIANT_PRIMARY_MATERIAL[_variant]
+	if randf() < primary_material_chance:
+		return primary
+	var alternatives: Array = MaterialCatalog.ALL_IDS.filter(func(id: String) -> bool: return id != primary)
+	return alternatives[randi_range(0, alternatives.size() - 1)]

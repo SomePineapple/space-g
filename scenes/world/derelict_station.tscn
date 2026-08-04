@@ -141,6 +141,8 @@ rarity = 2
 
 [node name="Salvage3" parent="." unique_id=1099634019 instance=ExtResource("7_salvage")]
 position = Vector2(-100, -320)
+kind = 1
+component_id = "metal_sheets"
 
 [node name="Salvage4" parent="." unique_id=955529911 instance=ExtResource("7_salvage")]
 position = Vector2(220, -100)
@@ -148,6 +150,8 @@ rarity = 3
 
 [node name="Salvage5" parent="." unique_id=1444424352 instance=ExtResource("7_salvage")]
 position = Vector2(40, -60)
+kind = 1
+component_id = "motor"
 
 [node name="Salvage6" parent="." unique_id=437294556 instance=ExtResource("7_salvage")]
 position = Vector2(-60, -220)
@@ -160,6 +164,8 @@ rarity = 2
 [node name="Salvage8" parent="." unique_id=220695335 instance=ExtResource("7_salvage")]
 position = Vector2(500, 420)
 rarity = 3
+kind = 1
+component_id = "reinforced_steel"
 
 [node name="Salvage9" parent="." unique_id=1671178981 instance=ExtResource("7_salvage")]
 position = Vector2(80, 580)

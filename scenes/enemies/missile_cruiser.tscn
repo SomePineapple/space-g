@@ -8,6 +8,10 @@
 [node name="MissileCruiser" groups=["enemy_ship", "lockable"] instance=ExtResource("1_ship")]
 ship_layout = ExtResource("3_layout")
 personality = ExtResource("4_personality")
+salvage_drop_count_min = 3
+salvage_drop_count_max = 5
+component_drop_chance = 0.55
+rare_component_chance = 0.45
 
 [node name="AIInput" type="Node" parent="." index="5"]
 script = ExtResource("2_ai")

@@ -10,10 +10,10 @@ extends Resource
 @export var display_name: String = ""
 @export var flavor_text: String = ""
 
-## property_name -> additive delta, applied the same way Ship's weapon/missile
-## upgrade-tree modifiers are (see Ship.apply_weapon_modifier): the target
-## node's existing value for that property is read and the delta added to
-## it, once, at spawn time. Keys are HardpointGun/HardpointMissileLauncher
+## property_name -> additive delta, applied the same way a ModuleInstance's
+## per-instance upgrades are (see Ship._apply_instance_upgrade_modifiers): the
+## target node's existing value for that property is read and the delta added
+## to it, once, at spawn time. Keys are HardpointGun/HardpointMissileLauncher
 ## property names (applied when the placement is a weapon/missile hardpoint)
 ## or ModuleType field names (applied to Reactor/Battery totals inside
 ## ShipLayout, which have no live node to mutate directly).

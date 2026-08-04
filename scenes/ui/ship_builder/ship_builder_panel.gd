@@ -55,11 +55,17 @@ var _stats_label: Label
 var _grid: HexGridControl
 var _palette_container: VBoxContainer
 ## Composite key ("module_type_id" for the generic row, "module_type_id::manufacturer_id"
-## for a manufacturer-flavored row) -> Button.
+## for a manufacturer-flavored row) -> {"select": Button, "build": Button}.
+## Phase 5.2: "select" picks this blueprint for placement (only enabled once
+## owned), "build" spends construction_costs to craft one owned instance —
+## see Inventory.owned_module_key/add_owned_module/take_owned_module.
 var _palette_buttons: Dictionary = {}
 ## module_type_id -> Button, only for ModuleType.requires_research entries
 ## (manufacturer rows never get one — they only appear once already known).
 var _research_buttons: Dictionary = {}
+## module_type_id -> Button, only for ModuleType.is_capturable_tech entries
+## (Phase 5.3 damaged-module repair — see Inventory.repair_module).
+var _repair_buttons: Dictionary = {}
 var _save_name_edit: LineEdit
 var _saved_list: ItemList
 
@@ -232,6 +238,9 @@ func _build_side_panel(panel: Control) -> void:
 	_rebuild_palette()
 	if _inventory != null:
 		_inventory.captured_tech_changed.connect(func(_totals): _refresh_lock_state())
+		_inventory.materials_changed.connect(func(_totals): _refresh_lock_state())
+		_inventory.components_changed.connect(func(_totals): _refresh_lock_state())
+		_inventory.owned_modules_changed.connect(func(_totals): _refresh_lock_state())
 		# A newly discovered manufacturer adds whole new rows (not just a
 		# lock-state change on existing ones), so it needs a full rebuild
 		# rather than _refresh_lock_state()'s in-place text/disabled update.
@@ -279,9 +288,11 @@ func _module_type_takes_manufacturers(module_type: ModuleType) -> bool:
 
 
 ## Composite key for a manufacturer-flavored palette row/button, distinct
-## from the generic row's plain module_type_id key.
+## from the generic row's plain module_type_id key. Delegates to Inventory
+## so the same key format is shared with owned-module tracking (see
+## Inventory.owned_module_key).
 func _palette_key(module_type_id: String, manufacturer_id: String) -> String:
-	return module_type_id if manufacturer_id.is_empty() else "%s::%s" % [module_type_id, manufacturer_id]
+	return Inventory.owned_module_key(module_type_id, manufacturer_id)
 
 
 ## Rebuilds the whole module palette from scratch. Needed (not just a
@@ -292,28 +303,27 @@ func _rebuild_palette() -> void:
 		child.queue_free()
 	_palette_buttons.clear()
 	_research_buttons.clear()
+	_repair_buttons.clear()
 
 	for module_type in ModuleCatalog.get_all():
-		var button := Button.new()
-		button.toggle_mode = true
-		# clip_text excludes the (sometimes long) cost string from the
-		# button's minimum-size calculation; without it a long enough cost
-		# string forces the ScrollContainer wider than SIDE_PANEL_WIDTH
-		# (ScrollContainer expands to fit content when horizontal scrolling
-		# is disabled), pushing the list and its scrollbar out past the
-		# neon-blue background on the right.
-		button.clip_text = true
-		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
-		button.pressed.connect(_on_palette_pressed.bind(module_type.id, ""))
-		_palette_container.add_child(button)
-		_palette_buttons[module_type.id] = button
+		_add_palette_row(module_type.id, "")
 
 		if module_type.requires_research:
 			var research_button := Button.new()
 			research_button.pressed.connect(_on_research_pressed.bind(module_type.id))
 			_palette_container.add_child(research_button)
 			_research_buttons[module_type.id] = research_button
+
+		# Repair (Phase 5.3): converts one damaged/captured part into a
+		# placeable owned instance — orthogonal to Research (which permanently
+		# unlocks a locked type), so any capturable module type gets one,
+		# not just requires_research ones. Hidden entirely until at least one
+		# captured part of this type has ever existed (see _refresh_lock_state).
+		if module_type.is_capturable_tech:
+			var repair_button := Button.new()
+			repair_button.pressed.connect(_on_repair_pressed.bind(module_type.id))
+			_palette_container.add_child(repair_button)
+			_repair_buttons[module_type.id] = repair_button
 
 		# A manufacturer row only makes sense once the base type itself is
 		# actually buildable — an "Atlas Railgun" row before Railgun itself
@@ -325,43 +335,105 @@ func _rebuild_palette() -> void:
 				var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
 				if manufacturer == null:
 					continue
-				var variant_button := Button.new()
-				variant_button.clip_text = true
-				variant_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-				variant_button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
-				variant_button.toggle_mode = true
-				variant_button.text = "%s (%s)\n%s" % [
-					module_type.display_name, manufacturer.display_name, _format_costs(module_type.build_costs),
-				]
-				variant_button.pressed.connect(_on_palette_pressed.bind(module_type.id, manufacturer.id))
-				_palette_container.add_child(variant_button)
-				_palette_buttons[_palette_key(module_type.id, manufacturer.id)] = variant_button
+				_add_palette_row(module_type.id, manufacturer.id)
 
 	_refresh_lock_state()
 
 
-## Shows each palette entry's current lock/researched state — call whenever
-## captured-tech counts change (see _build_side_panel) since that's what
-## Inventory.can_research depends on.
+## One palette row = a Select button (toggle, picks this blueprint for
+## placement — only enabled once at least one instance is owned) plus a
+## Build button (spends ModuleType.build_costs, now interpreted as
+## construction cost, to craft one owned instance — see Inventory.
+## add_owned_module/take_owned_module). Phase 5.2: placement itself is free,
+## everything is paid for up front when built.
+func _add_palette_row(module_type_id: String, manufacturer_id: String) -> void:
+	var row := HBoxContainer.new()
+	row.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
+	row.add_theme_constant_override("separation", 4)
+	_palette_container.add_child(row)
+
+	var select_button := Button.new()
+	select_button.toggle_mode = true
+	# clip_text excludes the (sometimes long) cost string from the button's
+	# minimum-size calculation; without it a long enough cost string forces
+	# the ScrollContainer wider than SIDE_PANEL_WIDTH (ScrollContainer
+	# expands to fit content when horizontal scrolling is disabled), pushing
+	# the list and its scrollbar out past the neon-blue background.
+	select_button.clip_text = true
+	select_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	select_button.custom_minimum_size = Vector2(0, PALETTE_BUTTON_HEIGHT)
+	select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	select_button.pressed.connect(_on_palette_pressed.bind(module_type_id, manufacturer_id))
+	row.add_child(select_button)
+
+	var build_button := Button.new()
+	build_button.text = "Build"
+	build_button.custom_minimum_size = Vector2(50, PALETTE_BUTTON_HEIGHT)
+	build_button.pressed.connect(_on_build_pressed.bind(module_type_id, manufacturer_id))
+	row.add_child(build_button)
+
+	_palette_buttons[_palette_key(module_type_id, manufacturer_id)] = {"select": select_button, "build": build_button}
+
+
+## Shows each palette entry's current lock/researched/owned/affordable state
+## — call whenever captured-tech counts, owned-module counts, or
+## material/component totals change.
 func _refresh_lock_state() -> void:
-	for module_type in ModuleCatalog.get_all():
-		var locked: bool = module_type.requires_research and (_inventory == null or not _inventory.is_researched(module_type.id))
-		var button: Button = _palette_buttons[module_type.id]
-		button.disabled = locked
-		button.text = "%s%s\n%s" % [
+	for key in _palette_buttons:
+		var module_type_id: String = key.split("::")[0]
+		var manufacturer_id: String = key.split("::")[1] if "::" in key else ""
+		var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
+		var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
+
+		var locked: bool = module_type.requires_research and (_inventory == null or not _inventory.is_researched(module_type_id))
+		var owned: int = _inventory.get_owned_module_count(key) if _inventory != null else 0
+		var can_afford: bool = _inventory != null and _inventory.has_items(module_type.build_costs)
+
+		var buttons: Dictionary = _palette_buttons[key]
+		var select_button: Button = buttons["select"]
+		var build_button: Button = buttons["build"]
+
+		select_button.disabled = locked or owned <= 0
+		var display_name: String = "%s (%s)" % [module_type.display_name, manufacturer.display_name] if manufacturer != null else module_type.display_name
+		select_button.text = "%s%s [Owned: %d]\n%s" % [
 			"[LOCKED] " if locked else "",
-			module_type.display_name,
+			display_name,
+			owned,
 			_format_costs(module_type.build_costs),
 		]
 
-		if not _research_buttons.has(module_type.id):
-			continue
-		var research_button: Button = _research_buttons[module_type.id]
-		research_button.visible = locked
-		if locked and _inventory != null:
-			var captured: int = _inventory.get_captured_tech_count(module_type.id)
-			research_button.disabled = not _inventory.can_research(module_type.id)
-			research_button.text = "Research (%d captured)" % captured
+		build_button.disabled = locked or not can_afford
+		build_button.text = "Build"
+
+		if manufacturer_id == "" and _research_buttons.has(module_type_id):
+			var research_button: Button = _research_buttons[module_type_id]
+			research_button.visible = locked
+			if locked and _inventory != null:
+				var captured: int = _inventory.get_captured_tech_count(module_type_id)
+				research_button.disabled = not _inventory.can_research(module_type_id)
+				research_button.text = "Research (%d captured)" % captured
+
+		if manufacturer_id == "" and _repair_buttons.has(module_type_id):
+			var repair_button: Button = _repair_buttons[module_type_id]
+			var captured_count: int = _inventory.get_captured_tech_count(module_type_id) if _inventory != null else 0
+			repair_button.visible = captured_count > 0
+			if captured_count > 0 and _inventory != null:
+				repair_button.disabled = not _inventory.can_repair(module_type_id)
+				repair_button.text = "Repair (%d damaged) needs %s" % [captured_count, _format_costs(_inventory.get_repair_cost(module_type_id))]
+
+
+func _on_repair_pressed(module_type_id: String) -> void:
+	if _inventory == null:
+		return
+
+	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
+	if _inventory.repair_module(module_type_id):
+		_status_label.text = "Repaired %s. Added to owned inventory." % module_type.display_name
+	else:
+		_status_label.text = "Cannot repair %s: need a damaged part and %s." % [
+			module_type.display_name, _format_costs(_inventory.get_repair_cost(module_type_id)),
+		]
+	_refresh_lock_state()
 
 
 func _on_research_pressed(module_type_id: String) -> void:
@@ -383,12 +455,35 @@ func _on_palette_pressed(module_type_id: String, manufacturer_id: String = "") -
 	_grid.selected_placement_id = ""
 	var pressed_key: String = _palette_key(module_type_id, manufacturer_id)
 	for id in _palette_buttons:
-		_palette_buttons[id].button_pressed = (id == pressed_key)
+		_palette_buttons[id]["select"].button_pressed = (id == pressed_key)
 	var type_name: String = ModuleCatalog.get_by_id(module_type_id).display_name
 	var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
 	var placing_name: String = "%s (%s)" % [type_name, manufacturer.display_name] if manufacturer != null else type_name
 	_status_label.text = "Placing: %s (hover the grid, Rotate to orient, click to place)" % placing_name
 	_update_preview()
+
+
+## Spends ModuleType.build_costs (materials and/or crafted components — see
+## Inventory.has_items/spend_items) to craft one owned-but-unplaced instance.
+## Never places anything itself — placement is a separate, free action once
+## owned (see _on_hex_clicked).
+func _on_build_pressed(module_type_id: String, manufacturer_id: String = "") -> void:
+	if _inventory == null:
+		return
+
+	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
+	if module_type.requires_research and not _inventory.is_researched(module_type_id):
+		_status_label.text = "Cannot build %s: research it first." % module_type.display_name
+		_refresh_lock_state()
+		return
+
+	if not _inventory.spend_items(module_type.build_costs):
+		_status_label.text = "Cannot build %s: need %s." % [module_type.display_name, _format_costs(module_type.build_costs)]
+		return
+
+	_inventory.add_owned_module(_palette_key(module_type_id, manufacturer_id))
+	_status_label.text = "Built %s." % module_type.display_name
+	_refresh_lock_state()
 
 
 func _on_hex_hovered(hex_coord: Vector2i) -> void:
@@ -412,7 +507,7 @@ func _update_preview() -> void:
 	if reason == "":
 		reason = working_layout.get_place_rejection_reason(_selected_type_id, _last_hover_hex, _pending_rotation)
 
-	_grid.set_preview(candidate_cells, reason == "")
+	_grid.set_preview(candidate_cells, reason == "", _selected_type_id, _pending_rotation)
 
 	var type_name: String = ModuleCatalog.get_by_id(_selected_type_id).display_name
 	if reason == "":
@@ -427,7 +522,7 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_selected_type_id = ""
 		_selected_manufacturer_id = ""
 		for id in _palette_buttons:
-			_palette_buttons[id].button_pressed = false
+			_palette_buttons[id]["select"].button_pressed = false
 		_grid.clear_preview()
 		_grid.selected_placement_id = existing.placement_id
 		var module_type: ModuleType = ModuleCatalog.get_by_id(existing.module_type_id)
@@ -449,13 +544,14 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		return
 
 	var type_to_place: ModuleType = ModuleCatalog.get_by_id(_selected_type_id)
-	if _inventory != null and not _inventory.has_materials(type_to_place.build_costs):
-		_status_label.text = "Cannot place %s: need %s" % [type_to_place.display_name, _format_costs(type_to_place.build_costs)]
+	var owned_key: String = _palette_key(_selected_type_id, _selected_manufacturer_id)
+	if _inventory != null and _inventory.get_owned_module_count(owned_key) <= 0:
+		_status_label.text = "Cannot place %s: you don't own one. Build it first." % type_to_place.display_name
 		return
 
-	working_layout.place(_selected_type_id, hex_coord, _pending_rotation, _selected_manufacturer_id)
-	if _inventory != null:
-		_inventory.spend_materials(type_to_place.build_costs)
+	var placed: ModulePlacement = working_layout.place(_selected_type_id, hex_coord, _pending_rotation, _selected_manufacturer_id)
+	if _inventory != null and placed != null:
+		placed.instance = _inventory.take_owned_module(owned_key)
 	_status_label.text = "Placed %s." % type_to_place.display_name
 	_pending_rotation = 0
 	_refresh()
@@ -525,12 +621,17 @@ func _on_remove_pressed() -> void:
 	working_layout.remove(_grid.selected_placement_id)
 	_grid.selected_placement_id = ""
 
+	# Phase 5.2: removal returns the built instance itself to owned stock, not
+	# raw materials/components — it was already a finished module, not
+	# something to be melted back down. Phase 8.1: it's the *same* instance,
+	# so any upgrades already unlocked on it are preserved, not lost.
 	if _inventory != null:
-		for material_id in removed_type.build_costs:
-			_inventory.add_material(material_id, removed_type.build_costs[material_id])
-		_status_label.text = "Removed. Refunded %s." % _format_costs(removed_type.build_costs)
+		var key: String = _palette_key(removed_placement.module_type_id, removed_placement.manufacturer_id)
+		_inventory.return_owned_module(key, removed_placement.ensure_instance())
+		_status_label.text = "Removed %s. Returned to inventory." % removed_type.display_name
 	else:
 		_status_label.text = "Removed."
+	_refresh_lock_state()
 	_refresh()
 
 
@@ -558,10 +659,14 @@ func _refresh() -> void:
 		cargo_used, cargo_capacity]
 
 
+## Costs can mix material_id and component_id keys (see Phase 5.2 module
+## construction costs, e.g. Hull) — resolve each id's display name from
+## whichever catalog actually owns it.
 func _format_costs(costs: Dictionary) -> String:
 	var parts: Array = []
-	for material_id in costs:
-		parts.append("%d %s" % [costs[material_id], Materials.display_name(material_id)])
+	for id in costs:
+		var item_name: String = ComponentCatalog.display_name(id) if ComponentCatalog.get_by_id(id) != null else MaterialCatalog.display_name(id)
+		parts.append("%d %s" % [costs[id], item_name])
 	return ", ".join(parts)
 
 

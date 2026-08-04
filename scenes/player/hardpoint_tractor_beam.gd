@@ -11,6 +11,11 @@ extends Node2D
 ## _active_target var and its one beam visual. The target leaving range,
 ## losing line of sight, or the ship running out of energy all end the pull
 ## safely; the beam visual only shows while a target is actually being pulled.
+## Pulls all the way in to this hardpoint's own Muzzle and collects there
+## (see _pull_target) — not to the ship's hull in general — so a beamed item
+## is visibly drawn to the module doing the pulling, distinct from a loose
+## item just drifting onto the hull (which instead has to reach the Command
+## Core itself — see Salvage._is_near_core/Ship.get_core_global_position).
 
 @export var max_range: float = 250.0
 @export var pull_speed: float = 300.0
@@ -30,6 +35,10 @@ extends Node2D
 ## it has no Area2D/collision of its own (unlike Salvage, which picks itself
 ## up via body_entered), so the beam has to do this check itself.
 @export var tech_part_collect_radius: float = 20.0
+## How close a pulled Salvage needs to get to the beam's own Muzzle to count
+## as collected — items are drawn all the way in to the beam itself, not
+## just to wherever the ship's hull happens to be (see _pull_target).
+@export var salvage_collect_radius: float = 20.0
 
 ## Which ModulePlacement (on the shooter's ShipLayout) this hardpoint was
 ## spawned from — set by Ship right after instancing, same convention as
@@ -131,6 +140,12 @@ func _find_nearest_valid_target() -> Node2D:
 	return best
 
 
+## Pulls the active target all the way in to this hardpoint's own Muzzle —
+## not just to wherever the ship's hull happens to be — and collects it once
+## it actually arrives there. A collection failure (e.g. full cargo, see
+## Salvage.collect_for) does not release the target: it stays held at the
+## Muzzle and retries every frame until capacity frees up, out of range, or
+## out of energy — same "hold and retry" shape as a real tractor beam.
 func _pull_target(delta: float) -> void:
 	if not _shooter.spend_energy(energy_cost_per_second * delta):
 		# Out of energy just drops the target from the beam (same as being out
@@ -142,12 +157,17 @@ func _pull_target(delta: float) -> void:
 		var salvage: Salvage = _active_target
 		# Heavier (rarer) salvage resists the beam and reels in slower, so it
 		# physically feels heavier rather than just being worth more.
-		salvage.pull_toward(_shooter.global_position, pull_speed * salvage.pull_resistance, delta)
+		salvage.pull_toward(_muzzle.global_position, pull_speed * salvage.pull_resistance, delta)
+		if _muzzle.global_position.distance_to(salvage.global_position) <= salvage_collect_radius:
+			if salvage.collect_for(_shooter):
+				_active_target = null
+				_set_beam_visible(false)
+				return
 	elif _active_target is CapturedTechPart:
 		var part: CapturedTechPart = _active_target
 		part.begin_reel_in()
-		part.global_position = part.global_position.move_toward(_shooter.global_position, tech_part_pull_speed * delta)
-		if part.global_position.distance_to(_shooter.global_position) <= tech_part_collect_radius:
+		part.global_position = part.global_position.move_toward(_muzzle.global_position, tech_part_pull_speed * delta)
+		if part.global_position.distance_to(_muzzle.global_position) <= tech_part_collect_radius:
 			_shooter.capture_tech_part(part.module_type_id, part.manufacturer_id)
 			part.collect()
 			_active_target = null

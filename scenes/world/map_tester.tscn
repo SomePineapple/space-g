@@ -7,7 +7,6 @@
 [ext_resource type="Script" uid="uid://cs8kwphh2annm" path="res://scenes/player/ship_input.gd" id="4_ppnaw"]
 [ext_resource type="Script" uid="uid://8u7j81y053pb" path="res://scenes/player/camera_shake.gd" id="5_fqjfb"]
 [ext_resource type="PackedScene" uid="uid://b1u7j380lkpgc" path="res://scenes/ui/hud.tscn" id="8_0o3hu"]
-[ext_resource type="PackedScene" uid="uid://b5udl06fbo3cy" path="res://scenes/ui/upgrade_panel.tscn" id="9_gc6po"]
 [ext_resource type="PackedScene" uid="uid://c8k2f6qh1w3xa" path="res://scenes/ui/ship_builder/ship_builder_panel.tscn" id="10_ja1me"]
 [ext_resource type="Script" uid="uid://bl25agppsdxej" path="res://scenes/world/enemy_spawner.gd" id="10_ojmk8"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/pirate_light_one.tscn" id="12_pirate_light"]
@@ -24,6 +23,8 @@
 [ext_resource type="Resource" path="res://resources/regions/small_asteroid_cluster.tres" id="25_small_cluster"]
 [ext_resource type="Resource" path="res://resources/regions/dense_dangerous_belt.tres" id="26_dense_belt"]
 [ext_resource type="PackedScene" path="res://scenes/ui/cargo_panel.tscn" id="27_cargo_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/crafting_panel.tscn" id="28_crafting_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/upgrade_menu.tscn" id="29_upgrade_menu"]
 [ext_resource type="Script" uid="uid://dxxtjrpwee6is" path="res://scripts/world/poi_camp.gd" id="27_poi_camp"]
 [ext_resource type="PackedScene" path="res://scenes/world/distress_signal.tscn" id="28_distress_signal"]
 [ext_resource type="PackedScene" path="res://scenes/world/abandoned_ship.tscn" id="29_abandoned_ship"]
@@ -191,13 +192,15 @@ environment = SubResource("Environment_u02ng")
 
 [node name="StationPrompt" parent="." unique_id=151776347 instance=ExtResource("18_station_prompt")]
 
-[node name="UpgradePanel" parent="." unique_id=1122649445 instance=ExtResource("9_gc6po")]
-
 [node name="ShipBuilderPanel" parent="." unique_id=-523937815 instance=ExtResource("10_ja1me")]
 
 [node name="TradePanel" parent="." unique_id=1917666629 instance=ExtResource("16_trade_panel")]
 
 [node name="CargoPanel" parent="." unique_id=55175682 instance=ExtResource("27_cargo_panel")]
+
+[node name="CraftingPanel" parent="." instance=ExtResource("28_crafting_panel")]
+
+[node name="UpgradeMenu" parent="." instance=ExtResource("29_upgrade_menu")]
 
 [node name="EnemySpawner" type="Node" parent="." unique_id=968011639]
 script = ExtResource("10_ojmk8")

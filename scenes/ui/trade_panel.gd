@@ -10,9 +10,9 @@ const ROW_GAP: float = 6.0
 const BACKGROUND_MARGIN: float = 10.0
 const BACKGROUND_COLOR: Color = Color(0.05, 0.07, 0.1, 0.55)
 
-const TRADEABLE_MATERIAL_IDS: Array[String] = [
-	Materials.STEEL_ALLOY, Materials.ELECTRONICS, Materials.REACTOR_COMPONENTS,
-]
+## Every raw material is tradeable — pulled from the catalog so a future
+## fifth material shows up here automatically (see MaterialCatalog.ALL_IDS).
+static var TRADEABLE_MATERIAL_IDS: Array[String] = MaterialCatalog.ALL_IDS
 
 ## Only lets the trade panel open near the region's home base marker,
 ## matching the ship builder's and upgrade panel's gating.
@@ -138,7 +138,7 @@ func _on_repair_pressed() -> void:
 
 
 func _on_buy_pressed(material_id: String) -> void:
-	var cost: int = Materials.buy_price(material_id) * TRADE_QUANTITY
+	var cost: int = MaterialCatalog.buy_price(material_id) * TRADE_QUANTITY
 	if not _inventory.spend_credits(cost):
 		return
 	_inventory.add_material(material_id, TRADE_QUANTITY)
@@ -147,7 +147,7 @@ func _on_buy_pressed(material_id: String) -> void:
 func _on_sell_pressed(material_id: String) -> void:
 	if not _inventory.spend_materials({material_id: TRADE_QUANTITY}):
 		return
-	_inventory.add_credits(Materials.sell_price(material_id) * TRADE_QUANTITY)
+	_inventory.add_credits(MaterialCatalog.sell_price(material_id) * TRADE_QUANTITY)
 
 
 func _on_state_changed(_value) -> void:
@@ -176,10 +176,10 @@ func _refresh() -> void:
 	for material_id in TRADEABLE_MATERIAL_IDS:
 		var row: Dictionary = _rows[material_id]
 		var owned: int = _inventory.get_material_amount(material_id)
-		var buy_cost: int = Materials.buy_price(material_id) * TRADE_QUANTITY
-		var sell_gain: int = Materials.sell_price(material_id) * TRADE_QUANTITY
+		var buy_cost: int = MaterialCatalog.buy_price(material_id) * TRADE_QUANTITY
+		var sell_gain: int = MaterialCatalog.sell_price(material_id) * TRADE_QUANTITY
 
-		row["name"].text = "%s: %d" % [Materials.display_name(material_id), owned]
+		row["name"].text = "%s: %d" % [MaterialCatalog.display_name(material_id), owned]
 		row["buy"].text = "Buy %d (%d cr)" % [TRADE_QUANTITY, buy_cost]
 		row["buy"].disabled = not _inventory.has_credits(buy_cost)
 		row["sell"].text = "Sell %d (+%d cr)" % [TRADE_QUANTITY, sell_gain]

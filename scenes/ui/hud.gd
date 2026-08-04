@@ -59,9 +59,9 @@ func _update_credits_label(amount: int) -> void:
 
 func _update_salvage_label(totals: Dictionary) -> void:
 	var parts: Array = []
-	for material_id in [Materials.STEEL_ALLOY, Materials.ELECTRONICS, Materials.REACTOR_COMPONENTS]:
+	for material_id in MaterialCatalog.ALL_IDS:
 		var amount: int = totals.get(material_id, 0)
-		parts.append("%s: %d" % [Materials.display_name(material_id), amount])
+		parts.append("%s: %d" % [MaterialCatalog.display_name(material_id), amount])
 	parts.append("Cargo: %d/%.0f" % [_inventory.get_cargo_used(), _inventory.get_cargo_capacity()])
 	_salvage_label.text = "  |  ".join(parts)
 

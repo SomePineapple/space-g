@@ -8,6 +8,8 @@
 [node name="PirateMedOne" groups=["enemy_ship", "lockable"] instance=ExtResource("1_ship")]
 ship_layout = ExtResource("3_layout")
 personality = ExtResource("4_personality")
+component_drop_chance = 0.3
+rare_component_chance = 0.25
 
 [node name="AIInput" type="Node" parent="." index="5"]
 script = ExtResource("2_ai")

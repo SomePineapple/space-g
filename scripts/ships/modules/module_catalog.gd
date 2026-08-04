@@ -49,7 +49,7 @@ static func get_all() -> Array[ModuleType]:
 	# than one of the flimsiest — a heavy weapon shouldn't be able to end a
 	# fight in one lucky hit to the cockpit.
 	var core_type: ModuleType = _make(CORE_TYPE_ID, "Command Core", Color(0.9, 0.85, 0.2), SINGLE_CELL, 0.4, 140.0, 0.0, COCKPIT_TEXTURE,
-		"", 1, {Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 20})
+		"", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20})
 	core_type.faction_hex_textures = FactionArtImporter.load_faction_textures("command_core")
 	types.append(core_type)
 
@@ -57,13 +57,19 @@ static func get_all() -> Array[ModuleType]:
 	# from nearby hits, see Ship.module_splash_fraction), but not so fragile
 	# that whatever's behind sturdier armor is exposed within a few seconds
 	# of sustained close-range fire.
+	# Phase 5.2 example cost: built from crafted components rather than raw
+	# Iron directly, once ComponentCatalog/CraftingCatalog exist to produce
+	# them (build_costs is spent when the module is *built*, not placed —
+	# see ShipBuilderPanel._on_build_pressed).
 	var hull_type: ModuleType = _make("hull", "Hull", Color(0.5, 0.55, 0.6), SINGLE_CELL, 0.3, 50.0, 0.0, HULL_TEXTURE,
-		"", 1, {Materials.STEEL_ALLOY: 5})
+		"", 1, {ComponentCatalog.METAL_SHEETS: 2, ComponentCatalog.REINFORCED_STEEL: 1})
 	hull_type.faction_hex_textures = FactionArtImporter.load_faction_textures("hull_mk1")
 	types.append(hull_type)
 
+	# Phase 5.2 example cost ("Thruster" in the spec) — Metal Sheets for the
+	# housing, Wiring + a crafted Motor for the actual drive.
 	var engine_type: ModuleType = _make("engine", "Engine", Color(0.3, 0.7, 1.0), SINGLE_CELL, 0.25, 20.0, 500.0, null,
-		"", 1, {Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 5})
+		"", 1, {ComponentCatalog.METAL_SHEETS: 1, ComponentCatalog.WIRING: 2, ComponentCatalog.MOTOR: 1})
 	engine_type.faction_hex_textures = FactionArtImporter.load_faction_textures("engine_mk1")
 	engine_type.is_capturable_tech = true
 	types.append(engine_type)
@@ -72,7 +78,7 @@ static func get_all() -> Array[ModuleType]:
 	# close-range fire can't punch through to whatever it's shielding within
 	# a few seconds, even from several guns at once.
 	var heavy_hull_type: ModuleType = _make("heavy_hull", "Heavy Hull", Color(0.45, 0.3, 0.55), LINE_3_CELLS, 0.9, 240.0, 0.0, null,
-		"", 1, {Materials.STEEL_ALLOY: 20})
+		"", 1, {MaterialCatalog.IRON: 20})
 	heavy_hull_type.faction_hex_textures = FactionArtImporter.load_faction_textures("armour_module")
 	types.append(heavy_hull_type)
 
@@ -82,7 +88,7 @@ static func get_all() -> Array[ModuleType]:
 	# Ancient has no strut art yet — falls back to a flat tinted hex for that
 	# faction only (see ShipLayoutRenderer/HexGridControl).
 	var strut_type: ModuleType = _make("strut", "Strut", Color(0.55, 0.58, 0.5), SINGLE_CELL, 0.15, 25.0, 0.0, null,
-		"", 1, {Materials.STEEL_ALLOY: 3})
+		"", 1, {MaterialCatalog.IRON: 3})
 	strut_type.faction_hex_textures = FactionArtImporter.load_faction_textures("strut")
 	types.append(strut_type)
 
@@ -117,14 +123,14 @@ static func get_all() -> Array[ModuleType]:
 	var turret_t3_textures: Dictionary = FactionArtImporter.load_faction_textures("turret_360_mk3")
 
 	var weapon_t1: ModuleType = _make(WEAPON_HARDPOINT_TYPE_ID, "Weapon Hardpoint I", Color(0.9, 0.35, 0.3), SINGLE_CELL,
-		0.2, 15.0, 0.0, null, "weapon", 1, {Materials.STEEL_ALLOY: 8, Materials.ELECTRONICS: 4})
+		0.2, 15.0, 0.0, null, "weapon", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 4})
 	weapon_t1.faction_hex_textures = laser_t1_fallback
 	weapon_t1.faction_hex_textures_per_cell = laser_t1_per_cell
 	weapon_t1.faction_hex_overlay_textures = turret_t1_textures
 	weapon_t1.is_capturable_tech = true
 	types.append(weapon_t1)
 	var weapon_t2: ModuleType = _make("weapon_hardpoint_t2", "Weapon Hardpoint II", Color(0.8, 0.25, 0.2), LINE_2_CELLS,
-		0.5, 35.0, 0.0, null, "weapon", 2, {Materials.STEEL_ALLOY: 18, Materials.ELECTRONICS: 10})
+		0.5, 35.0, 0.0, null, "weapon", 2, {MaterialCatalog.IRON: 18, MaterialCatalog.COPPER: 10})
 	weapon_t2.faction_hex_textures = laser_t2_fallback
 	weapon_t2.faction_hex_textures_per_cell = laser_t2_per_cell
 	weapon_t2.faction_hex_overlay_textures = turret_t2_textures
@@ -132,7 +138,7 @@ static func get_all() -> Array[ModuleType]:
 	types.append(weapon_t2)
 	var weapon_t3: ModuleType = _make("weapon_hardpoint_t3", "Weapon Hardpoint III", Color(0.65, 0.15, 0.1), TRIANGLE_3_CELLS,
 		0.9, 60.0, 0.0, null, "weapon", 3,
-		{Materials.STEEL_ALLOY: 32, Materials.ELECTRONICS: 20, Materials.REACTOR_COMPONENTS: 5})
+		{MaterialCatalog.IRON: 32, MaterialCatalog.COPPER: 20, MaterialCatalog.TITANIUM: 5})
 	weapon_t3.faction_hex_textures = laser_t3_fallback
 	weapon_t3.faction_hex_textures_per_cell = laser_t3_per_cell
 	weapon_t3.faction_hex_overlay_textures = turret_t3_textures
@@ -142,25 +148,25 @@ static func get_all() -> Array[ModuleType]:
 	# Same reuse-across-tiers reasoning as the laser cannon above.
 	var missile_textures: Dictionary = FactionArtImporter.load_faction_textures("missile_launcher_mk1")
 	var missile_t1: ModuleType = _make(MISSILE_HARDPOINT_TYPE_ID, "Missile Rack I", Color(1.0, 0.6, 0.15), SINGLE_CELL,
-		0.3, 20.0, 0.0, MISSILE_HARDPOINT_TEXTURE, "missile", 1, {Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 8})
+		0.3, 20.0, 0.0, MISSILE_HARDPOINT_TEXTURE, "missile", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 8})
 	missile_t1.faction_hex_textures = missile_textures
 	missile_t1.is_capturable_tech = true
 	types.append(missile_t1)
 	var missile_t2: ModuleType = _make("missile_hardpoint_t2", "Missile Rack II", Color(0.9, 0.5, 0.1), LINE_2_CELLS,
-		0.7, 45.0, 0.0, null, "missile", 2, {Materials.STEEL_ALLOY: 22, Materials.ELECTRONICS: 16})
+		0.7, 45.0, 0.0, null, "missile", 2, {MaterialCatalog.IRON: 22, MaterialCatalog.COPPER: 16})
 	missile_t2.faction_hex_textures = missile_textures
 	missile_t2.is_capturable_tech = true
 	types.append(missile_t2)
 	var missile_t3: ModuleType = _make("missile_hardpoint_t3", "Missile Rack III", Color(0.75, 0.4, 0.05), LINE_3_CELLS,
 		1.2, 75.0, 0.0, null, "missile", 3,
-		{Materials.STEEL_ALLOY: 38, Materials.ELECTRONICS: 26, Materials.REACTOR_COMPONENTS: 10})
+		{MaterialCatalog.IRON: 38, MaterialCatalog.COPPER: 26, MaterialCatalog.NICKEL: 10})
 	missile_t3.faction_hex_textures = missile_textures
 	missile_t3.is_capturable_tech = true
 	types.append(missile_t3)
 
 	var reactor_type: ModuleType = _make("reactor_mk1", "Reactor Mk1", Color(1.0, 0.75, 0.2), SINGLE_CELL,
 		0.35, 25.0, 0.0, null, "", 1,
-		{Materials.STEEL_ALLOY: 15, Materials.ELECTRONICS: 15, Materials.REACTOR_COMPONENTS: 10},
+		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 15, MaterialCatalog.NICKEL: 10},
 		15.0, 0.0)
 	reactor_type.faction_hex_textures = FactionArtImporter.load_faction_textures("reactor_mk1")
 	reactor_type.is_capturable_tech = true
@@ -168,7 +174,7 @@ static func get_all() -> Array[ModuleType]:
 
 	var battery_type: ModuleType = _make("battery_mk1", "Battery Mk1", Color(0.85, 0.75, 0.95), SINGLE_CELL,
 		0.3, 20.0, 0.0, null, "", 1,
-		{Materials.STEEL_ALLOY: 10, Materials.ELECTRONICS: 20},
+		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20},
 		0.0, 80.0)
 	battery_type.faction_hex_textures = FactionArtImporter.load_faction_textures("battery_mk1")
 	battery_type.is_capturable_tech = true
@@ -180,9 +186,11 @@ static func get_all() -> Array[ModuleType]:
 	# it just raises the cap Inventory.try_add_material() checks. No
 	# dedicated art yet — a generic flat-tinted hex, same approach as Strut.
 	# Brown/tan to stay distinct from every other module's color.
+	# Phase 5.2 example cost — Metal Sheets for the walls, Canisters for the
+	# actual holding cells.
 	var storage_type: ModuleType = _make("storage_mk1", "Cargo Container", Color(0.6, 0.45, 0.3), SINGLE_CELL,
 		0.4, 30.0, 0.0, null, "", 1,
-		{Materials.STEEL_ALLOY: 8},
+		{ComponentCatalog.METAL_SHEETS: 2, ComponentCatalog.CANISTER: 3},
 		0.0, 0.0, null, false, 0.5, 0.35, 60.0)
 	types.append(storage_type)
 
@@ -191,7 +199,7 @@ static func get_all() -> Array[ModuleType]:
 	# withstand its own recoil (see HardpointRailgun).
 	var railgun_type: ModuleType = _make(RAILGUN_HARDPOINT_TYPE_ID, "Railgun", Color(0.8, 0.85, 0.92), LINE_2_CELLS,
 		0.7, 40.0, 0.0, null, "weapon", 1,
-		{Materials.STEEL_ALLOY: 25, Materials.ELECTRONICS: 10, Materials.REACTOR_COMPONENTS: 8},
+		{MaterialCatalog.IRON: 25, MaterialCatalog.COPPER: 10, MaterialCatalog.TITANIUM: 8},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_railgun.tscn"))
 	railgun_type.is_capturable_tech = true
 	railgun_type.requires_research = true
@@ -201,7 +209,7 @@ static func get_all() -> Array[ModuleType]:
 	# than the industrial Railgun — it's exotic technology, not armor plate.
 	var phase_lance_type: ModuleType = _make(PHASE_LANCE_HARDPOINT_TYPE_ID, "Phase Lance", Color(0.35, 0.2, 0.45), SINGLE_CELL,
 		0.25, 30.0, 0.0, null, "weapon", 1,
-		{Materials.ELECTRONICS: 20, Materials.REACTOR_COMPONENTS: 18},
+		{MaterialCatalog.COPPER: 20, MaterialCatalog.TITANIUM: 18},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_phase_lance.tscn"))
 	phase_lance_type.is_capturable_tech = true
 	phase_lance_type.requires_research = true
@@ -210,7 +218,7 @@ static func get_all() -> Array[ModuleType]:
 	# Tractor beam hardpoint (see HardpointTractorBeam/Ship._spawn_hardpoint_tractor_beams).
 	# No dedicated art yet — a generic flat-tinted hex, same approach as Strut.
 	var tractor_type: ModuleType = _make(TRACTOR_HARDPOINT_TYPE_ID, "Tractor Beam", Color(0.4, 0.75, 0.85), SINGLE_CELL,
-		0.2, 30.0, 0.0, null, "tractor", 1, {Materials.STEEL_ALLOY: 8, Materials.ELECTRONICS: 8})
+		0.2, 30.0, 0.0, null, "tractor", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 8})
 	types.append(tractor_type)
 
 	# Radar hardpoint (see RadarDisplay.has_radar/Ship.has_radar) — a pure
@@ -223,29 +231,34 @@ static func get_all() -> Array[ModuleType]:
 	# distinct at a glance from Engine and the Tractor Beam hardpoint, which
 	# sat right next to it in the same blue family.
 	var radar_type: ModuleType = _make(RADAR_HARDPOINT_TYPE_ID, "Radar", Color(0.3, 1.0, 0.55), SINGLE_CELL,
-		0.2, 25.0, 0.0, null, "radar", 1, {Materials.STEEL_ALLOY: 6, Materials.ELECTRONICS: 10})
+		0.2, 25.0, 0.0, null, "radar", 1, {MaterialCatalog.IRON: 6, MaterialCatalog.COPPER: 10})
 	types.append(radar_type)
 
 	# Scanner hardpoint (see Scanner.has_scanner/Ship.has_scanner) — same
 	# "pure capability flag" shape as Radar: the pulse originates from the
 	# ship's own position, not a per-hex muzzle, so no spawned node or fixed
 	# facing is needed. No dedicated art yet — a generic flat-tinted hex.
+	# Phase 5.2 example cost — Circuit Board for the sensor electronics,
+	# Wiring, and raw Glass as the "suitable transparent... component" the
+	# spec calls for (no dedicated lens/sensor component exists yet — see
+	# CraftingCatalog, don't invent a seventh component for one line item).
 	var scanner_type: ModuleType = _make(SCANNER_HARDPOINT_TYPE_ID, "Scanner", Color(0.9, 0.35, 0.75), SINGLE_CELL,
-		0.2, 25.0, 0.0, null, "scanner", 1, {Materials.STEEL_ALLOY: 6, Materials.ELECTRONICS: 12})
+		0.2, 25.0, 0.0, null, "scanner", 1,
+		{ComponentCatalog.CIRCUIT_BOARD: 1, ComponentCatalog.WIRING: 1, MaterialCatalog.GLASS: 2})
 	types.append(scanner_type)
 
 	# Mining Grinder hardpoint (see HardpointGrinder/Ship._spawn_hardpoint_
-	# grinders) — a 2-hex line, like Railgun/Weapon Hardpoint II, so it has a
-	# distinct anchor (back) cell and front cell; the front cell (offset
-	# (1,0), rotated with the placement) is the actual contact/grind point.
+	# grinders) — a single hex; the mining/contact side is whichever direction
+	# the placement is rotated to face (HardpointGrinder.set_cell_size reaches
+	# the muzzle out from that one hex's centre toward its facing edge).
 	# Toggled on/off by the player (Ship.toggle_grinder, "G") rather than
 	# always-on like the Tractor Beam, since it deals continuous damage and
 	# should require deliberate activation. No dedicated art yet — a generic
 	# flat-tinted hex. Lime-green to stay distinct from every warm-toned
 	# module (Weapon/Missile/Reactor/Storage) and from Radar's pure green.
-	var grinder_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Mining Grinder", Color(0.65, 0.85, 0.15), LINE_2_CELLS,
+	var grinder_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Mining Grinder", Color(0.65, 0.85, 0.15), SINGLE_CELL,
 		0.5, 30.0, 0.0, null, "grinder", 1,
-		{Materials.STEEL_ALLOY: 15, Materials.ELECTRONICS: 6},
+		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 6},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_grinder.tscn"))
 	types.append(grinder_type)
 
@@ -256,7 +269,7 @@ static func get_all() -> Array[ModuleType]:
 	# supporting code/scenes/input action are still in place to pick back up.
 	# types.append(_make(WINCH_HARDPOINT_TYPE_ID, "Winch", Color(0.6, 0.55, 0.4), SINGLE_CELL,
 	# 	0.3, 20.0, 0.0, null, "winch", 1,
-	# 	{Materials.STEEL_ALLOY: 12, Materials.ELECTRONICS: 6},
+	# 	{MaterialCatalog.IRON: 12, MaterialCatalog.COPPER: 6},
 	# 	0.0, 0.0, preload("res://scenes/player/hardpoint_winch.tscn")))
 
 	_cached_types = types

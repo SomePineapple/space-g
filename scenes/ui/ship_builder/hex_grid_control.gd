@@ -20,6 +20,8 @@ var selected_placement_id: String = ""
 var _center: Vector2
 var _preview_cells: Array[Vector2i] = []
 var _preview_valid: bool = true
+var _preview_module_type_id: String = ""
+var _preview_rotation_steps: int = 0
 
 
 func _ready() -> void:
@@ -67,12 +69,13 @@ func _draw() -> void:
 			# It cannot be made to exactly track the real hex-neighbor
 			# direction: HexUtils.rotate(Vector2i(1, 0), rotation_steps) only
 			# ever lands on 60°*rotation_steps (0/60/120/180/240/300 — verified
-			# live against a Mining Grinder's actual second/front hex), and
+			# live against a Railgun's actual second/front hex), and
 			# none of those six angles is exactly "up" (-90°/270°). So this is
 			# a smooth, UX-only preview arrow, not a literal pointer at the
 			# real occupied front cell — for a multi-hex module (e.g. the
-			# Mining Grinder), the module's own second hex tile IS that real
-			# direction; for a single-hex fixed-facing hardpoint, the real
+			# Railgun), the module's own second hex tile IS that real
+			# direction; for a single-hex fixed-facing hardpoint (e.g. the
+			# Mining Grinder, or any Weapon Hardpoint), the real
 			# in-flight direction is 60°*rotation_steps + Ship._hull_renderer.
 			# rotation (see docs/gotchas.md's "+90° fixed offset" entry) —
 			# expect it to look diagonal in-flight even when this arrow points
@@ -133,12 +136,23 @@ func _draw_preview() -> void:
 	if _preview_cells.is_empty():
 		return
 
-	var overlay_color: Color = Color(0.3, 1.0, 0.4, 0.45) if _preview_valid else Color(1.0, 0.3, 0.3, 0.45)
-	for cell in _preview_cells:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(_preview_module_type_id)
+	var tint_color: Color = Color(0.3, 1.0, 0.4, 0.35) if _preview_valid else Color(1.0, 0.3, 0.3, 0.35)
+	var outline_color: Color = tint_color.lightened(0.3)
+	outline_color.a = 0.9
+
+	for i in _preview_cells.size():
+		var cell: Vector2i = _preview_cells[i]
 		var corners: PackedVector2Array = _hex_corners(_axial_to_pixel(cell))
-		draw_colored_polygon(corners, overlay_color)
-		for i in corners.size():
-			draw_line(corners[i], corners[(i + 1) % corners.size()], overlay_color.lightened(0.3), 2.0)
+		var hex_texture: Texture2D = module_type.get_hex_texture_for_cell(faction_id, i) if module_type != null else null
+		if hex_texture != null:
+			var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(_preview_rotation_steps)
+			draw_colored_polygon(corners, Color.WHITE, uvs, hex_texture)
+		elif module_type != null:
+			draw_colored_polygon(corners, module_type.color)
+		draw_colored_polygon(corners, tint_color)
+		for j in corners.size():
+			draw_line(corners[j], corners[(j + 1) % corners.size()], outline_color, 2.0)
 
 
 ## hex_coord -> [ModulePlacement, cell_index], cell_index being this cell's
@@ -174,14 +188,17 @@ func _notification(what: int) -> void:
 		hover_exited.emit()
 
 
-func set_preview(cells: Array[Vector2i], valid: bool) -> void:
+func set_preview(cells: Array[Vector2i], valid: bool, module_type_id: String = "", rotation_steps: int = 0) -> void:
 	_preview_cells = cells
 	_preview_valid = valid
+	_preview_module_type_id = module_type_id
+	_preview_rotation_steps = rotation_steps
 	queue_redraw()
 
 
 func clear_preview() -> void:
 	_preview_cells = []
+	_preview_module_type_id = ""
 	queue_redraw()
 
 

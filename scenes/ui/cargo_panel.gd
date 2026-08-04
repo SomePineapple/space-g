@@ -16,9 +16,9 @@ const ROW_GAP: float = 6.0
 const BACKGROUND_MARGIN: float = 10.0
 const BACKGROUND_COLOR: Color = Color(0.05, 0.07, 0.1, 0.55)
 
-const CARGO_MATERIAL_IDS: Array[String] = [
-	Materials.STEEL_ALLOY, Materials.ELECTRONICS, Materials.REACTOR_COMPONENTS,
-]
+## Pulled from the catalog so a future fifth material shows up here
+## automatically (see MaterialCatalog.ALL_IDS).
+static var CARGO_MATERIAL_IDS: Array[String] = MaterialCatalog.ALL_IDS
 
 var _inventory: Inventory
 var _capacity_label: Label
@@ -126,7 +126,7 @@ func _refresh() -> void:
 	for material_id in CARGO_MATERIAL_IDS:
 		var row: Dictionary = _rows[material_id]
 		var owned: int = _inventory.get_material_amount(material_id)
-		row["name"].text = "%s: %d" % [Materials.display_name(material_id), owned]
+		row["name"].text = "%s: %d" % [MaterialCatalog.display_name(material_id), owned]
 		row["discard"].text = "Discard %d" % DISCARD_QUANTITY
 		row["discard"].disabled = owned <= 0
 		row["discard_all"].disabled = owned <= 0
