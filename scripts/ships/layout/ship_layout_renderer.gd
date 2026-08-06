@@ -21,7 +21,7 @@ const DESTROYED_COLOR: Color = Color(0.12, 0.1, 0.1, 1.0)
 var _destroyed_placement_ids: Dictionary = {}
 
 ## placement_id -> true. A detached module (severed from the core's
-## connectivity graph — see Ship._detach_module) is no longer drawn here at
+## connectivity graph — see HullDamageModel._detach_module) is no longer drawn here at
 ## all, since a separate ShipDebris node now renders it drifting away.
 var _detached_placement_ids: Dictionary = {}
 

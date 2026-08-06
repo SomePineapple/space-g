@@ -647,8 +647,8 @@ func _current_cargo_capacity() -> float:
 func _refresh() -> void:
 	_grid.refresh()
 
-	var base_generation: float = _player_ship.base_energy_generation if _player_ship != null else 0.0
-	var base_capacity: float = _player_ship.base_energy_capacity if _player_ship != null else 0.0
+	var base_generation: float = _player_ship.get_base_energy_generation() if _player_ship != null else 0.0
+	var base_capacity: float = _player_ship.get_base_energy_capacity() if _player_ship != null else 0.0
 	var energy_generation: float = base_generation + working_layout.total_energy_generation()
 	var energy_capacity: float = base_capacity + working_layout.total_energy_capacity()
 	var cargo_capacity: float = _current_cargo_capacity()

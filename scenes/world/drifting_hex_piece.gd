@@ -2,7 +2,7 @@ class_name DriftingHexPiece
 extends Node2D
 
 ## Shared base for the two kinds of hex module that come off a ship when a
-## limb is severed (see Ship._detach_module): plain cosmetic ShipDebris, and
+## limb is severed (see HullDamageModel._detach_module): plain cosmetic ShipDebris, and
 ## the recoverable CapturedTechPart. Both render the same per-cell hex art the
 ## hull was showing an instant earlier, drift and spin under their own
 ## momentum, and fade out at the end of their life — previously two separate

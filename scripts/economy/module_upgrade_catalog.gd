@@ -16,7 +16,7 @@ extends RefCounted
 ## Tractor/Grinder trees proving those two hardpoints are wired the same way.
 ##
 ## Which categories are actually wired to *do* something when unlocked
-## (see Ship._apply_instance_upgrade_modifiers/_find_hardpoint_node_for and
+## (see HardpointBank._apply_instance_upgrade_modifiers/get_node_for and
 ## ShipLayout._instance_stat_delta) — check before adding a new tree_key:
 ##   - engine, hull, heavy_hull, strut, command_core, reactor_mk1,
 ##     battery_mk1, storage_mk1: any of ModuleType's own aggregate fields

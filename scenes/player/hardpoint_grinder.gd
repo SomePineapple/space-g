@@ -66,11 +66,11 @@ func setup(shooter: Ship) -> void:
 	_shooter = shooter
 
 
-## Facing-vertex reach, set once by Ship right after instancing (see
+## Facing-vertex reach, set once by HardpointBank right after instancing (see
 ## HardpointGun.set_cell_size for the same idea applied to a weapon muzzle).
 ## This node's origin is the single occupied hex's own centre (see
-## Ship._hardpoint_center); this node's own rotation (set by Ship right
-## after this, `rotation_steps * PI/3 + _hull_renderer.rotation`) points at
+## HardpointBank._hardpoint_center); this node's own rotation (set there too,
+## `rotation_steps * PI/3 + _hull_renderer.rotation`) points at
 ## the hex's face — see docs/gotchas.md's "+90° fixed offset" entry — not at
 ## the direction the builder's placement-facing arrow shows for the same
 ## rotation_steps (hex_grid_control.gd's arrow is drawn without that

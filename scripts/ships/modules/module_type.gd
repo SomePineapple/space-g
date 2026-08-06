@@ -49,7 +49,7 @@ extends Resource
 ## Energy capacity this module adds to the ship's energy pool (batteries).
 @export var energy_capacity_contribution: float = 0.0
 ## Cargo capacity this module adds to the ship's material storage (see
-## ShipLayout.total_cargo_capacity/Ship._apply_layout_cargo_capacity).
+## ShipLayout.total_cargo_capacity/Ship._refresh_layout_stats).
 @export var cargo_capacity_contribution: float = 0.0
 
 ## Weapon/missile hardpoints only. Which scene Ship spawns for this specific
@@ -63,7 +63,7 @@ extends Resource
 
 ## Whether a severed (not destroyed-outright) instance of this module can be
 ## recovered intact as a research item rather than just flying off as inert
-## ShipDebris — see Ship._roll_capturable/_spawn_capturable_part_for. Only
+## ShipDebris — see WreckageSpawner.spawn_severed_piece. Only
 ## meaningful "unique tech" modules should opt in; plain armor (Hull, Heavy
 ## Hull, Strut) has nothing worth reverse-engineering.
 @export var is_capturable_tech: bool = false

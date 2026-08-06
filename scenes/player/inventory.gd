@@ -30,7 +30,7 @@ var _component_totals: Dictionary = {}
 ## creates a brand new (unupgraded) one.
 var _owned_module_pool: Dictionary = {}
 ## Total cargo capacity, recomputed by Ship whenever its layout changes (see
-## Ship._apply_layout_cargo_capacity) — kept here rather than derived on the
+## Ship._refresh_layout_stats) — kept here rather than derived on the
 ## fly so try_add_material() has a cheap, always-current limit to check.
 var _cargo_capacity: float = 0.0
 ## module_type_id -> count. Distinct from _material_totals: these are

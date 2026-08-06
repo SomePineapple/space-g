@@ -41,7 +41,7 @@ func take_damage(amount: float) -> void:
 		destroyed.emit()
 
 
-## Mirrors module repair (see Ship._repair_module): a holed-out module
+## Mirrors module repair (see HullDamageModel._advance_repair): a holed-out module
 ## regrowing restores the same amount to the overall Health pool, so a fully
 ## repaired ship doesn't still carry invisible splash-damage debt from
 ## before.

@@ -2,7 +2,7 @@ class_name CapturedTechPart
 extends DriftingHexPiece
 
 ## A severed module that stayed intact enough to be worth recovering (see
-## Ship._roll_capturable). Drifts exactly like ordinary ShipDebris (both share
+## WreckageSpawner._roll_capturable). Drifts exactly like ordinary ShipDebris (both share
 ## DriftingHexPiece), but persists far longer and can be reeled in by
 ## HardpointWinch/HardpointTractorBeam instead of just fading away — see
 ## begin_reel_in(). Stores which module/faction/manufacturer it came from for

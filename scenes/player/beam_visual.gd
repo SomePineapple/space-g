@@ -45,10 +45,10 @@ func configure(color: Color, width: float, pulse_speed: float, pulse_strength: f
 
 
 ## from_local is in the parent hardpoint's local space (its Muzzle position);
-## to_global is the target's world position.
-func draw_beam(from_local: Vector2, to_global: Vector2) -> void:
+## target_global is the target's world position.
+func draw_beam(from_local: Vector2, target_global: Vector2) -> void:
 	visible = true
-	var points: PackedVector2Array = [from_local, to_local(to_global)]
+	var points: PackedVector2Array = [from_local, to_local(target_global)]
 	for line in _lines:
 		line.points = points
 

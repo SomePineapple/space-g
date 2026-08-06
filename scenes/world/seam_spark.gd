@@ -2,7 +2,7 @@ class_name SeamSpark
 extends Node2D
 
 ## A quick, narrow shower of sparks fired outward along one hex edge of a
-## module/wing that just tore free (see Ship._spawn_severance_sparks).
+## module/wing that just tore free (see WreckageSpawner.spawn_seam_sparks).
 ## Spawned once per boundary edge, oriented along that edge's outward
 ## normal, so a whole limb detaching reads as the seam itself splitting
 ## apart rather than one generic burst at the ship's center.

@@ -186,8 +186,8 @@ static func get_all() -> Array[ModuleType]:
 	battery_type.is_capturable_tech = true
 	types.append(battery_type)
 
-	# Cargo storage (see ShipLayout.total_cargo_capacity/Ship._apply_layout_
-	# cargo_capacity). A plain stat contributor like Reactor/Battery, not a
+	# Cargo storage (see ShipLayout.total_cargo_capacity/Ship._refresh_layout_
+	# stats). A plain stat contributor like Reactor/Battery, not a
 	# hardpoint category — storage has no facing/muzzle/HUD gate of its own,
 	# it just raises the cap Inventory.try_add_material() checks. No
 	# dedicated art yet — a generic flat-tinted hex, same approach as Strut.
@@ -221,7 +221,7 @@ static func get_all() -> Array[ModuleType]:
 	phase_lance_type.requires_research = true
 	types.append(phase_lance_type)
 
-	# Tractor beam hardpoint (see HardpointTractorBeam/Ship._spawn_hardpoint_tractor_beams).
+	# Tractor beam hardpoint (see HardpointTractorBeam/HardpointBank._mount_tractor_beam).
 	# No dedicated art yet — a generic flat-tinted hex, same approach as Strut.
 	var tractor_type: ModuleType = _make(TRACTOR_HARDPOINT_TYPE_ID, "Tractor Beam", Color(0.4, 0.75, 0.85), SINGLE_CELL,
 		0.2, 30.0, 0.0, null, "tractor", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 8})
@@ -253,8 +253,8 @@ static func get_all() -> Array[ModuleType]:
 		{ComponentCatalog.CIRCUIT_BOARD: 1, ComponentCatalog.WIRING: 1, MaterialCatalog.GLASS: 2})
 	types.append(scanner_type)
 
-	# Mining Grinder hardpoint (see HardpointGrinder/Ship._spawn_hardpoint_
-	# grinders) — a single hex; the mining/contact side is whichever direction
+	# Mining Grinder hardpoint (see HardpointGrinder/HardpointBank._mount_
+	# grinder) — a single hex; the mining/contact side is whichever direction
 	# the placement is rotated to face (HardpointGrinder.set_cell_size reaches
 	# the muzzle out from that one hex's centre toward its facing edge).
 	# Toggled on/off by the player (Ship.toggle_grinder, "G") rather than
@@ -269,7 +269,7 @@ static func get_all() -> Array[ModuleType]:
 	types.append(grinder_type)
 
 	# Winch hardpoint (casts a physical rope — see HardpointWinch/WinchRope/
-	# Ship._spawn_hardpoint_winches) is disabled for now, per explicit user
+	# HardpointBank._mount_winch) is disabled for now, per explicit user
 	# request — a good work-in-progress, not abandoned, just not offered as
 	# buildable in the meantime. Left commented rather than deleted: all the
 	# supporting code/scenes/input action are still in place to pick back up.

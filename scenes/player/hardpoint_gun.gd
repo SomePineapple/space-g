@@ -96,7 +96,7 @@ static func tier_visual_scale(tier: int) -> float:
 ## Sizes the barrel to two hex-lengths, pivoting at this node's own
 ## origin (the hardpoint's hex center) rather than the barrel's midpoint.
 ## tier_scale grows the barrel for bigger-tier hardpoints (see Ship's
-## _spawn_hardpoint_guns()), which also occupy more hex cells.
+## HardpointBank._mount_gun), which also occupy more hex cells.
 func set_cell_size(cell_size: float, tier_scale: float = 1.0) -> void:
 	_cell_size = cell_size
 	_tier_scale = tier_scale

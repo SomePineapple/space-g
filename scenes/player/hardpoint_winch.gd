@@ -4,7 +4,7 @@ extends Node2D
 ## A hardpoint that casts a physical rope (see WinchRope) instead of firing
 ## a projectile: press fire_winch (see Ship.fire_winch) to shoot the rope
 ## out in this hardpoint's own facing direction (its placement's
-## rotation_steps — see Ship._spawn_hardpoint_winches — not aimed at the
+## rotation_steps — see HardpointBank._mount_winch — not aimed at the
 ## mouse like a gun).
 ##
 ## The rope always stays paid out until the player reels it back in by

@@ -39,7 +39,7 @@ func _ready() -> void:
 	_update_health_label(ship.get_current_health(), ship.get_max_health())
 
 	ship.energy_changed.connect(_on_energy_changed)
-	_update_energy_label(ship.current_energy, ship.max_energy)
+	_update_energy_label(ship.get_energy(), ship.get_max_energy())
 
 
 func _on_materials_changed(totals: Dictionary) -> void:

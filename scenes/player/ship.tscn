@@ -5,6 +5,10 @@
 [ext_resource type="Script" path="res://scripts/ships/layout/ship_layout_renderer.gd" id="8_hullrend"]
 [ext_resource type="Script" uid="uid://c44i8af67y8yp" path="res://scenes/player/inventory.gd" id="10_lrwcl"]
 [ext_resource type="Script" path="res://scenes/player/scanner.gd" id="12_scanner"]
+[ext_resource type="Script" path="res://scenes/player/ship_energy.gd" id="13_energy"]
+[ext_resource type="Script" path="res://scenes/player/hardpoint_bank.gd" id="14_hardpoints"]
+[ext_resource type="Script" path="res://scenes/player/hull_damage_model.gd" id="15_hulldamage"]
+[ext_resource type="Script" path="res://scenes/world/wreckage_spawner.gd" id="16_wreckage"]
 
 [node name="Ship" type="CharacterBody2D" unique_id=236908416]
 script = ExtResource("1_yie7n")
@@ -23,3 +27,15 @@ script = ExtResource("10_lrwcl")
 
 [node name="Scanner" type="Node2D" parent="." unique_id=3971528401]
 script = ExtResource("12_scanner")
+
+[node name="Energy" type="Node" parent="."]
+script = ExtResource("13_energy")
+
+[node name="Hardpoints" type="Node2D" parent="."]
+script = ExtResource("14_hardpoints")
+
+[node name="HullDamage" type="Node" parent="."]
+script = ExtResource("15_hulldamage")
+
+[node name="Wreckage" type="Node" parent="."]
+script = ExtResource("16_wreckage")
