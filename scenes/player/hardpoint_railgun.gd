@@ -12,7 +12,9 @@ var _charging: bool = false
 var _charge_remaining: float = 0.0
 
 
-func _ready() -> void:
+## In _init() rather than _ready() so editor/scene overrides of these exports
+## survive — see HardpointMissileLauncher._init().
+func _init() -> void:
 	projectile_scene = preload("res://scenes/world/railgun_slug.tscn")
 	fire_rate = 0.5
 	projectile_speed = 1400.0
@@ -21,7 +23,6 @@ func _ready() -> void:
 	barrel_color = Color(0.78, 0.82, 0.9, 1.0)
 	projectile_damage = 35.0
 	energy_cost = 28.0
-	super._ready()
 
 
 ## Reserves the cooldown slot and gates re-triggering for the whole

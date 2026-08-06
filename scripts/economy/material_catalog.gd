@@ -29,6 +29,10 @@ const GLASS: String = "glass"
 const ALL_IDS: Array[String] = [IRON, COPPER, NICKEL, TITANIUM, GLASS]
 
 static var _cached_types: Array[MaterialType] = []
+## id -> MaterialType. Same reason as ModuleCatalog._index: every
+## display_name/color/price/yield helper below funnels through get_by_id(),
+## and the UI panels call those once per material per refresh.
+static var _index: Dictionary = {}
 
 
 static func get_all() -> Array[MaterialType]:
@@ -45,14 +49,14 @@ static func get_all() -> Array[MaterialType]:
 	types.append(_make(GLASS, "Glass", Color(0.75, 0.9, 0.95), 6, 12, 0.6))
 
 	_cached_types = types
+	for type in types:
+		_index[type.id] = type
 	return types
 
 
 static func get_by_id(material_id: String) -> MaterialType:
-	for type in get_all():
-		if type.id == material_id:
-			return type
-	return null
+	get_all()
+	return _index.get(material_id)
 
 
 static func display_name(material_id: String) -> String:

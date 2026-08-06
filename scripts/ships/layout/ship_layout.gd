@@ -11,6 +11,46 @@ extends Resource
 const REACTOR_DISTANCE_PENALTY_PER_CELL: float = 0.08
 const REACTOR_DISTANCE_PENALTY_MAX: float = 0.5
 
+## Derived lookup tables, rebuilt lazily from `placements` — never exported,
+## never part of this Resource's saved/duplicated data. get_placement_at()/
+## is_occupied()/get_occupied_cells() used to be O(placements x cells) with a
+## linear ModuleCatalog scan inside, and they sit under per-hit damage
+## resolution, the ship builder's hover redraw and Ship.get_layout_extent().
+var _cell_index: Dictionary = {}          # Vector2i -> ModulePlacement
+var _placement_index: Dictionary = {}     # String (placement_id) -> ModulePlacement
+var _cells_by_placement: Dictionary = {}  # String (placement_id) -> Array[Vector2i]
+var _index_dirty: bool = true
+## The exact `placements` array the tables above were built from. A
+## duplicate()d ShipLayout (warp restore, ship builder's working copy) gets a
+## brand-new array, so comparing identity here catches that case even if the
+## stale tables were copied across with it — see _ensure_index().
+var _indexed_source: Array = []
+
+
+## Call after mutating `placements` (or a placement's hex_coord/rotation_steps)
+## from outside this class. Every mutator in here already does.
+func invalidate_index() -> void:
+	_index_dirty = true
+
+
+func _ensure_index() -> void:
+	if not _index_dirty and is_same(_indexed_source, placements):
+		return
+
+	_cell_index.clear()
+	_placement_index.clear()
+	_cells_by_placement.clear()
+
+	for placement in placements:
+		_placement_index[placement.placement_id] = placement
+		var cells: Array[Vector2i] = _compute_occupied_cells(placement)
+		_cells_by_placement[placement.placement_id] = cells
+		for cell in cells:
+			_cell_index[cell] = placement
+
+	_indexed_source = placements
+	_index_dirty = false
+
 
 func total_mass() -> float:
 	var total: float = 0.0
@@ -34,10 +74,20 @@ func total_max_health() -> float:
 func total_thrust() -> float:
 	var total: float = 0.0
 	for placement in placements:
-		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-		if module_type != null:
-			total += module_type.thrust_contribution + _instance_stat_delta(placement, "thrust_contribution")
+		total += thrust_for(placement)
 	return total
+
+
+## One placement's effective thrust, including its own per-instance upgrade
+## deltas. Split out of total_thrust() so Ship can re-sum only the modules
+## that are still alive after damage — it previously adjusted thrust_force by
+## the module type's *base* thrust_contribution, which left an upgraded
+## engine's bonus behind on the ship after that engine was destroyed.
+func thrust_for(placement: ModulePlacement) -> float:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	if module_type == null:
+		return 0.0
+	return module_type.thrust_contribution + _instance_stat_delta(placement, "thrust_contribution")
 
 
 func total_energy_generation() -> float:
@@ -162,20 +212,27 @@ func _get_hardpoint_placements(hardpoint_category: String) -> Array[ModulePlacem
 
 
 func get_placement_at(hex_coord: Vector2i) -> ModulePlacement:
-	for placement in placements:
-		if hex_coord in get_occupied_cells(placement):
-			return placement
-	return null
+	_ensure_index()
+	return _cell_index.get(hex_coord)
 
 
 func get_placement_by_id(placement_id: String) -> ModulePlacement:
-	for placement in placements:
-		if placement.placement_id == placement_id:
-			return placement
-	return null
+	_ensure_index()
+	return _placement_index.get(placement_id)
 
 
 func get_occupied_cells(placement: ModulePlacement) -> Array[Vector2i]:
+	_ensure_index()
+	# Falls back to computing directly for a placement that isn't part of this
+	# layout (the ship builder passes candidate placements around before they
+	# are committed), so callers never need to know which case they're in.
+	var cached: Variant = _cells_by_placement.get(placement.placement_id)
+	if cached != null and _placement_index.get(placement.placement_id) == placement:
+		return cached
+	return _compute_occupied_cells(placement)
+
+
+func _compute_occupied_cells(placement: ModulePlacement) -> Array[Vector2i]:
 	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 	var cells: Array[Vector2i] = []
 	if module_type == null:
@@ -196,10 +253,8 @@ func get_candidate_cells(module_type_id: String, anchor_hex: Vector2i, rotation_
 
 
 func is_occupied(hex_coord: Vector2i) -> bool:
-	for placement in placements:
-		if hex_coord in get_occupied_cells(placement):
-			return true
-	return false
+	_ensure_index()
+	return _cell_index.has(hex_coord)
 
 
 func can_place(module_type_id: String, anchor_hex: Vector2i, rotation_steps: int) -> bool:
@@ -245,6 +300,7 @@ func place(module_type_id: String, anchor_hex: Vector2i, rotation_steps: int, ma
 	placement.rotation_steps = posmod(rotation_steps, 6)
 	placement.manufacturer_id = manufacturer_id
 	placements.append(placement)
+	invalidate_index()
 
 	if module_type_id == ModuleCatalog.CORE_TYPE_ID:
 		core_placement_id = placement.placement_id
@@ -273,6 +329,7 @@ func remove(placement_id: String) -> bool:
 	for i in placements.size():
 		if placements[i].placement_id == placement_id:
 			placements.remove_at(i)
+			invalidate_index()
 			return true
 	return false
 
@@ -304,6 +361,7 @@ func rotate(placement_id: String, steps_delta: int) -> bool:
 		return false
 	var placement: ModulePlacement = get_placement_by_id(placement_id)
 	placement.rotation_steps = posmod(placement.rotation_steps + steps_delta, 6)
+	invalidate_index()
 	return true
 
 

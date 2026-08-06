@@ -22,7 +22,11 @@ extends HardpointGun
 ## commits to full power and starts homing.
 @export var creep_acceleration: float = 69.0
 
-func _ready() -> void:
+## Launcher-specific defaults live in _init(), not _ready(): scene-file and
+## per-instance @export overrides are applied *after* _init() but *before*
+## _ready(), so setting them in _ready() silently discarded any value tuned in
+## the editor. Same fix applied to HardpointRailgun/HardpointPhaseLance.
+func _init() -> void:
 	projectile_scene = missile_scene
 	fire_rate = 1.0
 	# Lowered by a third from the original 450 so missiles are dodgeable
@@ -34,6 +38,9 @@ func _ready() -> void:
 	projectile_color = Color(1, 0.6, 0.15, 1)
 	projectile_damage = 40.0
 	energy_cost = 15.0
+
+
+func _ready() -> void:
 	super._ready()
 	# The missile-silo hex art already shows the tube; the inherited barrel
 	# shape would just draw a redundant grey rectangle on top of it.

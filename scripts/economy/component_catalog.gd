@@ -28,6 +28,8 @@ const COMMON_IDS: Array[String] = [METAL_SHEETS, WIRING, CANISTER]
 const RARE_IDS: Array[String] = [CIRCUIT_BOARD, REINFORCED_STEEL, MOTOR]
 
 static var _cached_types: Array[ComponentType] = []
+## id -> ComponentType — see MaterialCatalog._index.
+static var _index: Dictionary = {}
 
 
 static func get_all() -> Array[ComponentType]:
@@ -43,14 +45,14 @@ static func get_all() -> Array[ComponentType]:
 	types.append(_make(CANISTER, "Canister", Color(0.6, 0.7, 0.65)))
 
 	_cached_types = types
+	for type in types:
+		_index[type.id] = type
 	return types
 
 
 static func get_by_id(component_id: String) -> ComponentType:
-	for type in get_all():
-		if type.id == component_id:
-			return type
-	return null
+	get_all()
+	return _index.get(component_id)
 
 
 static func display_name(component_id: String) -> String:

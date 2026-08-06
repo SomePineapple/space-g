@@ -68,12 +68,19 @@ func setup(shooter: Ship) -> void:
 
 ## Scales this hardpoint's already-set base stats for its module tier (1-3).
 ## Called once, right after _ready(), before upgrade modifiers are applied.
+## Clamped rather than indexed raw: a ModuleType authored with a tier outside
+## 1-3 used to crash here on an out-of-bounds read.
 func apply_tier(tier: int) -> void:
-	projectile_damage *= TIER_DAMAGE_MULTIPLIER[tier]
-	fire_rate *= TIER_FIRE_RATE_MULTIPLIER[tier]
-	recoil_force *= TIER_RECOIL_MULTIPLIER[tier]
-	projectile_scale *= TIER_PROJECTILE_SCALE_MULTIPLIER[tier]
-	energy_cost *= TIER_ENERGY_COST_MULTIPLIER[tier]
+	var index: int = _tier_index(tier)
+	projectile_damage *= TIER_DAMAGE_MULTIPLIER[index]
+	fire_rate *= TIER_FIRE_RATE_MULTIPLIER[index]
+	recoil_force *= TIER_RECOIL_MULTIPLIER[index]
+	projectile_scale *= TIER_PROJECTILE_SCALE_MULTIPLIER[index]
+	energy_cost *= TIER_ENERGY_COST_MULTIPLIER[index]
+
+
+static func _tier_index(tier: int) -> int:
+	return clampi(tier, 0, TIER_DAMAGE_MULTIPLIER.size() - 1)
 
 
 ## Called once, right after apply_tier(), before upgrade modifiers.
@@ -83,7 +90,7 @@ func apply_core_distance_bonus(distance: int) -> void:
 
 
 static func tier_visual_scale(tier: int) -> float:
-	return TIER_VISUAL_SCALE[tier]
+	return TIER_VISUAL_SCALE[_tier_index(tier)]
 
 
 ## Sizes the barrel to two hex-lengths, pivoting at this node's own

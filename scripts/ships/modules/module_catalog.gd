@@ -37,6 +37,12 @@ const COCKPIT_TEXTURE: Texture2D = preload("res://art/ships/cockpit_v1.png")
 ## instances is fine — this is still a read-only prototype catalog, only
 ## built lazily now instead of eagerly every call.
 static var _cached_types: Array[ModuleType] = []
+## id -> ModuleType, built alongside _cached_types. get_by_id() used to walk
+## the whole array on every call, and it sits under ShipLayout.
+## get_occupied_cells()/get_placement_at(), which run per hex per placement on
+## every hit resolution and (before ShipLayout's own index) every frame per AI
+## ship — a linear scan there was pure waste.
+static var _index: Dictionary = {}
 
 
 static func get_all() -> Array[ModuleType]:
@@ -273,14 +279,14 @@ static func get_all() -> Array[ModuleType]:
 	# 	0.0, 0.0, preload("res://scenes/player/hardpoint_winch.tscn")))
 
 	_cached_types = types
+	for type in types:
+		_index[type.id] = type
 	return types
 
 
 static func get_by_id(id: String) -> ModuleType:
-	for type in get_all():
-		if type.id == id:
-			return type
-	return null
+	get_all()
+	return _index.get(id)
 
 
 static func _make(id: String, display_name: String, color: Color, footprint_cells: Array[Vector2i],

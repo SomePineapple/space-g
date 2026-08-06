@@ -69,6 +69,16 @@ func setup(shooter: Ship) -> void:
 	_shooter = shooter
 
 
+## The rope is parented to the current scene (not to this hardpoint) so it can
+## span from the muzzle to a world-space tip. That means it does NOT get freed
+## along with this node — a ship destroyed, or a module severed, mid-cast used
+## to leave its rope in the scene forever.
+func _exit_tree() -> void:
+	if _rope != null and is_instance_valid(_rope):
+		_rope.queue_free()
+	_rope = null
+
+
 ## Called once on the fire_winch action's just-pressed edge (see
 ## Ship.fire_winch) — starts casting if idle, otherwise does nothing (an
 ## attached/firing/extended rope has to resolve on its own first).

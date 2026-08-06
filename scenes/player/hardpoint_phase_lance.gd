@@ -18,12 +18,17 @@ var _charge_remaining: float = 0.0
 var _pending_aim_direction: Vector2 = Vector2.RIGHT
 
 
-func _ready() -> void:
+## In _init() rather than _ready() so editor/scene overrides of these exports
+## survive — see HardpointMissileLauncher._init().
+func _init() -> void:
 	fire_rate = 0.4
 	recoil_force = 18.0
 	projectile_color = Color(0.75, 0.55, 1.0, 1.0)
 	projectile_damage = 24.0
 	energy_cost = 45.0
+
+
+func _ready() -> void:
 	super._ready()
 	_barrel.visible = false
 

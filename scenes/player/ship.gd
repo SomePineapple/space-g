@@ -102,6 +102,12 @@ var _boost_active: bool = false
 var _base_hull_modulate: Color
 var _flash_tween: Tween
 var _thrusters: Array[Node2D] = []
+## The three GPUParticles2D children of each entry in _thrusters, resolved
+## once at spawn — _update_engine_particles() runs every physics frame and was
+## doing three get_node() string lookups per thruster per frame.
+var _thruster_particles_boost: Array[GPUParticles2D] = []
+var _thruster_particles_boost_soft: Array[GPUParticles2D] = []
+var _thruster_particles_normal: Array[GPUParticles2D] = []
 ## Parallel to _thrusters — which placement each thruster's flame belongs to,
 ## so a destroyed/detached engine's particles can be silenced individually
 ## even while other engines (or leftover momentum) keep the ship moving.
@@ -122,6 +128,11 @@ var _has_aim_target: bool = false
 var _locked_target: Node2D = null
 var _last_known_health: float = -1.0
 var _time_since_last_damage: float = 0.0
+## Recomputed once per layout apply rather than per call — get_layout_extent()
+## walks every placement's every cell, and the AI reads it several times per
+## physics frame (own hull, target's hull, avoidance probe range, and once per
+## other enemy ship for separation). -1.0 means "not computed yet".
+var _cached_layout_extent: float = -1.0
 
 var current_energy: float = 0.0
 var max_energy: float = 0.0
@@ -163,7 +174,14 @@ var _regrowing_placement_ids: Dictionary = {}
 
 
 func _ready() -> void:
-	_apply_ship_layout()
+	# A restoring player ship is about to have GameState.apply() push its saved
+	# layout in, which rebuilds everything anyway — building the scene's own
+	# default layout first (thrusters, collision shapes, every hardpoint node)
+	# just to throw it away was a wasted full rebuild on every warp arrival.
+	var will_restore: bool = is_in_group("player_ship") and GameState.has_snapshot()
+	if not will_restore:
+		_apply_ship_layout()
+
 	_health.destroyed.connect(_on_destroyed)
 	_health.health_changed.connect(_on_health_changed)
 	_base_hull_modulate = _hull_renderer.modulate
@@ -200,6 +218,7 @@ func _apply_ship_layout() -> void:
 	if ship_layout == null:
 		return
 	mass = ship_layout.total_mass()
+	_cached_layout_extent = -1.0
 	_health.configure(ship_layout.total_max_health() * personality.health_multiplier)
 	_hull_renderer.faction_id = personality.faction_id
 	_hull_renderer.set_layout(ship_layout)
@@ -224,10 +243,20 @@ func get_winch_radius() -> float:
 	return get_layout_extent()
 
 
+## Cached until the next layout apply — deliberately NOT invalidated when a
+## module is destroyed or severed: the value is used as an approximate hull
+## radius for AI spacing, winch reach and camera zoom, all of which are better
+## served by a stable silhouette than by one that shrinks mid-fight.
 func get_layout_extent() -> float:
 	if ship_layout == null:
 		return 0.0
+	if _cached_layout_extent >= 0.0:
+		return _cached_layout_extent
+	_cached_layout_extent = _compute_layout_extent()
+	return _cached_layout_extent
 
+
+func _compute_layout_extent() -> float:
 	var max_distance: float = 0.0
 	for placement in ship_layout.placements:
 		for cell in ship_layout.get_occupied_cells(placement):
@@ -415,8 +444,7 @@ func _on_module_destroyed(placement: ModulePlacement) -> void:
 		return
 
 	if module_type.thrust_contribution > 0.0:
-		thrust_force = maxf(thrust_force - module_type.thrust_contribution, 0.0)
-		reverse_thrust_force = thrust_force * reverse_thrust_ratio
+		_recompute_thrust_stats()
 
 	_check_for_detachment()
 	_check_all_modules_gone()
@@ -550,8 +578,7 @@ func _on_module_repaired(placement: ModulePlacement, module_type: ModuleType) ->
 	_set_hardpoint_visual_visible(placement.placement_id, true)
 
 	if module_type.thrust_contribution > 0.0:
-		thrust_force += module_type.thrust_contribution
-		reverse_thrust_force = thrust_force * reverse_thrust_ratio
+		_recompute_thrust_stats()
 
 
 func _spawn_seam_spark_at(cell: Vector2i, neighbor: Vector2i) -> void:
@@ -575,12 +602,11 @@ func _detach_module(placement: ModulePlacement) -> void:
 	if module_type == null:
 		return
 
-	# A module destroyed by a direct hit already lost its stat contribution in
-	# _on_module_destroyed; only apply it here for a module that detaches
-	# while still otherwise intact.
-	if module_type.thrust_contribution > 0.0 and get_module_condition(placement.placement_id) > 0.0:
-		thrust_force = maxf(thrust_force - module_type.thrust_contribution, 0.0)
-		reverse_thrust_force = thrust_force * reverse_thrust_ratio
+	# Re-summing every live module (rather than subtracting this one's share)
+	# means it doesn't matter whether this module already lost its contribution
+	# in _on_module_destroyed or is detaching while still intact.
+	if module_type.thrust_contribution > 0.0:
+		_recompute_thrust_stats()
 
 	_hull_renderer.set_module_detached(placement.placement_id)
 	_free_collision_shapes_for(placement.placement_id)
@@ -683,13 +709,33 @@ func _apply_layout_cargo_capacity() -> void:
 	_inventory.set_cargo_capacity(base_cargo_capacity + ship_layout.total_cargo_capacity())
 
 
-func _apply_layout_thrust() -> void:
-	thrust_force = ship_layout.total_thrust()
+## Re-derives thrust and the speed caps from whichever engine modules are
+## currently alive. Replaces the old incremental "subtract this module's
+## thrust_contribution on destruction, add it back on repair" bookkeeping,
+## which had two bugs: it used the module type's *base* contribution while
+## _apply_layout_thrust() had summed the upgraded value (so an upgraded engine
+## left its bonus behind when destroyed), and it never touched max_speed at
+## all (so a ship that lost every engine kept its full top speed).
+##
+## Deliberately does not re-derive `mass`: a hull losing modules getting
+## lighter — and therefore more agile — is a gameplay change, not a bug fix.
+func _recompute_thrust_stats() -> void:
+	var live_thrust: float = 0.0
+	for placement in ship_layout.placements:
+		if is_module_destroyed(placement.placement_id):
+			continue
+		live_thrust += ship_layout.thrust_for(placement)
+
+	thrust_force = maxf(live_thrust, 0.0)
 	reverse_thrust_force = thrust_force * reverse_thrust_ratio
 
 	var acceleration_estimate: float = (thrust_force / mass) if mass > 0.0 else 0.0
 	max_speed = acceleration_estimate * speed_per_acceleration
 	reverse_max_speed = max_speed * reverse_speed_ratio
+
+
+func _apply_layout_thrust() -> void:
+	_recompute_thrust_stats()
 
 
 ## Applies one just-unlocked per-instance upgrade (Phase 8.1, see
@@ -747,6 +793,9 @@ func _spawn_thrusters() -> void:
 		thruster.queue_free()
 	_thrusters.clear()
 	_thruster_placement_ids.clear()
+	_thruster_particles_boost.clear()
+	_thruster_particles_boost_soft.clear()
+	_thruster_particles_normal.clear()
 
 	for placement in ship_layout.get_thruster_placements():
 		var thruster: Node2D = engine_thruster_scene.instantiate()
@@ -767,6 +816,9 @@ func _spawn_thrusters() -> void:
 		thruster.position = (hex_center + back_vertex_offset).rotated(_hull_renderer.rotation)
 		_thrusters.append(thruster)
 		_thruster_placement_ids.append(placement.placement_id)
+		_thruster_particles_boost.append(thruster.get_node("Particles"))
+		_thruster_particles_boost_soft.append(thruster.get_node("ParticlesSoft"))
+		_thruster_particles_normal.append(thruster.get_node("ParticlesNormal"))
 
 
 func _spawn_hardpoint_guns() -> void:
@@ -1108,7 +1160,10 @@ func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector
 	var hull_local_origin: Vector2 = to_local(entry_point).rotated(-_hull_renderer.rotation)
 	var hull_local_direction: Vector2 = aim_direction.rotated(-global_rotation - _hull_renderer.rotation).normalized()
 
+	# A zero cell_size would make the sampling loop below never advance.
 	var step: float = _hull_renderer.cell_size * 0.5
+	if step <= 0.0:
+		return
 	var traveled: float = 0.0
 	var hit_placement_ids: Dictionary = {}
 
@@ -1159,7 +1214,13 @@ func capture_tech_part(module_type_id: String, manufacturer_id: String = "") -> 
 		_inventory.discover_manufacturer(manufacturer_id)
 
 
+## Guarded against a zero/negative mass (a layout whose modules all report no
+## mass_contribution, or one stripped by negative manufacturer/upgrade
+## deltas) — dividing by it produced INF velocity and threw the ship out of
+## the region.
 func apply_impulse(impulse: Vector2) -> void:
+	if mass <= 0.0:
+		return
 	velocity += impulse / mass
 
 
@@ -1309,11 +1370,18 @@ func _try_spend_thrust_energy(delta: float) -> bool:
 	return spend_energy(cost)
 
 
+## Regen emitted every single physics frame while the pool was below full,
+## which meant the HUD reformatted and rewrote its energy Label ~60 times a
+## second for a readout that only displays whole numbers. Only emitting once
+## the displayed value can actually have changed (or the pool tops out) keeps
+## the readout identical while cutting the signal traffic.
 func _regenerate_energy(delta: float) -> void:
 	if current_energy >= max_energy:
 		return
+	var previous: float = current_energy
 	current_energy = minf(current_energy + energy_generation_rate * delta, max_energy)
-	energy_changed.emit(current_energy, max_energy)
+	if current_energy >= max_energy or floorf(current_energy) > floorf(previous):
+		energy_changed.emit(current_energy, max_energy)
 
 
 func _update_hardpoint_aim() -> void:
@@ -1331,19 +1399,17 @@ func _update_engine_particles() -> void:
 	var boosting: bool = thrusting_forward and _boost_active
 
 	for i in _thrusters.size():
-		var thruster: Node2D = _thrusters[i]
 		# A destroyed/detached engine shouldn't keep showing its own flame,
 		# even while other engines (or leftover momentum) keep the ship
 		# actually moving forward.
 		var alive: bool = not is_module_destroyed(_thruster_placement_ids[i])
-		var particles: GPUParticles2D = thruster.get_node("Particles")
-		var particles_soft: GPUParticles2D = thruster.get_node("ParticlesSoft")
-		var particles_normal: GPUParticles2D = thruster.get_node("ParticlesNormal")
 
+		var particles: GPUParticles2D = _thruster_particles_boost[i]
 		particles.emitting = boosting and alive
 		particles.amount_ratio = 1.0
 
+		var particles_soft: GPUParticles2D = _thruster_particles_boost_soft[i]
 		particles_soft.emitting = boosting and alive
 		particles_soft.amount_ratio = 1.0
 
-		particles_normal.emitting = thrusting_forward and not boosting and alive
+		_thruster_particles_normal[i].emitting = thrusting_forward and not boosting and alive
