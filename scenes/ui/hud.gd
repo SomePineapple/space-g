@@ -13,8 +13,6 @@ extends CanvasLayer
 @onready var _storage_full_label: Label = $StorageFullLabel
 
 var _inventory: Inventory
-var _health: Health
-var _last_known_health: float = -1.0
 var _damage_flash_tween: Tween
 var _storage_full_tween: Tween
 
@@ -32,11 +30,14 @@ func _ready() -> void:
 	_inventory.credits_changed.connect(_on_credits_changed)
 	_update_credits_label(_inventory.get_credits())
 
-	_health = players[0].get_node("Health")
-	_health.health_changed.connect(_on_health_changed)
-	_update_health_label(_health.current_health, _health.max_health)
-
+	# Health readouts and the damage vignette both come off the Ship's own
+	# relayed signals now, rather than this panel reaching into the ship scene
+	# for its $Health node and re-deriving "was that a hit" itself.
 	var ship: Ship = players[0]
+	ship.health_changed.connect(_update_health_label)
+	ship.damaged.connect(_on_ship_damaged)
+	_update_health_label(ship.get_current_health(), ship.get_max_health())
+
 	ship.energy_changed.connect(_on_energy_changed)
 	_update_energy_label(ship.current_energy, ship.max_energy)
 
@@ -77,16 +78,11 @@ func _on_storage_full() -> void:
 	_storage_full_tween.tween_property(_storage_full_label, "modulate:a", 0.0, storage_full_fade_duration)
 
 
-## Only current < last-known counts as damage — a ship rebuild in the
-## builder also emits health_changed, but resets to full health rather
-## than lowering it, so it never triggers the flash.
-func _on_health_changed(current: float, max_health: float) -> void:
-	_update_health_label(current, max_health)
-
-	var took_damage: bool = _last_known_health >= 0.0 and current < _last_known_health
-	_last_known_health = current
-	if took_damage:
-		_flash_damage()
+## Health.damaged already means "current actually dropped" — a ship rebuild in
+## the builder emits health_changed but never this, so the vignette still
+## can't be triggered by a refit.
+func _on_ship_damaged(_amount: float, _current: float) -> void:
+	_flash_damage()
 
 
 func _flash_damage() -> void:

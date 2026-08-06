@@ -20,7 +20,6 @@ static var TRADEABLE_MATERIAL_IDS: Array[String] = MaterialCatalog.ALL_IDS
 
 var _ship: Ship
 var _inventory: Inventory
-var _health: Health
 var _credits_label: Label
 var _repair_label: Label
 var _repair_button: Button
@@ -39,10 +38,9 @@ func _ready() -> void:
 
 	_ship = players[0]
 	_inventory = _ship.get_node("Inventory")
-	_health = _ship.get_node("Health")
 	_inventory.materials_changed.connect(_on_state_changed)
 	_inventory.credits_changed.connect(_on_state_changed)
-	_health.health_changed.connect(_on_health_changed)
+	_ship.health_changed.connect(_on_health_changed)
 
 	_build_ui()
 	_refresh()
@@ -164,7 +162,7 @@ func _refresh() -> void:
 
 	_credits_label.text = "Credits: %d" % _inventory.get_credits()
 
-	_repair_label.text = "Hull: %d / %d" % [_health.current_health, _health.max_health]
+	_repair_label.text = "Hull: %d / %d" % [_ship.get_current_health(), _ship.get_max_health()]
 	if _ship.needs_repair():
 		var repair_cost: int = _ship.get_repair_cost()
 		_repair_button.text = "Repair Fully (%d cr)" % repair_cost

@@ -1,26 +1,24 @@
 class_name HardpointPhaseLance
-extends HardpointGun
+extends ChargedHardpoint
 
-## Ancient Civilisation energy weapon: charges briefly, then instantly
-## resolves a straight hitscan beam instead of a travelling projectile.
-## Unlike a normal shot (one hex + a splash fraction to neighbors), the beam
-## pierces the whole target and damages every module hex along its path in
-## full (see Ship.take_beam_damage) — a well-aligned shot can punch through
-## armor into whatever sits directly behind it. No barrel is drawn; the beam
-## itself is the only visible weapon effect.
+## Ancient Civilisation energy weapon: charges briefly (see ChargedHardpoint),
+## then instantly resolves a straight hitscan beam instead of a travelling
+## projectile. Unlike a normal shot (one hex + a splash fraction to
+## neighbors), the beam pierces the whole target and damages every module hex
+## along its path in full (see Ship.take_beam_damage) — a well-aligned shot
+## can punch through armor into whatever sits directly behind it. No barrel is
+## drawn; the beam itself is the only visible weapon effect.
 
-@export var charge_time: float = 0.7
 @export var beam_max_range: float = 1200.0
 @export var beam_scene: PackedScene = preload("res://scenes/world/phase_lance_beam.tscn")
 
-var _charging: bool = false
-var _charge_remaining: float = 0.0
 var _pending_aim_direction: Vector2 = Vector2.RIGHT
 
 
 ## In _init() rather than _ready() so editor/scene overrides of these exports
 ## survive — see HardpointMissileLauncher._init().
 func _init() -> void:
+	charge_time = 0.7
 	fire_rate = 0.4
 	recoil_force = 18.0
 	projectile_color = Color(0.75, 0.55, 1.0, 1.0)
@@ -33,26 +31,15 @@ func _ready() -> void:
 	_barrel.visible = false
 
 
-func fire() -> Projectile:
-	if _charging or _cooldown_remaining > 0.0 or _shooter == null:
-		return null
-	if not _shooter.has_energy(energy_cost):
-		return null
-	_cooldown_remaining = 1.0 / fire_rate
-	_charging = true
-	_charge_remaining = charge_time
+## Latched at trigger-pull, not at release, so a charged shot travels where
+## the barrel was aimed when the player committed to it rather than tracking
+## the mouse through the whole spin-up.
+func _on_charge_started() -> void:
 	_pending_aim_direction = Vector2.RIGHT.rotated(global_rotation)
-	return null
 
 
-func _process(delta: float) -> void:
-	super._process(delta)
-	if not _charging:
-		return
-	_charge_remaining -= delta
-	if _charge_remaining <= 0.0:
-		_charging = false
-		_resolve_beam()
+func _release_charge() -> void:
+	_resolve_beam()
 
 
 func _resolve_beam() -> void:

@@ -84,9 +84,7 @@ func capture(ship: Node) -> void:
 	_researched_ids = inventory.get_researched_ids()
 	_known_manufacturer_ids = inventory.get_known_manufacturer_ids()
 	_ship_layout = ship.ship_layout.duplicate(true)
-
-	var health: Node = ship.get_node("Health")
-	_health_fraction = health.current_health / health.max_health if health.max_health > 0.0 else 1.0
+	_health_fraction = ship.get_health_fraction()
 
 	_has_snapshot = true
 
@@ -115,9 +113,7 @@ func apply(ship: Node) -> void:
 	for manufacturer_id in _known_manufacturer_ids:
 		inventory.discover_manufacturer(manufacturer_id)
 
-	var health: Node = ship.get_node("Health")
-	health.current_health = health.max_health * _health_fraction
-	health.health_changed.emit(health.current_health, health.max_health)
+	ship.set_health_fraction(_health_fraction)
 
 	if not pending_arrival_node_name.is_empty():
 		var arrival: Node2D = ship.get_tree().current_scene.get_node_or_null(pending_arrival_node_name)

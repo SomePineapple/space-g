@@ -47,25 +47,16 @@ var source_placement_id: String = ""
 
 var _shooter: Ship
 var _active_target: Node2D = null
-var _time: float = 0.0
-
-## Shared across every tractor beam hardpoint — a fresh CanvasItemMaterial per
-## pickup used to force a new renderer material/pipeline setup on every single
-## tractor grab, causing a real, reproducible hitch (see this module's prior
-## always-on cockpit history). The blend mode is the only property set and
-## never varies, so one cached instance is always correct to reuse.
-static var _additive_material_cache: CanvasItemMaterial
 
 @onready var _muzzle: Marker2D = $Muzzle
-var _glow_line: Line2D
-var _core_line: Line2D
+var _beam: BeamVisual
 
 
 func _ready() -> void:
-	_glow_line = _create_beam_line(beam_width * glow_width_multiplier,
-		Color(beam_color.r, beam_color.g, beam_color.b, beam_color.a * glow_alpha_multiplier))
-	_core_line = _create_beam_line(beam_width, beam_color)
-	_set_beam_visible(false)
+	_beam = BeamVisual.new()
+	add_child(_beam)
+	_beam.configure(beam_color, beam_width, pulse_speed, pulse_strength,
+		glow_width_multiplier, glow_alpha_multiplier)
 
 
 func setup(shooter: Ship) -> void:
@@ -73,8 +64,6 @@ func setup(shooter: Ship) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_time += delta
-
 	if _shooter == null or (not source_placement_id.is_empty() and _shooter.is_module_destroyed(source_placement_id)):
 		_release_target()
 		return
@@ -91,7 +80,7 @@ func _physics_process(delta: float) -> void:
 		_active_target = _find_nearest_valid_target()
 
 	if _active_target == null:
-		_set_beam_visible(false)
+		_beam.hide_beam()
 		return
 
 	_pull_target(delta)
@@ -161,7 +150,7 @@ func _pull_target(delta: float) -> void:
 		if _muzzle.global_position.distance_to(salvage.global_position) <= salvage_collect_radius:
 			if salvage.collect_for(_shooter):
 				_active_target = null
-				_set_beam_visible(false)
+				_beam.hide_beam()
 				return
 	elif _active_target is CapturedTechPart:
 		var part: CapturedTechPart = _active_target
@@ -171,7 +160,7 @@ func _pull_target(delta: float) -> void:
 			_shooter.capture_tech_part(part.module_type_id, part.manufacturer_id)
 			part.collect()
 			_active_target = null
-			_set_beam_visible(false)
+			_beam.hide_beam()
 			return
 
 	_update_beam_visual()
@@ -179,36 +168,8 @@ func _pull_target(delta: float) -> void:
 
 func _release_target() -> void:
 	_active_target = null
-	_set_beam_visible(false)
+	_beam.hide_beam()
 
 
 func _update_beam_visual() -> void:
-	_set_beam_visible(true)
-	var points: PackedVector2Array = [_muzzle.position, to_local(_active_target.global_position)]
-	_glow_line.points = points
-	_core_line.points = points
-
-	var pulse: float = 1.0 - pulse_strength * (sin(_time * pulse_speed) * 0.5 + 0.5)
-	_glow_line.modulate = Color(1.0, 1.0, 1.0, pulse)
-	_core_line.modulate = Color(1.0, 1.0, 1.0, pulse)
-
-
-func _set_beam_visible(should_be_visible: bool) -> void:
-	_glow_line.visible = should_be_visible
-	_core_line.visible = should_be_visible
-
-
-func _create_beam_line(width: float, color: Color) -> Line2D:
-	var line := Line2D.new()
-	line.width = width
-	line.default_color = color
-	line.material = _additive_material()
-	add_child(line)
-	return line
-
-
-func _additive_material() -> CanvasItemMaterial:
-	if _additive_material_cache == null:
-		_additive_material_cache = CanvasItemMaterial.new()
-		_additive_material_cache.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	return _additive_material_cache
+	_beam.draw_beam(_muzzle.position, _active_target.global_position)

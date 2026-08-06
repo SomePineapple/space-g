@@ -49,24 +49,17 @@ var source_placement_id: String = ""
 var _shooter: Ship
 var _active_target: Asteroid = null
 var _fragment_timer: float = 0.0
-var _time: float = 0.0
-
-## Shared across every grinder hardpoint — see HardpointTractorBeam's
-## identical cache for why a fresh CanvasItemMaterial per event is a real,
-## reproducible hitch worth avoiding.
-static var _additive_material_cache: CanvasItemMaterial
 
 @onready var _muzzle: Marker2D = $Muzzle
-var _beam_line: Line2D
+## No glow layer, unlike the tractor beam's — a grinder is a hard cutting
+## contact, not a soft field.
+var _beam: BeamVisual
 
 
 func _ready() -> void:
-	_beam_line = Line2D.new()
-	_beam_line.width = beam_width
-	_beam_line.default_color = beam_color
-	_beam_line.material = _additive_material()
-	add_child(_beam_line)
-	_set_beam_visible(false)
+	_beam = BeamVisual.new()
+	add_child(_beam)
+	_beam.configure(beam_color, beam_width, pulse_speed, pulse_strength)
 
 
 func setup(shooter: Ship) -> void:
@@ -94,8 +87,6 @@ func set_cell_size(cell_size: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_time += delta
-
 	if _shooter == null or (not source_placement_id.is_empty() and _shooter.is_module_destroyed(source_placement_id)):
 		_stop_grinding()
 		return
@@ -177,22 +168,8 @@ func _spawn_fragment() -> void:
 func _stop_grinding() -> void:
 	_active_target = null
 	_fragment_timer = 0.0
-	_set_beam_visible(false)
+	_beam.hide_beam()
 
 
 func _update_beam_visual() -> void:
-	_set_beam_visible(true)
-	_beam_line.points = [_muzzle.position, to_local(_active_target.global_position)]
-	var pulse: float = 1.0 - pulse_strength * (sin(_time * pulse_speed) * 0.5 + 0.5)
-	_beam_line.modulate = Color(1.0, 1.0, 1.0, pulse)
-
-
-func _set_beam_visible(should_be_visible: bool) -> void:
-	_beam_line.visible = should_be_visible
-
-
-func _additive_material() -> CanvasItemMaterial:
-	if _additive_material_cache == null:
-		_additive_material_cache = CanvasItemMaterial.new()
-		_additive_material_cache.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	return _additive_material_cache
+	_beam.draw_beam(_muzzle.position, _active_target.global_position)

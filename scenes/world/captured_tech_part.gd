@@ -1,91 +1,58 @@
 class_name CapturedTechPart
-extends Node2D
+extends DriftingHexPiece
 
 ## A severed module that stayed intact enough to be worth recovering (see
-## Ship._roll_capturable). Drifts like ordinary ShipDebris at first, but
-## persists far longer and can be reeled in by WinchBeam instead of just
-## fading away — see begin_reel_in(). Stores which module/faction it came
-## from for a future reverse-engineering/research system to consume.
+## Ship._roll_capturable). Drifts exactly like ordinary ShipDebris (both share
+## DriftingHexPiece), but persists far longer and can be reeled in by
+## HardpointWinch/HardpointTractorBeam instead of just fading away — see
+## begin_reel_in(). Stores which module/faction/manufacturer it came from for
+## the research and manufacturer-discovery systems to consume on pickup.
 
 signal captured
-
-@export var lifetime: float = 45.0
-@export var fade_duration: float = 2.0
-
-const OUTLINE_COLOR: Color = Color(0.05, 0.05, 0.07, 0.9)
 
 var module_type_id: String = ""
 var faction_id: String = ""
 ## Empty means "generic/no manufacturer" — see Manufacturer/ManufacturerCatalog.
 var manufacturer_id: String = ""
 
-var _cells: Array[Vector2i] = []
-var _colors: Array[Color] = []
-var _textures: Array[Texture2D] = []
-var _rotation_steps: int = 0
-var _cell_size: float = 24.0
-var _velocity: Vector2 = Vector2.ZERO
-var _spin: float = 0.0
-var _age: float = 0.0
 var _being_reeled_in: bool = false
 
 
+func _init() -> void:
+	# Far longer than ShipDebris': this is a pickup the player has to notice,
+	# fly to and reel in, not a one-second visual flourish.
+	lifetime = 45.0
+	fade_duration = 2.0
+
+
 func _ready() -> void:
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	super._ready()
 	add_to_group("capturable_tech")
 
 
-func setup(cells: Array[Vector2i], colors: Array[Color], textures: Array[Texture2D], rotation_steps: int,
-		cell_size: float, drift_velocity: Vector2, spin: float,
-		source_module_type_id: String, source_faction_id: String, source_manufacturer_id: String = "") -> void:
-	_cells = cells
-	_colors = colors
-	_textures = textures
-	_rotation_steps = rotation_steps
-	_cell_size = cell_size
-	_velocity = drift_velocity
-	_spin = spin
+## Provenance, set by Ship right after setup(). Kept separate from setup()
+## rather than widening it: GDScript requires an override to match its base
+## class's signature exactly, and every other DriftingHexPiece has no source
+## module to record.
+func set_source(source_module_type_id: String, source_faction_id: String, source_manufacturer_id: String = "") -> void:
 	module_type_id = source_module_type_id
 	faction_id = source_faction_id
 	manufacturer_id = source_manufacturer_id
-	queue_redraw()
 
 
-## Called by WinchBeam once it locks on. Stops the part drifting/spinning
-## and stops its own lifetime countdown so the winch has full control of its
-## motion until _complete_reel_in() collects it.
+## Called by a winch or tractor beam once it locks on. Stops the part drifting
+## and spinning, and stops its lifetime countdown, so the puller has full
+## control of its motion until collect().
 func begin_reel_in() -> void:
 	_being_reeled_in = true
 	_velocity = Vector2.ZERO
 	_spin = 0.0
 
 
+func is_drifting() -> bool:
+	return not _being_reeled_in
+
+
 func collect() -> void:
 	captured.emit()
 	queue_free()
-
-
-func _process(delta: float) -> void:
-	if _being_reeled_in:
-		return
-
-	_age += delta
-	position += _velocity * delta
-	rotation += _spin * delta
-
-	if _age >= lifetime - fade_duration:
-		modulate.a = clampf((lifetime - _age) / fade_duration, 0.0, 1.0)
-	if _age >= lifetime:
-		queue_free()
-
-
-func _draw() -> void:
-	for i in _cells.size():
-		var corners: PackedVector2Array = HexUtils.hex_corners(HexUtils.axial_to_pixel(_cells[i], _cell_size), _cell_size)
-		var texture: Texture2D = _textures[i] if i < _textures.size() else null
-		if texture != null:
-			draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners_for_rotation(_rotation_steps), texture)
-		else:
-			draw_colored_polygon(corners, _colors[i])
-		for j in corners.size():
-			draw_line(corners[j], corners[(j + 1) % corners.size()], OUTLINE_COLOR, 2.0)

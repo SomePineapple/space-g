@@ -13,11 +13,9 @@ enum State { IDLE, SUSPICIOUS, ALERT }
 enum MovementIntent { APPROACH, RETREAT, HOLD }
 
 @onready var ship: Ship = get_parent()
-@onready var _health: Health = ship.get_node("Health")
 
 var current_state: State = State.IDLE
 var _suspicion_elapsed: float = 0.0
-var _last_known_health: float = -1.0
 var _navigator: AINavigator = AINavigator.new()
 var _movement_intent: MovementIntent = MovementIntent.HOLD
 
@@ -46,17 +44,18 @@ const AIM_JITTER_FRACTION: float = 0.5
 
 
 func _ready() -> void:
-	_health.health_changed.connect(_on_health_changed)
+	# Ship relays its own Health's damaged signal, so this no longer reaches
+	# into the parent's node hierarchy for $Health — and no longer needs its
+	# own copy of the "did health go down" comparison.
+	ship.damaged.connect(_on_ship_damaged)
 
 
 ## Taking damage counts as noticing an attacker immediately, regardless of
 ## state or detection_range — without this, a stationary ship being shot
 ## from outside its detection range just sits there and never fights back.
-func _on_health_changed(current: float, _max: float) -> void:
-	if _last_known_health >= 0.0 and current < _last_known_health:
-		current_state = State.ALERT
-		_leash_timer = 0.0
-	_last_known_health = current
+func _on_ship_damaged(_amount: float, _current: float) -> void:
+	current_state = State.ALERT
+	_leash_timer = 0.0
 
 
 func _physics_process(delta: float) -> void:

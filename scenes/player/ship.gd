@@ -3,6 +3,14 @@ extends CharacterBody2D
 
 signal layout_applied
 signal energy_changed(current: float, max_energy: float)
+## Relayed from the internal Health component (see get_health()/its own
+## signals of the same name) so external systems — ShipAI, the HUD, the trade
+## panel — can react to this ship being hurt without reaching into its node
+## hierarchy for $Health, which is exactly the coupling the project's scene
+## ownership rules forbid.
+signal health_changed(current: float, max_health: float)
+signal damaged(amount: float, current: float)
+signal destroyed
 
 @export var thrust_force: float = 600.0
 @export var reverse_thrust_force: float = 120.0
@@ -126,7 +134,6 @@ var _grinder_active: bool = false
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
-var _last_known_health: float = -1.0
 var _time_since_last_damage: float = 0.0
 ## Recomputed once per layout apply rather than per call — get_layout_extent()
 ## walks every placement's every cell, and the AI reads it several times per
@@ -184,6 +191,7 @@ func _ready() -> void:
 
 	_health.destroyed.connect(_on_destroyed)
 	_health.health_changed.connect(_on_health_changed)
+	_health.damaged.connect(_on_health_damaged)
 	_base_hull_modulate = _hull_renderer.modulate
 
 	if is_in_group("player_ship"):
@@ -333,6 +341,29 @@ func is_module_destroyed(placement_id: String) -> bool:
 	if _detached_placement_ids.has(placement_id) or _regrowing_placement_ids.has(placement_id):
 		return true
 	return get_module_condition(placement_id) <= 0.0
+
+
+## Health readouts as a small public API, so the HUD, trade panel and
+## GameState no longer do ship.get_node("Health") to read them — see the
+## health_changed/damaged signals relayed above.
+func get_current_health() -> float:
+	return _health.current_health
+
+
+func get_max_health() -> float:
+	return _health.max_health
+
+
+func get_health_fraction() -> float:
+	return (_health.current_health / _health.max_health) if _health.max_health > 0.0 else 1.0
+
+
+## Restores a previously captured health fraction (see GameState) without
+## going through take_damage/heal, which would fire hit feedback for what is
+## really just state being carried across a scene change.
+func set_health_fraction(fraction: float) -> void:
+	_health.current_health = _health.max_health * clampf(fraction, 0.0, 1.0)
+	_health.health_changed.emit(_health.current_health, _health.max_health)
 
 
 func get_missing_health() -> float:
@@ -615,7 +646,7 @@ func _detach_module(placement: ModulePlacement) -> void:
 	if _roll_capturable(placement, module_type):
 		_spawn_capturable_part_for(placement, module_type)
 	else:
-		_spawn_debris_for(placement, module_type)
+		_spawn_severed_piece(ship_debris_scene, placement, module_type)
 
 
 func _free_collision_shapes_for(placement_id: String) -> void:
@@ -626,9 +657,9 @@ func _free_collision_shapes_for(placement_id: String) -> void:
 	_collision_shapes_by_placement.erase(placement_id)
 
 
-## Shared by _spawn_debris_for/_spawn_capturable_part_for: both spawn a node
-## representing the same severed placement's hex(es), just as a different
-## scene type, so the cell/color/texture/centroid gathering only lives once.
+## Gathers the visual description of a severed placement's hex(es) for
+## _spawn_severed_piece — both DriftingHexPiece flavors need exactly the same
+## cell/color/texture/centroid data.
 ## Uses the same per-cell, faction-reskinned texture lookup as
 ## ShipLayoutRenderer (get_hex_texture_for_cell) so the severed piece keeps
 ## showing the exact art it had on the hull, not the type's generic fallback.
@@ -645,21 +676,26 @@ func _debris_visual_data(placement: ModulePlacement, module_type: ModuleType) ->
 	return {"cells": cells, "colors": colors, "textures": textures, "rotation_steps": placement.rotation_steps, "centroid": local_centroid}
 
 
-func _spawn_debris_for(placement: ModulePlacement, module_type: ModuleType) -> void:
+## Spawns either flavor of severed hex piece — plain ShipDebris or a
+## recoverable CapturedTechPart. Both are DriftingHexPiece, and the placement
+## and launch maths were identical between them, so only the scene differs
+## here; the caller adds whatever is specific to its own type afterwards.
+func _spawn_severed_piece(piece_scene: PackedScene, placement: ModulePlacement, module_type: ModuleType) -> DriftingHexPiece:
 	var data: Dictionary = _debris_visual_data(placement, module_type)
 
-	var debris: ShipDebris = ship_debris_scene.instantiate()
-	get_tree().current_scene.add_child(debris)
+	var piece: DriftingHexPiece = piece_scene.instantiate()
+	get_tree().current_scene.add_child(piece)
 	# Same transform as HullRenderer (ship center + its fixed rotation offset),
-	# so the debris's cells render exactly where they were an instant ago,
+	# so the piece's cells render exactly where they were an instant ago,
 	# before drifting away under their own velocity.
-	debris.global_transform = _hull_renderer.global_transform
+	piece.global_transform = _hull_renderer.global_transform
 
-	var kick_direction: Vector2 = debris.global_transform.basis_xform(data["centroid"])
-	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(debris.global_rotation)
+	var kick_direction: Vector2 = piece.global_transform.basis_xform(data["centroid"])
+	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(piece.global_rotation)
 
-	debris.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _hull_renderer.cell_size,
+	piece.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _hull_renderer.cell_size,
 		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE))
+	return piece
 
 
 ## A severed module only stays intact enough to be worth recovering if it
@@ -680,18 +716,8 @@ func _roll_capturable(placement: ModulePlacement, module_type: ModuleType) -> bo
 
 
 func _spawn_capturable_part_for(placement: ModulePlacement, module_type: ModuleType) -> void:
-	var data: Dictionary = _debris_visual_data(placement, module_type)
-
-	var part: CapturedTechPart = captured_tech_part_scene.instantiate()
-	get_tree().current_scene.add_child(part)
-	part.global_transform = _hull_renderer.global_transform
-
-	var kick_direction: Vector2 = part.global_transform.basis_xform(data["centroid"])
-	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(part.global_rotation)
-
-	part.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _hull_renderer.cell_size,
-		velocity + kick_direction * DETACH_KICK_SPEED, randf_range(-DETACH_SPIN_RANGE, DETACH_SPIN_RANGE),
-		module_type.id, personality.faction_id, placement.manufacturer_id)
+	var part: CapturedTechPart = _spawn_severed_piece(captured_tech_part_scene, placement, module_type)
+	part.set_source(module_type.id, personality.faction_id, placement.manufacturer_id)
 
 
 ## New max_energy keeps the same fraction full rather than resetting to full
@@ -1048,14 +1074,21 @@ func is_in_nebula() -> bool:
 	return _nebula_depth > 0
 
 
-## Only current < last-known counts as damage — configure() (ship rebuilds
-## in the builder) also emits health_changed, but resets to full health
-## rather than lowering it, so it never falls through to the hit feedback.
-func _on_health_changed(current: float, _max: float) -> void:
-	var took_damage: bool = _last_known_health >= 0.0 and current < _last_known_health
-	_last_known_health = current
+func _on_health_changed(current: float, max_health: float) -> void:
+	health_changed.emit(current, max_health)
 
-	if took_damage and hit_sound != null:
+
+## Hit feedback, now driven by Health.damaged rather than by comparing
+## successive health_changed values here. Beyond removing this ship's copy of
+## that comparison, it fixes the hull flash firing on *every* health_changed:
+## the sound was correctly gated on "did health drop", but the white flash was
+## not, so passive module regrowth (which calls Health.heal every physics
+## frame — see _regenerate_modules) restarted the flash tween every frame and
+## pinned the hull white for the whole repair.
+func _on_health_damaged(amount: float, current: float) -> void:
+	damaged.emit(amount, current)
+
+	if hit_sound != null:
 		_hit_sound_player.stream = hit_sound
 		_hit_sound_player.play()
 
@@ -1229,6 +1262,7 @@ func apply_impulse(impulse: Vector2) -> void:
 ## adding the Salvage Area2D to the tree and freeing this body would
 ## otherwise touch physics server shape state mid-flush.
 func _on_destroyed() -> void:
+	destroyed.emit()
 	_finish_destruction.call_deferred()
 
 
