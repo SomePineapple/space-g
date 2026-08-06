@@ -32,8 +32,10 @@ func _ready() -> void:
 
 
 ## Top-right, opposite RadarDisplay (bottom-right) so the two never overlap.
-const RIGHT_MARGIN: float = 10.0
-const TOP_MARGIN: float = 10.0
+## TOP_MARGIN also clears the HUD's credits readout, which owns the strip
+## directly under the top-right corner.
+const RIGHT_MARGIN: float = 24.0
+const TOP_MARGIN: float = 52.0
 
 
 func _build_ui() -> void:

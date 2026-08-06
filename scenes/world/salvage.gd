@@ -78,7 +78,8 @@ var _pending_pickup_body: Node = null
 func _ready() -> void:
 	add_to_group("salvage")
 	body_entered.connect(_on_body_entered)
-	_drift_direction = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
+	var rng: RandomNumberGenerator = GameRng.stream("salvage")
+	_drift_direction = Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)).normalized()
 
 	var data: Dictionary = RARITY_DATA[rarity]
 	if kind == Kind.COMPONENT:

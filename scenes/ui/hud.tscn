@@ -3,56 +3,34 @@
 [ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_0mwgc"]
 [ext_resource type="Script" path="res://scenes/ui/radar_display.gd" id="2_radar"]
 [ext_resource type="Script" path="res://scenes/ui/scanner_display.gd" id="3_scanner"]
+[ext_resource type="Script" path="res://scenes/ui/vitals_readout.gd" id="4_vitals"]
+[ext_resource type="Script" path="res://scenes/ui/cargo_widget.gd" id="5_cargo"]
 
 [node name="HUD" type="CanvasLayer" unique_id=309546132]
 script = ExtResource("1_0mwgc")
 
-[node name="Background" type="ColorRect" parent="."]
-offset_left = 10.0
-offset_top = 10.0
-offset_right = 660.0
-offset_bottom = 132.0
-color = Color(0.05, 0.07, 0.1, 0.55)
+[node name="VitalsReadout" type="Control" parent="."]
+mouse_filter = 2
+script = ExtResource("4_vitals")
 
-[node name="SalvageLabel" type="Label" parent="." unique_id=610305732]
-offset_left = 20.0
-offset_top = 20.0
-offset_right = 21.0
-offset_bottom = 43.0
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Salvage: 0"
-
-[node name="HealthLabel" type="Label" parent="." unique_id=610305733]
-offset_left = 20.0
-offset_top = 48.0
-offset_right = 21.0
-offset_bottom = 71.0
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Health: 0 / 0"
-
-[node name="EnergyLabel" type="Label" parent="."]
-offset_left = 20.0
-offset_top = 76.0
-offset_right = 21.0
-offset_bottom = 99.0
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Energy: 0 / 0"
+[node name="CargoWidget" type="Control" parent="."]
+mouse_filter = 2
+script = ExtResource("5_cargo")
 
 [node name="CreditsLabel" type="Label" parent="."]
-offset_left = 20.0
-offset_top = 104.0
-offset_right = 21.0
-offset_bottom = 127.0
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -220.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 42.0
+theme_override_colors/font_color = Color(0.3333, 0.8392, 0.9098, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Credits: 0"
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 2
+text = "0 CR"
 
 [node name="StorageFullLabel" type="Label" parent="."]
 anchors_preset = 8
@@ -64,7 +42,7 @@ offset_left = -110.0
 offset_top = -220.0
 offset_right = 110.0
 offset_bottom = -190.0
-theme_override_colors/font_color = Color(1, 0.3, 0.3, 1)
+theme_override_colors/font_color = Color(0.8863, 0.4078, 0.2902, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 26

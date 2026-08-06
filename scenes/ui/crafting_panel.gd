@@ -1,90 +1,57 @@
-extends CanvasLayer
+extends GamePanel
 
 ## Phase 5.1 crafting screen — one row per CraftingCatalog recipe, each with
 ## its own quantity selector and Craft button. Recipe data (inputs/outputs)
 ## lives entirely in CraftingRecipe/CraftingCatalog; this panel only reads
 ## it, so a new recipe needs zero UI changes (see CraftingCatalog).
-const ROW_HEIGHT: float = 34.0
-const ROW_WIDTH: float = 460.0
-const CONTENT_TOP: float = 108.0
-const CONTENT_LEFT: float = 20.0
-const HEADER_HEIGHT: float = 30.0
+##
+## Layout constants and the menu-panel plumbing live on GamePanel.
 const STATUS_HEIGHT: float = 22.0
-const ROW_GAP: float = 6.0
-const BACKGROUND_MARGIN: float = 10.0
-const BACKGROUND_COLOR: Color = Color(0.05, 0.07, 0.1, 0.55)
 
-var _inventory: Inventory
 var _status_label: Label
 ## recipe_id -> {"info": Label, "quantity": SpinBox, "craft": Button}
 var _rows: Dictionary = {}
 
 
-func _ready() -> void:
-	visible = false
-	# So gameplay input (ship_input.gd) can suspend itself while any menu is
-	# open, without hard-coding a reference to this specific panel.
-	add_to_group("menu_panel")
+func _init() -> void:
+	toggle_action = "toggle_crafting"
+	# Wider than the default: recipe rows carry an ingredient list.
+	panel_width = 460.0
 
-	var ship: Ship = PlayerContext.get_ship()
-	if ship == null:
+
+func _setup() -> void:
+	if inventory == null:
 		return
 
-	_inventory = ship.get_inventory()
-	_inventory.materials_changed.connect(_on_state_changed)
-	_inventory.components_changed.connect(_on_state_changed)
-	_inventory.cargo_capacity_changed.connect(_on_state_changed)
+	inventory.materials_changed.connect(_on_state_changed)
+	inventory.components_changed.connect(_on_state_changed)
+	inventory.cargo_capacity_changed.connect(_on_state_changed)
 
 	_build_ui()
 	_refresh()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("toggle_crafting"):
-		return
-	visible = not visible
-	if visible:
-		_refresh()
+func _on_opened() -> void:
+	_refresh()
 
 
 func _build_ui() -> void:
-	var panel := Control.new()
-	panel.position = Vector2(CONTENT_LEFT, CONTENT_TOP)
-	add_child(panel)
-
 	var recipes: Array[CraftingRecipe] = CraftingCatalog.get_all()
 	var rows_top: float = HEADER_HEIGHT + STATUS_HEIGHT + ROW_GAP
 	var content_height: float = rows_top + recipes.size() * (ROW_HEIGHT + ROW_GAP)
-
-	var background := ColorRect.new()
-	background.position = Vector2(-BACKGROUND_MARGIN, -BACKGROUND_MARGIN)
-	background.size = Vector2(ROW_WIDTH + BACKGROUND_MARGIN * 2, content_height + BACKGROUND_MARGIN * 2)
-	background.color = BACKGROUND_COLOR
-	panel.add_child(background)
-
-	var header := Label.new()
-	header.position = Vector2(0, 0)
-	header.size = Vector2(ROW_WIDTH, HEADER_HEIGHT)
-	header.text = "Crafting"
-	header.add_theme_font_size_override("font_size", 18)
-	panel.add_child(header)
+	var panel: Control = build_panel_root(content_height, "Crafting")
 
 	_status_label = Label.new()
 	_status_label.position = Vector2(0, HEADER_HEIGHT)
-	_status_label.size = Vector2(ROW_WIDTH, STATUS_HEIGHT)
+	_status_label.size = Vector2(panel_width, STATUS_HEIGHT)
 	_status_label.clip_text = true
 	_status_label.text = "Select a quantity and craft."
 	panel.add_child(_status_label)
 
 	for i in recipes.size():
 		var recipe: CraftingRecipe = recipes[i]
-		var row_top: float = rows_top + i * (ROW_HEIGHT + ROW_GAP)
-
-		var row := HBoxContainer.new()
-		row.position = Vector2(0, row_top)
-		row.size = Vector2(ROW_WIDTH, ROW_HEIGHT)
+		var row: HBoxContainer = build_row(panel, rows_top + i * (ROW_HEIGHT + ROW_GAP))
 		row.add_theme_constant_override("separation", 8)
-		panel.add_child(row)
 
 		var info_label := Label.new()
 		info_label.custom_minimum_size = Vector2(300, ROW_HEIGHT)
@@ -110,20 +77,20 @@ func _build_ui() -> void:
 
 
 func _on_craft_pressed(recipe_id: String) -> void:
-	if _inventory == null:
+	if inventory == null:
 		return
 
 	var recipe: CraftingRecipe = CraftingCatalog.get_by_id(recipe_id)
 	var quantity: int = int(_rows[recipe_id]["quantity"].value)
 
-	if not _inventory.can_craft(recipe, quantity):
-		if not _inventory.has_cargo_space(recipe.output_amount * quantity):
+	if not inventory.can_craft(recipe, quantity):
+		if not inventory.has_cargo_space(recipe.output_amount * quantity):
 			_status_label.text = "Cannot craft %s: not enough cargo space." % recipe.display_name
 		else:
 			_status_label.text = "Cannot craft %s: missing ingredients." % recipe.display_name
 		return
 
-	_inventory.craft(recipe, quantity)
+	inventory.craft(recipe, quantity)
 	_status_label.text = "Crafted %d %s." % [recipe.output_amount * quantity, recipe.display_name]
 
 
@@ -132,7 +99,7 @@ func _on_state_changed(_value) -> void:
 
 
 func _refresh() -> void:
-	if _inventory == null:
+	if inventory == null:
 		return
 
 	for recipe in CraftingCatalog.get_all():
@@ -140,16 +107,16 @@ func _refresh() -> void:
 		var quantity: int = int(row["quantity"].value)
 
 		row["info"].text = "%s: %s -> %d owned" % [
-			recipe.display_name, _format_inputs(recipe), _inventory.get_component_amount(recipe.output_component_id),
+			recipe.display_name, _format_inputs(recipe), inventory.get_component_amount(recipe.output_component_id),
 		]
-		row["craft"].disabled = not _inventory.can_craft(recipe, quantity)
+		row["craft"].disabled = not inventory.can_craft(recipe, quantity)
 		row["quantity"].value_changed.connect(_on_quantity_changed.bind(recipe.id), CONNECT_REFERENCE_COUNTED)
 
 
 func _on_quantity_changed(_new_value: float, recipe_id: String) -> void:
 	var recipe: CraftingRecipe = CraftingCatalog.get_by_id(recipe_id)
 	var quantity: int = int(_rows[recipe_id]["quantity"].value)
-	_rows[recipe_id]["craft"].disabled = _inventory == null or not _inventory.can_craft(recipe, quantity)
+	_rows[recipe_id]["craft"].disabled = inventory == null or not inventory.can_craft(recipe, quantity)
 
 
 func _format_inputs(recipe: CraftingRecipe) -> String:

@@ -743,12 +743,11 @@ func _on_destroyed() -> void:
 
 func _finish_destruction() -> void:
 	var explosion: Explosion = explosion_scene.instantiate()
-	get_tree().current_scene.add_child(explosion)
-	explosion.global_position = global_position
 	explosion.effect_scale = destruction_explosion_scale
+	WorldSpawn.attach_at(explosion, global_position)
 
 	if drops_salvage:
-		var drop_count: int = randi_range(salvage_drop_count_min, salvage_drop_count_max)
+		var drop_count: int = GameRng.stream("loot").randi_range(salvage_drop_count_min, salvage_drop_count_max)
 		for i in drop_count:
 			_spawn_kill_drop()
 
@@ -756,19 +755,20 @@ func _finish_destruction() -> void:
 
 
 func _spawn_kill_drop() -> void:
+	var rng: RandomNumberGenerator = GameRng.stream("loot")
 	var salvage: Salvage = salvage_scene.instantiate()
 	var rolled_rarity: Salvage.Rarity = _roll_salvage_rarity()
 	salvage.rarity = rolled_rarity
-	if randf() < component_drop_chance:
+	if rng.randf() < component_drop_chance:
 		salvage.kind = Salvage.Kind.COMPONENT
 		salvage.component_id = _roll_combat_component()
 	else:
 		salvage.material_id = _roll_combat_material()
-	salvage.is_dangerous = randf() < _danger_chance_for_rarity(rolled_rarity)
-	get_tree().current_scene.add_child(salvage)
+	salvage.is_dangerous = rng.randf() < _danger_chance_for_rarity(rolled_rarity)
 	# Small scatter so multiple drops from one kill don't spawn stacked exactly
 	# on top of each other.
-	salvage.global_position = global_position + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0))
+	var scatter := Vector2(rng.randf_range(-20.0, 20.0), rng.randf_range(-20.0, 20.0))
+	WorldSpawn.attach_at(salvage, global_position + scatter)
 
 
 func _danger_chance_for_rarity(rolled_rarity: Salvage.Rarity) -> float:
@@ -788,7 +788,7 @@ func _danger_chance_for_rarity(rolled_rarity: Salvage.Rarity) -> float:
 
 
 func _roll_salvage_rarity() -> Salvage.Rarity:
-	var roll: float = randf()
+	var roll: float = GameRng.stream("loot").randf()
 	if roll < 0.55:
 		return Salvage.Rarity.COMMON
 	elif roll < 0.8:
@@ -805,11 +805,12 @@ func _roll_salvage_rarity() -> Salvage.Rarity:
 ## each drop rolls uniformly from all four raw materials (see
 ## MaterialCatalog.ALL_IDS) independently of its rarity/amount tier.
 func _roll_combat_material() -> String:
-	return MaterialCatalog.ALL_IDS[randi_range(0, MaterialCatalog.ALL_IDS.size() - 1)]
+	return MaterialCatalog.ALL_IDS[GameRng.stream("loot").randi_range(0, MaterialCatalog.ALL_IDS.size() - 1)]
 
 
 ## See component_drop_chance/rare_component_chance — picks which component a
 ## kill-drop that already rolled COMPONENT actually carries.
 func _roll_combat_component() -> String:
-	var pool: Array[String] = ComponentCatalog.RARE_IDS if randf() < rare_component_chance else ComponentCatalog.COMMON_IDS
-	return pool[randi_range(0, pool.size() - 1)]
+	var rng: RandomNumberGenerator = GameRng.stream("loot")
+	var pool: Array[String] = ComponentCatalog.RARE_IDS if rng.randf() < rare_component_chance else ComponentCatalog.COMMON_IDS
+	return pool[rng.randi_range(0, pool.size() - 1)]

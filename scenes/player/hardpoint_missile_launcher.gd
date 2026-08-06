@@ -70,7 +70,7 @@ func fire() -> Projectile:
 		missile.turn_rate_ramp_time = turn_rate_ramp_time
 		missile.max_miss_offset_ratio = max_miss_offset_ratio
 		missile.miss_chance = miss_chance
-		missile.lifetime = randf_range(missile_lifetime - lifetime_variance, missile_lifetime)
+		missile.lifetime = GameRng.stream("missile").randf_range(missile_lifetime - lifetime_variance, missile_lifetime)
 		missile.creep_acceleration = creep_acceleration
 
 		var locked_target: Node2D = _shooter.get_locked_target()

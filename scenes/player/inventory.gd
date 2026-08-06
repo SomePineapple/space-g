@@ -289,7 +289,7 @@ func add_owned_module(key: String, amount: int = 1) -> void:
 	var parts: PackedStringArray = key.split("::")
 	for i in amount:
 		var instance := ModuleInstance.new()
-		instance.instance_id = "mi_%d_%d" % [Time.get_ticks_usec(), randi() % 100000]
+		instance.instance_id = GameRng.next_id("mi")
 		instance.module_type_id = parts[0]
 		instance.manufacturer_id = parts[1] if parts.size() > 1 else ""
 		_owned_module_pool[key].append(instance)

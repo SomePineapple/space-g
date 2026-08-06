@@ -48,6 +48,11 @@ const BLIP_MATCH_DISTANCE: float = 150.0
 ## _build_range_label) — the outer ring is exactly this distance out.
 const RANGE_LABEL_HEIGHT: float = 18.0
 
+## One faint ring per this many world units of range, so upgrading the radar
+## adds rings rather than rescaling a fixed pair of them
+## (docs/HUD-1d-Godot-spec.md §3). Range 1800 -> one ring at 1000.
+const RING_INTERVAL: float = 1000.0
+
 var _player: Ship
 var _sweep_angle: float = 0.0
 var _prev_sweep_angle: float = 0.0
@@ -63,10 +68,10 @@ func _ready() -> void:
 	var diameter: float = radius * 2.0
 	custom_minimum_size = Vector2(diameter + 10.0, diameter + 10.0 + RANGE_LABEL_HEIGHT)
 	set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	offset_left = -(diameter + 20.0)
-	offset_top = -(diameter + 20.0 + RANGE_LABEL_HEIGHT)
-	offset_right = -10.0
-	offset_bottom = -10.0
+	offset_left = -(diameter + 10.0 + HudPalette.CORNER_MARGIN)
+	offset_top = -(diameter + 10.0 + RANGE_LABEL_HEIGHT + HudPalette.CORNER_MARGIN)
+	offset_right = -HudPalette.CORNER_MARGIN
+	offset_bottom = -HudPalette.CORNER_MARGIN
 
 	_build_range_label(diameter)
 	_refresh_contacts()
@@ -74,12 +79,12 @@ func _ready() -> void:
 
 func _build_range_label(diameter: float) -> void:
 	_range_label = Label.new()
-	_range_label.text = "Range: %d" % int(detection_range)
+	_range_label.text = "RANGE %d" % int(detection_range)
 	_range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_range_label.position = Vector2(5.0, diameter + 12.0)
 	_range_label.size = Vector2(diameter, RANGE_LABEL_HEIGHT)
-	_range_label.add_theme_font_size_override("font_size", 13)
-	_range_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
+	_range_label.add_theme_font_size_override("font_size", 12)
+	_range_label.add_theme_color_override("font_color", HudPalette.with_alpha(HudPalette.CYAN, 0.75))
 	_range_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	_range_label.add_theme_constant_override("outline_size", 4)
 	add_child(_range_label)
@@ -164,19 +169,57 @@ func _decay_blips(delta: float) -> void:
 func _draw() -> void:
 	var center: Vector2 = Vector2(radius, radius) + Vector2(5.0, 5.0)
 
-	draw_circle(center, radius, Color(0.0, 0.15, 0.05, 0.55))
-	draw_arc(center, radius, 0.0, TAU, 48, Color(0.3, 1.0, 0.5, 0.6), 1.5)
-	draw_arc(center, radius * 0.5, 0.0, TAU, 32, Color(0.3, 1.0, 0.5, 0.25), 1.0)
+	_draw_dial(center)
+	_draw_sweep(center)
 
-	var sweep_dir: Vector2 = Vector2.RIGHT.rotated(_sweep_angle)
-	draw_line(center, center + sweep_dir * radius, Color(0.4, 1.0, 0.6, 0.9), 2.0)
-
-	var scale: float = radius / detection_range
+	var dial_scale: float = radius / detection_range
 	for blip in _blips:
-		var point: Vector2 = center + (blip["offset"] as Vector2) * scale
+		var point: Vector2 = center + (blip["offset"] as Vector2) * dial_scale
 		var color: Color = CATEGORY_COLOR.get(blip["category"], Color.WHITE)
-		color.a *= 1.0 - ((blip["age"] as float) / blip_fade_duration)
+		var fade: float = 1.0 - ((blip["age"] as float) / blip_fade_duration)
+		_draw_ping_pulse(point, color, blip["age"])
+		color.a *= fade
 		_draw_contact(point, blip["category"], color)
+
+	# Ship marker last so contacts never draw over it.
+	draw_circle(center, 2.5, HudPalette.CYAN_BRIGHT)
+
+
+## No square frame — the dial floats directly over the game view. The radial
+## gradient is faked with concentric fills because draw_circle takes a flat
+## colour and a GradientTexture2D would need a TextureRect child.
+func _draw_dial(center: Vector2) -> void:
+	const STEPS: int = 6
+	for i in range(STEPS, 0, -1):
+		var t: float = float(i) / float(STEPS)
+		draw_circle(center, radius * t, HudPalette.with_alpha(HudPalette.CYAN_DARK, 0.05 * (1.0 - t) + 0.03))
+
+	# Outer ring is the max-range boundary.
+	draw_arc(center, radius, 0.0, TAU, 64, HudPalette.with_alpha(HudPalette.CYAN, 0.3), 1.0)
+	for ring_value in range(int(RING_INTERVAL), int(detection_range), int(RING_INTERVAL)):
+		var ring_radius: float = radius * (float(ring_value) / detection_range)
+		draw_arc(center, ring_radius, 0.0, TAU, 48, HudPalette.with_alpha(HudPalette.CYAN, 0.16), 1.0)
+
+
+## A short trailing wedge rather than a bare line, so the leading edge reads
+## as the current bearing and the tail shows which way it's turning.
+func _draw_sweep(center: Vector2) -> void:
+	const TRAIL: float = 0.45
+	const SEGMENTS: int = 18
+	for i in range(SEGMENTS):
+		var t: float = float(i) / float(SEGMENTS)
+		var angle: float = _sweep_angle - TRAIL * t
+		var alpha: float = 0.45 * (1.0 - t)
+		draw_line(center, center + Vector2.RIGHT.rotated(angle) * radius,
+				HudPalette.with_alpha(HudPalette.CYAN, alpha), 2.0)
+
+
+## Expanding ring per contact, restarted every time the sweep re-pings it —
+## blip age doubles as the pulse clock, so no per-blip Tween is needed.
+func _draw_ping_pulse(point: Vector2, color: Color, age: float) -> void:
+	var t: float = clampf(age / blip_fade_duration, 0.0, 1.0)
+	draw_arc(point, 4.0 * lerpf(0.5, 2.4, t), 0.0, TAU, 20,
+			HudPalette.with_alpha(color, 0.9 * (1.0 - t)), 1.0)
 
 
 func _draw_contact(point: Vector2, category: Category, color: Color) -> void:

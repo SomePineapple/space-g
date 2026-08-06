@@ -52,8 +52,7 @@ func _destroy() -> void:
 	var explosion: Explosion = explosion_scene.instantiate()
 	explosion.tint = color
 	explosion.effect_scale = explosion_scale
-	get_tree().current_scene.add_child(explosion)
-	explosion.global_position = global_position
+	WorldSpawn.attach_at(explosion, global_position)
 
 	# Deferred: this runs from within the physics engine's collision query
 	# flush (_on_body_entered), where freeing a CollisionObject2D

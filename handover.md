@@ -5,7 +5,10 @@ Purpose: bring a fresh chat up to speed without re-deriving context. Read this,
 `vision.md` is longer-term aspirational material — only relevant if the user
 explicitly brings it up. `docs/gotchas.md` has durable GDScript/Godot/MCP
 gotchas pulled out of session history — check it before fighting a weird
-engine/tooling behavior.
+engine/tooling behavior. **`docs/multiplayer.md` is required reading before
+touching ship control, the player-ship lookup, randomness or object spawning**
+— those four areas now have deliberate seams in them and it explains what is
+and (mostly) is not prepared for multiplayer.
 
 **Read "Most recent session" first.** Sessions older than the two kept in
 full below are compressed to short summaries — full narrative detail (exact
@@ -14,7 +17,94 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (Phase 8.1 Module Upgrades — framework, entry-point revision, hardpoint-modifier wiring)
+## Most recent session (code review + four-tranche refactor: bugs/perf, DRY, ship.gd decomposition, multiplayer foundations)
+
+A user-requested four-part code review (duplication / architecture / correctness
+/ deliverable) whose implementation was split into four agreed tranches. All
+four are done and were verified live via `game_eval` against the running
+project. Tranches 1–3 are committed (`b9122c5`, `5d09b49`, `cebcaea`); tranche 4
+was in progress at the end of the session.
+
+**No human has played any of it.** Everything below is verified by scripted
+checks — numeric before/after comparisons, signal-emission counts, spawn counts
+— not by flying the ship. Tranche 3 moved collision shapes, hardpoint parenting
+and the entire damage model; tranche 4 rerouted every input. A real playtest is
+the outstanding item.
+
+### Tranche 1 — bugs and performance
+- **Real bug fixed**: destroying an upgraded engine left its upgrade bonus on
+  the ship (`_recompute_thrust_stats()` now re-sums live modules instead of
+  subtracting the module type's *base* contribution), and `max_speed` was never
+  re-derived at all, so a ship that lost every engine kept its top speed.
+- Dictionary indexes on `ModuleCatalog`/`MaterialCatalog`/`ComponentCatalog`
+  (`get_by_id` was a linear scan under a per-hex, per-frame call path) and on
+  `ShipLayout` (cell → placement, placement_id → placement, cached occupied
+  cells, invalidated on place/remove/rotate).
+- Cached layout extent, cached thruster particle nodes, throttled the energy
+  signal to whole-number changes, `HardpointWinch` rope leak on `_exit_tree`,
+  zero-mass guards.
+
+### Tranche 2 — DRY extractions
+- `DriftingHexPiece` base for `ShipDebris`/`CapturedTechPart`;
+  `ChargedHardpoint` base for railgun/phase lance; `BeamVisual` shared by
+  tractor beam and grinder (one cached additive material for all beams).
+- `Health.damaged(amount, current)` — fires only on an actual drop. Removed
+  **four** separate `_last_known_health` copies (ship, HUD, ship_ai,
+  camera_shake) and every `get_node("Health")` reach.
+- **Real bug fixed en route**: the white hull flash was gated on
+  `health_changed`, not "did health drop", so passive module regrowth (which
+  heals every physics frame) restarted the flash tween every frame and pinned
+  the hull white for the entire repair.
+
+### Tranche 3 — ship.gd decomposition (1449 → 779 lines)
+Four new child components on `ship.tscn`, all delegated to and relayed for, so
+nothing outside the ship talks to them:
+- `HullDamageModel` — per-module condition, splash/beam resolution, severance,
+  regrowth, paid repair, per-placement collision shapes. Reports back via
+  `modules_changed` / `hull_healed` / `hull_lost` rather than touching Health.
+- `HardpointBank` — owns every mounted hardpoint as its own children; five
+  parallel arrays and five near-identical spawn functions collapsed; lookups
+  now O(1) via `placement_id → node`.
+- `WreckageSpawner` — debris, capturable parts, seam sparks.
+- `ShipEnergy` — the pool, its capacity derivation and its throttled signal.
+
+**Deferred deliberately**: the loot-drop split. Its five tuning exports are
+overridden per archetype in nine scene files and the right destination is a
+`LootTable` Resource, not a node — worth doing properly rather than half-moving.
+
+### Tranche 4 — multiplayer foundations
+**See `docs/multiplayer.md` — it is the authoritative record, including a long
+"what is still single-player-only" section. Do not infer readiness from the
+seams existing.**
+
+The user specified two eventual modes: (1) one ship per player, (2) several
+players crewing one ship. Both shaped the work:
+- **`ShipIntent`** — commands as plain data, tagged by `Role`
+  (HELM/WEAPONS/OPERATIONS). Everything commanding a ship goes through
+  `Ship.submit_intent(intent, roles)`, which **filters by role on arrival
+  rather than trusting the sender** — already the authority check a server
+  needs. `ship_input.gd` and `ship_ai.gd` are both now just intent producers;
+  the ship cannot tell them apart. Ship's individual input setters were removed.
+- **`PlayerContext`** (autoload) — which ship is *this machine's*, plus
+  `local_roles`. Replaced twelve `get_nodes_in_group("player_ship")[0]` lookups.
+  The group stays and is still right for "any player ship" — `region_boundary`
+  and `ship_ai` were changed to iterate it rather than take `[0]`.
+- **`GameRng`** (autoload) — named seeded streams for *simulation* randomness.
+  Presentation randomness (camera shake, starfield) deliberately stays on global
+  `randf()`; the reasoning is in the doc and at the call site.
+- **`WorldSpawn`** — one entry point for objects entering the region (~18 inline
+  `current_scene.add_child` calls). Local-only presentation deliberately excluded.
+- **`GamePanel`** — base for the five gameplay menus; absorbed four copies of
+  the home-base gate, the layout constants and the panel scaffolding.
+
+**Two real bugs found during tranche 4 verification, both introduced by it:** a
+station that stopped submitting left its last order latched (a disconnecting
+helmsman would pin the throttle open — now roles nobody submitted for are
+released each frame), and the lock-on indicator was destroyed the same frame it
+spawned once the lock began landing a frame later (it now tracks confirmed
+state, which is also the correct model for a networked client).
+
+## Session before that (Phase 8.1 Module Upgrades — framework, entry-point revision, hardpoint-modifier wiring)
 
 Implements a user-supplied "Phase 8 — Module Upgrades / 8.1 Upgrade
 framework" spec (styled after a Jedi Survivor-esque radial skill-tree
@@ -153,7 +243,7 @@ that wired two previously-unwired hardpoint kinds.
   the HUD's top-left resource readout was spotted in the verification
   screenshot but not addressed (not what was asked).
 
-## Session before that (Phase 5 Crafting & Construction Economy, then a fix-up pass)
+## Earlier session (Phase 5 Crafting & Construction Economy, then a fix-up pass)
 
 Implements a user-supplied "Phase 5 — Crafting and Construction Economy" spec
 across three back-to-back requests in the same session: 5.1 (crafting
@@ -1309,6 +1399,11 @@ ship's overall `Health` pool.
 
 No specific next item has been chosen yet. Candidates on the table, most
 relevant first:
+- **A real human playtest of the refactor** — four tranches reshaped the ship's
+  internals and every input path, verified only by scripted checks. Fly it,
+  fight something, mine, build a ship, warp. This outranks everything below.
+- **Commit tranche 4** if it is still uncommitted, and decide whether the
+  deferred `LootTable` Resource (see tranche 3) is worth doing now.
 - **A real human playtest of the whole Phase 8.1 module upgrade system** —
   the U-key menu, the radial tree's readability/feel against the reference
   design, and every cost/branch/cross-module-gate number are first-pass,

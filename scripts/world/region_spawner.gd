@@ -72,5 +72,4 @@ func _spawn_asteroid(rng: RandomNumberGenerator, local_point: Vector2) -> void:
 	asteroid.size_tier = region_type.pick_size_tier(rng)
 	asteroid.random_seed = rng.randi_range(1, 10000000)
 	asteroid.self_modulate = region_type.asteroid_tint
-	get_tree().current_scene.add_child(asteroid)
-	asteroid.global_position = global_position + local_point
+	WorldSpawn.attach_at(asteroid, global_position + local_point)

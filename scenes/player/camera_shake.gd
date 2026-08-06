@@ -83,5 +83,10 @@ func _process(delta: float) -> void:
 		offset = Vector2.ZERO
 		return
 
+	# Deliberately the global randf(), not a GameRng stream: shake is local
+	# decoration, so there's nothing to agree with another machine about. Worse,
+	# drawing it from a shared stream would advance that stream once per rendered
+	# frame — a different number of times on every machine — and desync every
+	# simulation roll downstream of it. See GameRng's header.
 	offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake_strength
 	_shake_strength = maxf(_shake_strength - shake_decay_rate * delta, 0.0)

@@ -114,7 +114,7 @@ func _pick_recovery_turn_direction(ship: Ship) -> float:
 	var avoidance: Vector2 = compute_avoidance_vector(ship)
 	if avoidance.length() > 0.01:
 		return signf(ship.transform.x.cross(avoidance))
-	return 1.0 if randf() < 0.5 else -1.0
+	return 1.0 if GameRng.stream("ai").randf() < 0.5 else -1.0
 
 
 ## Blends "seek the target" with steering away from nearby asteroids/ships
@@ -202,7 +202,7 @@ func compute_avoidance_vector(ship: Ship, exclude_target: Node2D = null) -> Vect
 	var lateral_signal: float = forward.cross(avoidance)
 	if absf(lateral_signal) < AMBIGUOUS_LATERAL_EPS:
 		if _avoidance_bias_sign == 0.0:
-			_avoidance_bias_sign = 1.0 if randf() < 0.5 else -1.0
+			_avoidance_bias_sign = 1.0 if GameRng.stream("ai").randf() < 0.5 else -1.0
 		avoidance += forward.rotated(PI / 2.0 * _avoidance_bias_sign) * STICKY_LATERAL_PUSH * strongest_closeness
 	else:
 		_avoidance_bias_sign = signf(lateral_signal)

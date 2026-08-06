@@ -2,7 +2,7 @@ class_name HardpointGrinder
 extends Node2D
 
 ## Mining Grinder hex module: a short-range, contact-operation tool the
-## player toggles on/off (see Ship.toggle_grinder, "G"), unlike the
+## player toggles on/off (see ShipIntent.toggle_grinder, "G"), unlike the
 ## always-on Tractor Beam — grinding deals continuous damage, so it needs
 ## deliberate activation rather than running whenever mounted.
 ##
@@ -161,8 +161,7 @@ func _spawn_fragment() -> void:
 	var fragment: Salvage = salvage_scene.instantiate()
 	fragment.material_id = _active_target.roll_ore_material()
 	fragment.amount_multiplier = fragment_yield_multiplier
-	get_tree().current_scene.add_child(fragment)
-	fragment.global_position = _muzzle.global_position.move_toward(_active_target.global_position, contact_range * 0.5)
+	WorldSpawn.attach_at(fragment, _muzzle.global_position.move_toward(_active_target.global_position, contact_range * 0.5))
 
 
 func _stop_grinding() -> void:

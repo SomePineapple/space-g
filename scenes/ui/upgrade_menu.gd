@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends GamePanel
 
 ## Standalone per-instance module upgrade menu (Phase 8.1), opened with a
 ## dedicated key (toggle_upgrades — "U") rather than a button buried inside
@@ -12,15 +12,11 @@ extends CanvasLayer
 ## never rebuilds the ship wholesale (see Ship.apply_instance_upgrade_effect),
 ## so it's safe to use without silently resetting health/module condition.
 
-@export var home_base_range: float = 300.0
-
 const CATEGORY_WIDTH: float = 150.0
 const INSTANCE_LIST_WIDTH: float = 340.0
 const PANEL_HEIGHT: float = 420.0
-const ROW_HEIGHT: float = 34.0
-
-var _ship: Ship
-var _inventory: Inventory
+## Taller than GamePanel.ROW_HEIGHT — these rows carry two lines of module text.
+const INSTANCE_ROW_HEIGHT: float = 34.0
 
 var _category_container: VBoxContainer
 var _instance_container: VBoxContainer
@@ -34,40 +30,22 @@ var _categories: Dictionary = {}
 var _category_order: Array[String] = []
 
 
-func _ready() -> void:
-	visible = false
-	# So gameplay input (ship_input.gd) can suspend itself while any menu is
-	# open, without hard-coding a reference to this specific panel.
-	add_to_group("menu_panel")
+func _init() -> void:
+	toggle_action = "toggle_upgrades"
+	requires_home_base = true
 
+
+func _setup() -> void:
 	_build_categories()
-
-	_ship = PlayerContext.get_ship()
-	if _ship != null:
-		_inventory = _ship.get_inventory()
-
 	_build_ui()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("toggle_upgrades"):
-		return
-
-	if visible:
-		visible = false
-		_close_tree_overlay()
-		return
-
-	if _is_near_home_base():
-		visible = true
-		_refresh_categories()
+func _on_opened() -> void:
+	_refresh_categories()
 
 
-func _is_near_home_base() -> bool:
-	var home_bases: Array = get_tree().get_nodes_in_group("home_base")
-	if _ship == null or home_bases.is_empty():
-		return false
-	return _ship.global_position.distance_to(home_bases[0].global_position) <= home_base_range
+func _on_closed() -> void:
+	_close_tree_overlay()
 
 
 ## Groups every ModuleType into a small set of player-facing categories —
@@ -165,11 +143,11 @@ func _refresh_instances() -> void:
 	for child in _instance_container.get_children():
 		child.queue_free()
 
-	if _selected_category.is_empty() or _ship == null or _ship.ship_layout == null:
+	if _selected_category.is_empty() or ship == null or ship.ship_layout == null:
 		return
 
 	var type_ids: Array = _categories.get(_selected_category, [])
-	var placements: Array = _ship.ship_layout.placements.filter(func(p): return type_ids.has(p.module_type_id))
+	var placements: Array = ship.ship_layout.placements.filter(func(p): return type_ids.has(p.module_type_id))
 
 	if placements.is_empty():
 		var empty_label := Label.new()
@@ -181,7 +159,7 @@ func _refresh_instances() -> void:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		var tree_size: int = ModuleUpgradeService.get_tree_for_placement(placement).size()
 		var button := Button.new()
-		button.custom_minimum_size = Vector2(0, ROW_HEIGHT)
+		button.custom_minimum_size = Vector2(0, INSTANCE_ROW_HEIGHT)
 
 		if tree_size == 0:
 			button.text = "%s at (%d, %d) — no upgrades yet" % [module_type.display_name, placement.hex_coord.x, placement.hex_coord.y]
@@ -202,7 +180,7 @@ func _on_instance_pressed(placement: ModulePlacement) -> void:
 		_tree_overlay.upgrade_unlocked.connect(_on_upgrade_unlocked)
 
 	_tree_overlay_placement = placement
-	_tree_overlay.open(_ship.ship_layout, _inventory, placement)
+	_tree_overlay.open(ship.ship_layout, inventory, placement)
 
 
 func _close_tree_overlay() -> void:
@@ -219,5 +197,5 @@ func _on_upgrade_unlocked(upgrade_id: String) -> void:
 	if _tree_overlay_placement == null:
 		return
 	var node: ModuleUpgradeNode = ModuleUpgradeCatalog.get_by_id(upgrade_id)
-	_ship.apply_instance_upgrade_effect(_tree_overlay_placement, node)
+	ship.apply_instance_upgrade_effect(_tree_overlay_placement, node)
 	_refresh_instances()

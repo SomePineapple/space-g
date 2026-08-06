@@ -90,10 +90,11 @@ func _ready() -> void:
 func launch_toward(target: Node2D) -> void:
 	var target_position: Vector2 = target.global_position
 	var distance: float = global_position.distance_to(target_position)
-	var offset_ratio: float = randf() * max_miss_offset_ratio * 0.35
-	if randf() < miss_chance:
-		offset_ratio = randf_range(max_miss_offset_ratio * 0.6, max_miss_offset_ratio)
-	_miss_offset = Vector2.RIGHT.rotated(randf_range(0.0, TAU)) * distance * offset_ratio
+	var rng: RandomNumberGenerator = GameRng.stream("missile")
+	var offset_ratio: float = rng.randf() * max_miss_offset_ratio * 0.35
+	if rng.randf() < miss_chance:
+		offset_ratio = rng.randf_range(max_miss_offset_ratio * 0.6, max_miss_offset_ratio)
+	_miss_offset = Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * distance * offset_ratio
 
 	_target_node = target
 	_target_position = target_position + _miss_offset

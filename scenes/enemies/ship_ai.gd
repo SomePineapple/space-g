@@ -238,7 +238,8 @@ func _jittered_aim_point(player: Ship, delta: float) -> Vector2:
 	if _aim_jitter_timer <= 0.0:
 		_aim_jitter_timer = AIM_JITTER_INTERVAL
 		var spread_radius: float = player.get_layout_extent() * AIM_JITTER_FRACTION
-		_aim_jitter_offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * spread_radius
+		var rng: RandomNumberGenerator = GameRng.stream("ai")
+		_aim_jitter_offset = Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * spread_radius
 	return player.global_position + _aim_jitter_offset
 
 

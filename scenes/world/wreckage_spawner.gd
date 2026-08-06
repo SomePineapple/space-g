@@ -75,7 +75,7 @@ func _roll_capturable(module_type: ModuleType, condition_fraction: float) -> boo
 		return false
 	if condition_fraction < module_type.capture_health_fraction:
 		return false
-	return randf() < module_type.capture_chance
+	return GameRng.stream("wreckage").randf() < module_type.capture_chance
 
 
 ## Spawns either flavor of severed hex piece. Both are DriftingHexPiece, and the
@@ -85,17 +85,17 @@ func _spawn_piece(piece_scene: PackedScene, placement: ModulePlacement, module_t
 	var data: Dictionary = _visual_data(placement, module_type)
 
 	var piece: DriftingHexPiece = piece_scene.instantiate()
-	get_tree().current_scene.add_child(piece)
 	# Same transform as HullRenderer (ship center + its fixed rotation offset),
 	# so the piece's cells render exactly where they were an instant ago, before
 	# drifting away under their own velocity.
-	piece.global_transform = _renderer.global_transform
+	WorldSpawn.attach_transformed(piece, _renderer.global_transform)
 
 	var kick_direction: Vector2 = piece.global_transform.basis_xform(data["centroid"])
 	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(piece.global_rotation)
 
 	piece.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _renderer.cell_size,
-		_ship.velocity + kick_direction * detach_kick_speed, randf_range(-detach_spin_range, detach_spin_range))
+		_ship.velocity + kick_direction * detach_kick_speed,
+		GameRng.stream("wreckage").randf_range(-detach_spin_range, detach_spin_range))
 	return piece
 
 
@@ -123,6 +123,6 @@ func _spawn_seam_spark_at(cell: Vector2i, neighbor: Vector2i) -> void:
 	var local_outward: Vector2 = (neighbor_center - cell_center).normalized()
 
 	var spark: Node2D = seam_spark_scene.instantiate()
-	get_tree().current_scene.add_child(spark)
-	spark.global_position = _renderer.global_transform * edge_midpoint
-	spark.global_rotation = _renderer.global_transform.basis_xform(local_outward).angle()
+	WorldSpawn.attach_at(spark,
+		_renderer.global_transform * edge_midpoint,
+		_renderer.global_transform.basis_xform(local_outward).angle())

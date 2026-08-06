@@ -43,7 +43,7 @@ const CORE_DISTANCE_DAMAGE_BONUS_MAX: float = 0.5
 @export var projectile_scale: float = 1.0
 
 ## Which ModulePlacement (on the shooter's ShipLayout) this hardpoint was
-## spawned from — set by Ship right after instancing, so Ship.fire_primary()/
+## spawned from — set by HardpointBank right after instancing, so its fire_primary()/
 ## fire_secondary() can skip a hardpoint whose module has been destroyed.
 var source_placement_id: String = ""
 
@@ -155,7 +155,7 @@ func fire() -> Projectile:
 	if not _shooter.spend_energy(energy_cost):
 		return null
 	_cooldown_remaining = 1.0 / fire_rate
-	if malfunction_chance > 0.0 and randf() < malfunction_chance:
+	if malfunction_chance > 0.0 and GameRng.stream("malfunction").randf() < malfunction_chance:
 		_shooter.damage_own_module(source_placement_id, malfunction_self_damage)
 		return null
 	return _execute_fire()
@@ -174,9 +174,7 @@ func _execute_fire() -> Projectile:
 	# Bigger-tier projectiles should leave a bigger impact burst, not just a
 	# bigger travelling shot.
 	projectile.explosion_scale *= projectile_scale
-	get_tree().current_scene.add_child(projectile)
-	projectile.global_position = _muzzle.global_position
-	projectile.global_rotation = _muzzle.global_rotation
+	WorldSpawn.attach_at(projectile, _muzzle.global_position, _muzzle.global_rotation)
 	projectile.launch(projectile_speed, _shooter)
 
 	if fire_sound != null:

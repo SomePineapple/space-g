@@ -80,5 +80,5 @@ func _resolve_beam() -> void:
 
 func _spawn_beam_visual(from_point: Vector2, to_point: Vector2) -> void:
 	var beam: PhaseLanceBeam = beam_scene.instantiate()
-	get_tree().current_scene.add_child(beam)
+	WorldSpawn.attach(beam)
 	beam.setup(from_point, to_point)

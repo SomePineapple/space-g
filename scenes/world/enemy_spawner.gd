@@ -15,5 +15,4 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _spawn(scene: PackedScene) -> void:
 	var enemy: Ship = scene.instantiate()
-	get_tree().current_scene.add_child(enemy)
-	enemy.global_position = spawn_position
+	WorldSpawn.attach_at(enemy, spawn_position)

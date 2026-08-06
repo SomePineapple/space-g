@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends GamePanel
 
 const GRID_COLS: int = 20
 const GRID_ROWS: int = 20
@@ -8,8 +8,6 @@ const GRID_PIXEL_HEIGHT: float = 450.0
 
 const SAVE_DIRECTORY: String = "user://ships"
 
-const CONTENT_TOP: float = 108.0
-const CONTENT_LEFT: float = 20.0
 const INFO_BAR_HEIGHT: float = 40.0
 const ACTIONS_HEIGHT: float = 34.0
 const SECTION_GAP: float = 8.0
@@ -30,18 +28,9 @@ const INFO_BG_COLOR: Color = Color(0.05, 0.07, 0.1, 0.55)
 const GRID_BG_COLOR: Color = Color(0.03, 0.04, 0.06, 0.5)
 const PALETTE_BG_COLOR: Color = Color(0.1, 0.5, 1.0, 0.5)
 
-## Only lets the builder open near the region's home base marker, so
-## building/spending happens at a fixed "home", not mid-flight anywhere.
-@export var home_base_range: float = 300.0
-
 var template_layout: ShipLayout
 var working_layout: ShipLayout
 
-var _inventory: Inventory
-## Only used to read base_energy_generation/base_energy_capacity so the
-## builder's energy stat matches what the ship will actually have once
-## applied — the working layout's own totals don't include that baseline.
-var _player_ship: Ship
 
 var _selected_type_id: String = ""
 ## Empty means "generic/no manufacturer" — see Manufacturer/ManufacturerCatalog.
@@ -70,30 +59,32 @@ var _save_name_edit: LineEdit
 var _saved_list: ItemList
 
 
-func _ready() -> void:
-	visible = false
-	# So gameplay input (ship_input.gd) can suspend itself while any menu is
-	# open, without hard-coding a reference to this specific panel.
-	add_to_group("menu_panel")
+func _init() -> void:
+	# Opening is handled below rather than by GamePanel's toggle_action, because
+	# this panel's own key also has to reach its in-panel hotkeys, and closing
+	# it applies the built layout.
+	requires_home_base = true
 
+
+func _setup() -> void:
 	template_layout = load("res://resources/ships/starter_ship_layout.tres")
 	working_layout = template_layout.duplicate(true)
-
-	_player_ship = PlayerContext.get_ship()
-	if _player_ship != null:
-		_inventory = _player_ship.get_inventory()
 
 	_build_ui()
 	_refresh()
 
 
+## Closing the builder is what commits the working layout to the live ship.
+func _on_closed() -> void:
+	_apply_toship()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_builder"):
 		if visible:
-			visible = false
-			_apply_to_player_ship()
-		elif _is_near_home_base():
-			visible = true
+			close()
+		else:
+			open()
 		return
 
 	if not visible:
@@ -105,15 +96,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_remove_pressed()
 
 
-func _is_near_home_base() -> bool:
-	var home_bases: Array = get_tree().get_nodes_in_group("home_base")
-	if _player_ship == null or home_bases.is_empty():
-		return false
-	return _player_ship.global_position.distance_to(home_bases[0].global_position) <= home_base_range
-
-
-func _apply_to_player_ship() -> void:
-	if _player_ship == null:
+func _apply_toship() -> void:
+	if ship == null:
 		return
 
 	var issues: Array[String] = working_layout.validate_layout()
@@ -121,7 +105,7 @@ func _apply_to_player_ship() -> void:
 		_status_label.text = "Cannot apply to ship: %s" % "; ".join(issues)
 		return
 
-	_player_ship.apply_layout(working_layout.duplicate(true))
+	ship.apply_layout(working_layout.duplicate(true))
 	_status_label.text = "Applied to ship."
 
 
@@ -169,8 +153,8 @@ func _build_left_column(panel: Control) -> void:
 	_grid.grid_width = GRID_COLS
 	_grid.grid_height = GRID_ROWS
 	_grid.layout = working_layout
-	if _player_ship != null:
-		_grid.faction_id = _player_ship.personality.faction_id
+	if ship != null:
+		_grid.faction_id = ship.personality.faction_id
 	_grid.hex_clicked.connect(_on_hex_clicked)
 	_grid.hex_hovered.connect(_on_hex_hovered)
 	_grid.hover_exited.connect(_on_hover_exited)
@@ -233,15 +217,15 @@ func _build_side_panel(panel: Control) -> void:
 	palette_scroll.add_child(_palette_container)
 
 	_rebuild_palette()
-	if _inventory != null:
-		_inventory.captured_tech_changed.connect(func(_totals): _refresh_lock_state())
-		_inventory.materials_changed.connect(func(_totals): _refresh_lock_state())
-		_inventory.components_changed.connect(func(_totals): _refresh_lock_state())
-		_inventory.owned_modules_changed.connect(func(_totals): _refresh_lock_state())
+	if inventory != null:
+		inventory.captured_tech_changed.connect(func(_totals): _refresh_lock_state())
+		inventory.materials_changed.connect(func(_totals): _refresh_lock_state())
+		inventory.components_changed.connect(func(_totals): _refresh_lock_state())
+		inventory.owned_modules_changed.connect(func(_totals): _refresh_lock_state())
 		# A newly discovered manufacturer adds whole new rows (not just a
 		# lock-state change on existing ones), so it needs a full rebuild
 		# rather than _refresh_lock_state()'s in-place text/disabled update.
-		_inventory.manufacturer_discovered.connect(func(_id): _rebuild_palette())
+		inventory.manufacturer_discovered.connect(func(_id): _rebuild_palette())
 
 	var save_row := HBoxContainer.new()
 	save_row.position = Vector2(side_x + SIDE_MARGIN, save_row_top)
@@ -326,9 +310,9 @@ func _rebuild_palette() -> void:
 		# actually buildable — an "Atlas Railgun" row before Railgun itself
 		# is researched would be confusing (and un-placeable anyway).
 		var base_type_unlocked: bool = not module_type.requires_research \
-			or (_inventory != null and _inventory.is_researched(module_type.id))
-		if _inventory != null and base_type_unlocked and _module_type_takes_manufacturers(module_type):
-			for manufacturer_id in _inventory.get_known_manufacturer_ids():
+			or (inventory != null and inventory.is_researched(module_type.id))
+		if inventory != null and base_type_unlocked and _module_type_takes_manufacturers(module_type):
+			for manufacturer_id in inventory.get_known_manufacturer_ids():
 				var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
 				if manufacturer == null:
 					continue
@@ -382,9 +366,9 @@ func _refresh_lock_state() -> void:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
 		var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
 
-		var locked: bool = module_type.requires_research and (_inventory == null or not _inventory.is_researched(module_type_id))
-		var owned: int = _inventory.get_owned_module_count(key) if _inventory != null else 0
-		var can_afford: bool = _inventory != null and _inventory.has_items(module_type.build_costs)
+		var locked: bool = module_type.requires_research and (inventory == null or not inventory.is_researched(module_type_id))
+		var owned: int = inventory.get_owned_module_count(key) if inventory != null else 0
+		var can_afford: bool = inventory != null and inventory.has_items(module_type.build_costs)
 
 		var buttons: Dictionary = _palette_buttons[key]
 		var select_button: Button = buttons["select"]
@@ -405,40 +389,40 @@ func _refresh_lock_state() -> void:
 		if manufacturer_id == "" and _research_buttons.has(module_type_id):
 			var research_button: Button = _research_buttons[module_type_id]
 			research_button.visible = locked
-			if locked and _inventory != null:
-				var captured: int = _inventory.get_captured_tech_count(module_type_id)
-				research_button.disabled = not _inventory.can_research(module_type_id)
+			if locked and inventory != null:
+				var captured: int = inventory.get_captured_tech_count(module_type_id)
+				research_button.disabled = not inventory.can_research(module_type_id)
 				research_button.text = "Research (%d captured)" % captured
 
 		if manufacturer_id == "" and _repair_buttons.has(module_type_id):
 			var repair_button: Button = _repair_buttons[module_type_id]
-			var captured_count: int = _inventory.get_captured_tech_count(module_type_id) if _inventory != null else 0
+			var captured_count: int = inventory.get_captured_tech_count(module_type_id) if inventory != null else 0
 			repair_button.visible = captured_count > 0
-			if captured_count > 0 and _inventory != null:
-				repair_button.disabled = not _inventory.can_repair(module_type_id)
-				repair_button.text = "Repair (%d damaged) needs %s" % [captured_count, _format_costs(_inventory.get_repair_cost(module_type_id))]
+			if captured_count > 0 and inventory != null:
+				repair_button.disabled = not inventory.can_repair(module_type_id)
+				repair_button.text = "Repair (%d damaged) needs %s" % [captured_count, _format_costs(inventory.get_repair_cost(module_type_id))]
 
 
 func _on_repair_pressed(module_type_id: String) -> void:
-	if _inventory == null:
+	if inventory == null:
 		return
 
 	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
-	if _inventory.repair_module(module_type_id):
+	if inventory.repair_module(module_type_id):
 		_status_label.text = "Repaired %s. Added to owned inventory." % module_type.display_name
 	else:
 		_status_label.text = "Cannot repair %s: need a damaged part and %s." % [
-			module_type.display_name, _format_costs(_inventory.get_repair_cost(module_type_id)),
+			module_type.display_name, _format_costs(inventory.get_repair_cost(module_type_id)),
 		]
 	_refresh_lock_state()
 
 
 func _on_research_pressed(module_type_id: String) -> void:
-	if _inventory == null:
+	if inventory == null:
 		return
 
 	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
-	if _inventory.research(module_type_id):
+	if inventory.research(module_type_id):
 		_status_label.text = "Researched %s. It can now be built." % module_type.display_name
 	else:
 		_status_label.text = "Cannot research %s yet: capture one first." % module_type.display_name
@@ -465,20 +449,20 @@ func _on_palette_pressed(module_type_id: String, manufacturer_id: String = "") -
 ## Never places anything itself — placement is a separate, free action once
 ## owned (see _on_hex_clicked).
 func _on_build_pressed(module_type_id: String, manufacturer_id: String = "") -> void:
-	if _inventory == null:
+	if inventory == null:
 		return
 
 	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
-	if module_type.requires_research and not _inventory.is_researched(module_type_id):
+	if module_type.requires_research and not inventory.is_researched(module_type_id):
 		_status_label.text = "Cannot build %s: research it first." % module_type.display_name
 		_refresh_lock_state()
 		return
 
-	if not _inventory.spend_items(module_type.build_costs):
+	if not inventory.spend_items(module_type.build_costs):
 		_status_label.text = "Cannot build %s: need %s." % [module_type.display_name, _format_costs(module_type.build_costs)]
 		return
 
-	_inventory.add_owned_module(_palette_key(module_type_id, manufacturer_id))
+	inventory.add_owned_module(_palette_key(module_type_id, manufacturer_id))
 	_status_label.text = "Built %s." % module_type.display_name
 	_refresh_lock_state()
 
@@ -542,13 +526,13 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 
 	var type_to_place: ModuleType = ModuleCatalog.get_by_id(_selected_type_id)
 	var owned_key: String = _palette_key(_selected_type_id, _selected_manufacturer_id)
-	if _inventory != null and _inventory.get_owned_module_count(owned_key) <= 0:
+	if inventory != null and inventory.get_owned_module_count(owned_key) <= 0:
 		_status_label.text = "Cannot place %s: you don't own one. Build it first." % type_to_place.display_name
 		return
 
 	var placed: ModulePlacement = working_layout.place(_selected_type_id, hex_coord, _pending_rotation, _selected_manufacturer_id)
-	if _inventory != null and placed != null:
-		placed.instance = _inventory.take_owned_module(owned_key)
+	if inventory != null and placed != null:
+		placed.instance = inventory.take_owned_module(owned_key)
 	_status_label.text = "Placed %s." % type_to_place.display_name
 	_pending_rotation = 0
 	_refresh()
@@ -609,9 +593,9 @@ func _on_remove_pressed() -> void:
 	# Prevent removing a Storage module while it would leave currently-held
 	# cargo over the new capacity — cargo is never deleted to make it fit, so
 	# the player has to discard cargo first (see CargoPanel) instead.
-	if _inventory != null and removed_type.cargo_capacity_contribution > 0.0:
+	if inventory != null and removed_type.cargo_capacity_contribution > 0.0:
 		var capacity_after_removal: float = _current_cargo_capacity() - removed_type.cargo_capacity_contribution
-		if _inventory.get_cargo_used() > capacity_after_removal:
+		if inventory.get_cargo_used() > capacity_after_removal:
 			_status_label.text = "Cannot remove %s: discard cargo first, current cargo exceeds the reduced capacity." % removed_type.display_name
 			return
 
@@ -622,9 +606,9 @@ func _on_remove_pressed() -> void:
 	# raw materials/components — it was already a finished module, not
 	# something to be melted back down. Phase 8.1: it's the *same* instance,
 	# so any upgrades already unlocked on it are preserved, not lost.
-	if _inventory != null:
+	if inventory != null:
 		var key: String = _palette_key(removed_placement.module_type_id, removed_placement.manufacturer_id)
-		_inventory.return_owned_module(key, removed_placement.ensure_instance())
+		inventory.return_owned_module(key, removed_placement.ensure_instance())
 		_status_label.text = "Removed %s. Returned to inventory." % removed_type.display_name
 	else:
 		_status_label.text = "Removed."
@@ -637,19 +621,19 @@ func _on_remove_pressed() -> void:
 ## actually have once applied — the working layout's own totals don't
 ## include that baseline.
 func _current_cargo_capacity() -> float:
-	var base_capacity: float = _player_ship.base_cargo_capacity if _player_ship != null else 0.0
+	var base_capacity: float = ship.base_cargo_capacity if ship != null else 0.0
 	return base_capacity + working_layout.total_cargo_capacity()
 
 
 func _refresh() -> void:
 	_grid.refresh()
 
-	var base_generation: float = _player_ship.get_base_energy_generation() if _player_ship != null else 0.0
-	var base_capacity: float = _player_ship.get_base_energy_capacity() if _player_ship != null else 0.0
+	var base_generation: float = ship.get_base_energy_generation() if ship != null else 0.0
+	var base_capacity: float = ship.get_base_energy_capacity() if ship != null else 0.0
 	var energy_generation: float = base_generation + working_layout.total_energy_generation()
 	var energy_capacity: float = base_capacity + working_layout.total_energy_capacity()
 	var cargo_capacity: float = _current_cargo_capacity()
-	var cargo_used: int = _inventory.get_cargo_used() if _inventory != null else 0
+	var cargo_used: int = inventory.get_cargo_used() if inventory != null else 0
 
 	_stats_label.text = "Max Health: %d   Mass: %.2f   Energy: +%.0f/s (cap %.0f)   Cargo: %d/%.0f" % [
 		working_layout.total_max_health(), working_layout.total_mass(), energy_generation, energy_capacity,

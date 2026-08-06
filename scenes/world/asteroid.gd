@@ -162,14 +162,12 @@ func _on_destroyed() -> void:
 
 func _finish_destruction() -> void:
 	var explosion: Explosion = explosion_scene.instantiate()
-	get_tree().current_scene.add_child(explosion)
-	explosion.global_position = global_position
 	explosion.effect_scale = destruction_explosion_scale
+	WorldSpawn.attach_at(explosion, global_position)
 
 	var salvage: Salvage = salvage_scene.instantiate()
 	salvage.material_id = roll_ore_material()
-	get_tree().current_scene.add_child(salvage)
-	salvage.global_position = global_position
+	WorldSpawn.attach_at(salvage, global_position)
 
 	if NEXT_TIER_DOWN.has(size_tier):
 		_spawn_fragments(NEXT_TIER_DOWN[size_tier])
@@ -197,8 +195,7 @@ func _spawn_fragments(child_tier: SizeTier) -> void:
 		fragment.scatter_speed = scatter_speed
 		fragment.scatter_decay = scatter_decay
 
-		get_tree().current_scene.add_child(fragment)
-		fragment.global_position = global_position + direction * offset_distance
+		WorldSpawn.attach_at(fragment, global_position + direction * offset_distance)
 		fragment._scatter_velocity = direction * scatter_speed
 
 
@@ -209,7 +206,7 @@ func _spawn_fragments(child_tier: SizeTier) -> void:
 ## rock is never guaranteed pure but is mostly one material.
 func roll_ore_material() -> String:
 	var primary: String = VARIANT_PRIMARY_MATERIAL[_variant]
-	if randf() < primary_material_chance:
+	if GameRng.stream("ore").randf() < primary_material_chance:
 		return primary
 	var alternatives: Array = MaterialCatalog.ALL_IDS.filter(func(id: String) -> bool: return id != primary)
-	return alternatives[randi_range(0, alternatives.size() - 1)]
+	return alternatives[GameRng.stream("ore").randi_range(0, alternatives.size() - 1)]

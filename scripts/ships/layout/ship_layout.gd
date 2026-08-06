@@ -294,7 +294,7 @@ func place(module_type_id: String, anchor_hex: Vector2i, rotation_steps: int, ma
 		return null
 
 	var placement := ModulePlacement.new()
-	placement.placement_id = "p_%d_%d" % [placements.size(), randi() % 100000]
+	placement.placement_id = GameRng.next_id("p")
 	placement.module_type_id = module_type_id
 	placement.hex_coord = anchor_hex
 	placement.rotation_steps = posmod(rotation_steps, 6)

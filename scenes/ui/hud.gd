@@ -1,18 +1,20 @@
 extends CanvasLayer
 
+## Gameplay HUD root. Owns only the pieces that need ship signals routed to
+## them (vitals, credits, damage vignette, storage-full cue) — CargoWidget,
+## RadarDisplay and ScannerDisplay each subscribe to their own sources.
+## Layout and colours come from docs/HUD-1d-Godot-spec.md via HudPalette.
+
 @export var damage_flash_peak_alpha: float = 0.35
 @export var damage_flash_fade_duration: float = 0.35
 @export var storage_full_display_duration: float = 1.5
 @export var storage_full_fade_duration: float = 0.6
 
-@onready var _salvage_label: Label = $SalvageLabel
-@onready var _health_label: Label = $HealthLabel
-@onready var _energy_label: Label = $EnergyLabel
+@onready var _vitals: Control = $VitalsReadout
 @onready var _credits_label: Label = $CreditsLabel
 @onready var _damage_flash: ColorRect = $DamageFlash
 @onready var _storage_full_label: Label = $StorageFullLabel
 
-var _inventory: Inventory
 var _damage_flash_tween: Tween
 var _storage_full_tween: Tween
 
@@ -22,48 +24,24 @@ func _ready() -> void:
 	if ship == null:
 		return
 
-	_inventory = ship.get_inventory()
-	_inventory.materials_changed.connect(_on_materials_changed)
-	_inventory.cargo_capacity_changed.connect(_on_cargo_capacity_changed)
-	_update_salvage_label(_inventory.get_all_materials())
-	_inventory.storage_full.connect(_on_storage_full)
-	_inventory.credits_changed.connect(_on_credits_changed)
-	_update_credits_label(_inventory.get_credits())
+	var inventory: Inventory = ship.get_inventory()
+	inventory.storage_full.connect(_on_storage_full)
+	inventory.credits_changed.connect(_update_credits_label)
+	_update_credits_label(inventory.get_credits())
 
 	# Health readouts and the damage vignette both come off the Ship's own
 	# relayed signals now, rather than this panel reaching into the ship scene
 	# for its $Health node and re-deriving "was that a hit" itself.
-	ship.health_changed.connect(_update_health_label)
+	ship.health_changed.connect(_vitals.set_health)
 	ship.damaged.connect(_on_ship_damaged)
-	_update_health_label(ship.get_current_health(), ship.get_max_health())
+	_vitals.set_health(ship.get_current_health(), ship.get_max_health())
 
-	ship.energy_changed.connect(_on_energy_changed)
-	_update_energy_label(ship.get_energy(), ship.get_max_energy())
-
-
-func _on_materials_changed(totals: Dictionary) -> void:
-	_update_salvage_label(totals)
-
-
-func _on_cargo_capacity_changed(_capacity: float) -> void:
-	_update_salvage_label(_inventory.get_all_materials())
-
-
-func _on_credits_changed(amount: int) -> void:
-	_update_credits_label(amount)
+	ship.energy_changed.connect(_vitals.set_energy)
+	_vitals.set_energy(ship.get_energy(), ship.get_max_energy())
 
 
 func _update_credits_label(amount: int) -> void:
-	_credits_label.text = "Credits: %d" % amount
-
-
-func _update_salvage_label(totals: Dictionary) -> void:
-	var parts: Array = []
-	for material_id in MaterialCatalog.ALL_IDS:
-		var amount: int = totals.get(material_id, 0)
-		parts.append("%s: %d" % [MaterialCatalog.display_name(material_id), amount])
-	parts.append("Cargo: %d/%.0f" % [_inventory.get_cargo_used(), _inventory.get_cargo_capacity()])
-	_salvage_label.text = "  |  ".join(parts)
+	_credits_label.text = "%s CR" % HudPalette.group_digits(amount)
 
 
 ## Transient "storage full" cue — see Inventory.storage_full, fired whenever
@@ -94,15 +72,3 @@ func _flash_damage() -> void:
 	_damage_flash.color = flash_color
 	_damage_flash_tween = create_tween()
 	_damage_flash_tween.tween_property(_damage_flash, "color:a", 0.0, damage_flash_fade_duration)
-
-
-func _update_health_label(current: float, max_health: float) -> void:
-	_health_label.text = "Health: %d / %d" % [current, max_health]
-
-
-func _on_energy_changed(current: float, max_energy: float) -> void:
-	_update_energy_label(current, max_energy)
-
-
-func _update_energy_label(current: float, max_energy: float) -> void:
-	_energy_label.text = "Energy: %d / %d" % [current, max_energy]

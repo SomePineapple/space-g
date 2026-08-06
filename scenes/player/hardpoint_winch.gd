@@ -115,7 +115,7 @@ func _start_firing() -> void:
 	_tip_position = _muzzle.global_position
 	_paid_out_length = 0.0
 	_rope = winch_rope_scene.instantiate()
-	get_tree().current_scene.add_child(_rope)
+	WorldSpawn.attach(_rope)
 
 
 func _advance_firing(delta: float) -> void:
