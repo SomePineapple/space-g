@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cfvutuxtehad5"
-path="res://.godot/imported/Corporate_Station.png-e5509dbabfd135dfe0888cf4d153ec97.ctex"
+uid="uid://cbxwux2hebpkh"
+path="res://.godot/imported/corporate_tractor_beam.png-57214acb00dd5e2d2f0e2180dda08791.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/exports/corporate/Corporate_Station.png"
-dest_files=["res://.godot/imported/Corporate_Station.png-e5509dbabfd135dfe0888cf4d153ec97.ctex"]
+source_file="res://resources/exports/corporate/corporate_tractor_beam.png"
+dest_files=["res://.godot/imported/corporate_tractor_beam.png-57214acb00dd5e2d2f0e2180dda08791.ctex"]
 
 [params]
 

@@ -378,6 +378,30 @@ Do not download generated or third-party art without permission.
 
 Prioritise readability and game feel over visual complexity.
 
+### Texture import settings
+
+Any texture that is actually drawn in the world must have
+`mipmaps/generate=true` in its `.import` file. Module sprites are authored
+far larger than the hex they are drawn into, and the hex renderers sample
+with `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` — without a mip chain they alias
+and shimmer.
+
+Godot's default for a newly created `.import` is `false`, so the setting is
+lost whenever a re-export deletes the `.import` files. After adding or
+re-exporting any art, check and fix before doing anything else:
+
+```bash
+grep -rl "mipmaps/generate=false" resources/exports/   # must return nothing
+sed -i 's|^mipmaps/generate=false$|mipmaps/generate=true|' <files>
+```
+
+Then reimport (`filesystem_manage(op="reimport", paths=[...])`) so the
+change takes effect. See `docs/gotchas.md` for the full diagnosis.
+
+This applies to rendered art only. `art/reference/`, `images_uploaded/`,
+`docs/` and `icon.svg` are never drawn in-game and are deliberately left
+alone — do not "fix" them.
+
 ## Scope control
 
 The current priority order is:

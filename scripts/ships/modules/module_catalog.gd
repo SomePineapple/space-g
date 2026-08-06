@@ -189,15 +189,15 @@ static func get_all() -> Array[ModuleType]:
 	# Cargo storage (see ShipLayout.total_cargo_capacity/Ship._refresh_layout_
 	# stats). A plain stat contributor like Reactor/Battery, not a
 	# hardpoint category — storage has no facing/muzzle/HUD gate of its own,
-	# it just raises the cap Inventory.try_add_material() checks. No
-	# dedicated art yet — a generic flat-tinted hex, same approach as Strut.
-	# Brown/tan to stay distinct from every other module's color.
+	# it just raises the cap Inventory.try_add_material() checks.
+	# Brown/tan tint stays as the fallback for factions with no cargo art.
 	# Phase 5.2 example cost — Metal Sheets for the walls, Canisters for the
 	# actual holding cells.
 	var storage_type: ModuleType = _make("storage_mk1", "Cargo Container", Color(0.6, 0.45, 0.3), SINGLE_CELL,
 		0.4, 30.0, 0.0, null, "", 1,
 		{ComponentCatalog.METAL_SHEETS: 2, ComponentCatalog.CANISTER: 3},
 		0.0, 0.0, null, false, 0.5, 0.35, 60.0)
+	storage_type.faction_hex_textures = FactionArtImporter.load_faction_textures("cargo_container")
 	types.append(storage_type)
 
 	# Corporate Alliance: standardised, industrial kinetic weapon. Tougher
@@ -222,28 +222,28 @@ static func get_all() -> Array[ModuleType]:
 	types.append(phase_lance_type)
 
 	# Tractor beam hardpoint (see HardpointTractorBeam/HardpointBank._mount_tractor_beam).
-	# No dedicated art yet — a generic flat-tinted hex, same approach as Strut.
 	var tractor_type: ModuleType = _make(TRACTOR_HARDPOINT_TYPE_ID, "Tractor Beam", Color(0.4, 0.75, 0.85), SINGLE_CELL,
 		0.2, 30.0, 0.0, null, "tractor", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 8})
+	tractor_type.faction_hex_textures = FactionArtImporter.load_faction_textures("tractor_beam")
 	types.append(tractor_type)
 
 	# Radar hardpoint (see RadarDisplay.has_radar/Ship.has_radar) — a pure
 	# capability flag, no per-hex spawned node or fixed facing needed (radar
 	# is an omnidirectional sensor centered on the ship, not a directional
 	# beam like the tractor beam), so unlike most hardpoints above it never
-	# gets a hardpoint_scene. No dedicated art yet — a generic flat-tinted
-	# hex, same approach as Strut/the tractor beam hardpoint. Green (matching
-	# RadarDisplay's own sweep/label color) rather than another blue/teal —
-	# distinct at a glance from Engine and the Tractor Beam hardpoint, which
-	# sat right next to it in the same blue family.
+	# gets a hardpoint_scene. Green (matching RadarDisplay's own sweep/label
+	# color) is the fallback tint for factions with no radar art — distinct at
+	# a glance from Engine and the Tractor Beam hardpoint, which sat right
+	# next to it in the same blue family.
 	var radar_type: ModuleType = _make(RADAR_HARDPOINT_TYPE_ID, "Radar", Color(0.3, 1.0, 0.55), SINGLE_CELL,
 		0.2, 25.0, 0.0, null, "radar", 1, {MaterialCatalog.IRON: 6, MaterialCatalog.COPPER: 10})
+	radar_type.faction_hex_textures = FactionArtImporter.load_faction_textures("radar")
 	types.append(radar_type)
 
 	# Scanner hardpoint (see Scanner.has_scanner/Ship.has_scanner) — same
 	# "pure capability flag" shape as Radar: the pulse originates from the
 	# ship's own position, not a per-hex muzzle, so no spawned node or fixed
-	# facing is needed. No dedicated art yet — a generic flat-tinted hex.
+	# facing is needed.
 	# Phase 5.2 example cost — Circuit Board for the sensor electronics,
 	# Wiring, and raw Glass as the "suitable transparent... component" the
 	# spec calls for (no dedicated lens/sensor component exists yet — see
@@ -251,6 +251,7 @@ static func get_all() -> Array[ModuleType]:
 	var scanner_type: ModuleType = _make(SCANNER_HARDPOINT_TYPE_ID, "Scanner", Color(0.9, 0.35, 0.75), SINGLE_CELL,
 		0.2, 25.0, 0.0, null, "scanner", 1,
 		{ComponentCatalog.CIRCUIT_BOARD: 1, ComponentCatalog.WIRING: 1, MaterialCatalog.GLASS: 2})
+	scanner_type.faction_hex_textures = FactionArtImporter.load_faction_textures("scanner")
 	types.append(scanner_type)
 
 	# Mining Grinder hardpoint (see HardpointGrinder/HardpointBank._mount_
@@ -259,13 +260,14 @@ static func get_all() -> Array[ModuleType]:
 	# the muzzle out from that one hex's centre toward its facing edge).
 	# Toggled on/off by the player (ShipIntent.toggle_grinder, "G") rather than
 	# always-on like the Tractor Beam, since it deals continuous damage and
-	# should require deliberate activation. No dedicated art yet — a generic
-	# flat-tinted hex. Lime-green to stay distinct from every warm-toned
-	# module (Weapon/Missile/Reactor/Storage) and from Radar's pure green.
+	# should require deliberate activation. Lime-green is the fallback tint
+	# for factions with no grinder art — distinct from every warm-toned module
+	# (Weapon/Missile/Reactor/Storage) and from Radar's pure green.
 	var grinder_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Mining Grinder", Color(0.65, 0.85, 0.15), SINGLE_CELL,
 		0.5, 30.0, 0.0, null, "grinder", 1,
 		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 6},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_grinder.tscn"))
+	grinder_type.faction_hex_textures = FactionArtImporter.load_faction_textures("mining_grinder")
 	types.append(grinder_type)
 
 	# Winch hardpoint (casts a physical rope — see HardpointWinch/WinchRope/

@@ -5,8 +5,4 @@
 [node name="HardpointTractorBeam" type="Node2D"]
 script = ExtResource("1_tractor")
 
-[node name="Mount" type="Polygon2D" parent="."]
-color = Color(0.4, 0.75, 0.85, 1)
-polygon = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
-
 [node name="Muzzle" type="Marker2D" parent="."]

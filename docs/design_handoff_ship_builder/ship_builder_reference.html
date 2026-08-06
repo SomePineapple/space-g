@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <style>
+    body{margin:0;background:#0a0d12;}
+    @keyframes coreGlow{0%,100%{opacity:0.55}50%{opacity:1}}
+    @keyframes driftDots{from{background-position:0 0, 0 0;}to{background-position:-600px 300px, 400px -500px;}}
+    ::-webkit-scrollbar{width:8px;height:8px;}
+    ::-webkit-scrollbar-thumb{background:rgba(85,214,232,0.25);border-radius:4px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+  </style>
+</helmet>
+
+<div style="position:relative;width:100%;height:100vh;min-height:700px;overflow:hidden;background:radial-gradient(ellipse 900px 700px at 30% 80%,rgba(42,60,75,0.35),transparent 60%),radial-gradient(ellipse 700px 500px at 90% 10%,rgba(42,90,100,0.18),transparent 60%),#0a0d12;font-family:system-ui,-apple-system,Segoe UI,sans-serif;box-sizing:border-box;">
+
+  <div style="position:absolute;inset:0;background-image:radial-gradient(1px 1px at 20% 30%,rgba(255,255,255,0.5),transparent),radial-gradient(1px 1px at 70% 60%,rgba(255,255,255,0.35),transparent),radial-gradient(1px 1px at 40% 80%,rgba(255,255,255,0.4),transparent),radial-gradient(1px 1px at 85% 25%,rgba(255,255,255,0.3),transparent),radial-gradient(1px 1px at 55% 15%,rgba(255,255,255,0.4),transparent);background-size:600px 600px,500px 500px,700px 700px,400px 400px,550px 550px;animation:driftDots 90s linear infinite;pointer-events:none;"></div>
+
+  <!-- top HUD -->
+  <div style="position:absolute;left:32px;top:24px;display:flex;flex-direction:column;gap:8px;z-index:2;">
+    <div style="color:#c7d0d8;font-size:13px;font-family:monospace;letter-spacing:0.02em;">{{ instructionText }}</div>
+    <div style="display:flex;align-items:center;gap:22px;background:rgba(15,19,24,0.5);backdrop-filter:blur(10px);border:1px solid rgba(85,214,232,0.22);border-radius:4px;padding:9px 16px;">
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#7ce8b8;box-shadow:0 0 5px #7ce8b8;display:inline-block;"></span>
+        <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">HP</span>
+        <span style="font-family:monospace;font-size:12px;color:#e8edf0;">435</span>
+      </div>
+      <div style="width:1px;height:14px;background:rgba(255,255,255,0.1);"></div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">MASS</span>
+        <span style="font-family:monospace;font-size:12px;color:#e8edf0;">3.25</span>
+      </div>
+      <div style="width:1px;height:14px;background:rgba(255,255,255,0.1);"></div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#55d6e8;box-shadow:0 0 5px #55d6e8;display:inline-block;"></span>
+        <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">EN</span>
+        <span style="font-family:monospace;font-size:12px;color:#e8edf0;">+10/s <span style="color:#5f6d78;">cap 50</span></span>
+      </div>
+      <div style="width:1px;height:14px;background:rgba(255,255,255,0.1);"></div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">CARGO</span>
+        <span style="font-family:monospace;font-size:12px;color:#e8edf0;">0<span style="color:#55d6e8;opacity:0.6;">/160</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- hex grid field -->
+  <div style="position:absolute;left:32px;top:110px;right:376px;bottom:96px;border-radius:6px;overflow:hidden;background:radial-gradient(ellipse 70% 60% at 48% 45%,rgba(42,90,105,0.16),transparent 70%),linear-gradient(160deg,#0d1117,#0a0d12);box-shadow:inset 0 0 0 1px rgba(85,214,232,0.14);">
+    <svg style="position:absolute;inset:0;width:100%;height:100%;" viewBox="0 0 1400 700" preserveAspectRatio="none">
+      <sc-for list="{{ hexGrid }}" as="hx" hint-placeholder-count="1">
+        <polygon points="{{ hx.pts }}" fill="rgba(255,255,255,0.012)" stroke="rgba(85,214,232,{{ hx.op }})" stroke-width="1"></polygon>
+      </sc-for>
+    </svg>
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 60% 70% at 50% 50%,transparent 40%,rgba(10,13,18,0.85) 100%);"></div>
+
+    <!-- placed module cluster (mini ship preview) -->
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:230px;height:190px;">
+      <sc-for list="{{ shipHexes }}" as="h" hint-placeholder-count="7">
+        <div style="position:absolute;left:{{ h.x }};top:{{ h.y }};width:56px;height:64px;clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);background:{{ h.bg }};box-shadow:{{ h.shadow }};display:flex;align-items:center;justify-content:center;">
+          <span style="font-family:monospace;font-size:10px;font-weight:700;letter-spacing:0.04em;color:{{ h.glyphColor }};">{{ h.glyph }}</span>
+        </div>
+      </sc-for>
+      <div style="position:absolute;left:96px;top:60px;width:56px;height:64px;clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);border:1.5px dashed rgba(85,214,232,0.55);animation:coreGlow 2.4s ease-in-out infinite;"></div>
+    </div>
+  </div>
+
+  <!-- right panel -->
+  <div style="position:absolute;right:24px;top:24px;bottom:24px;width:336px;display:flex;flex-direction:column;gap:12px;z-index:2;">
+
+    <div style="background:rgba(15,19,24,0.72);backdrop-filter:blur(10px);border:1px solid rgba(85,214,232,0.25);border-radius:5px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+      <div style="padding:14px 16px 10px;border-bottom:1px solid rgba(85,214,232,0.15);display:flex;flex-direction:column;gap:10px;">
+        <span style="color:#e8edf0;font-size:13px;font-weight:600;letter-spacing:0.08em;font-family:monospace;">MODULES</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+            <span onClick="{{ t.select }}" style="font-family:monospace;font-size:10.5px;letter-spacing:0.05em;padding:5px 10px;border-radius:3px;cursor:pointer;color:{{ t.color }};background:{{ t.bg }};border:1px solid {{ t.border }};">{{ t.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:14px;">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:{{ rowGap }};">
+            <span style="color:#5f6d78;font-size:10.5px;font-family:monospace;letter-spacing:0.12em;padding-left:2px;">{{ g.label }}</span>
+            <sc-for list="{{ g.items }}" as="m" hint-placeholder-count="2">
+              <div>
+                <div title="{{ m.cost }}" onClick="{{ m.select }}" style="display:flex;align-items:center;gap:11px;padding:{{ rowPad }};border-radius:4px;border:{{ m.borderW }} solid {{ m.borderColor }};background:{{ m.rowBg }};cursor:pointer;transition:background 0.12s,border-color 0.12s;box-shadow:{{ m.rowShadow }};">
+                  <div style="position:relative;flex-shrink:0;width:{{ m.iconW }};height:{{ m.iconH }};clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);background:{{ m.iconBg }};display:flex;align-items:center;justify-content:center;transition:width 0.15s,height 0.15s;">
+                    <span style="font-family:monospace;font-size:{{ m.glyphSize }};font-weight:700;color:{{ m.glyphColor }};">{{ m.glyph }}</span>
+                    <sc-if value="{{ m.owned }}" hint-placeholder-val="{{ 0 }}">
+                      <span style="position:absolute;right:-4px;bottom:-4px;background:#0a0d12;border:1px solid rgba(85,214,232,0.4);color:#8fe9f2;font-family:monospace;font-size:9px;line-height:1;padding:1px 3px;border-radius:3px;">{{ m.owned }}</span>
+                    </sc-if>
+                  </div>
+                  <span style="flex:1;color:{{ m.nameColor }};font-size:13px;font-family:system-ui,sans-serif;font-weight:{{ m.nameWeight }};">{{ m.name }}</span>
+                  <button onClick="{{ m.craft }}" style="background:rgba(85,214,232,0.12);border:1px solid rgba(85,214,232,0.45);color:#8fe9f2;font-family:monospace;font-size:11px;letter-spacing:0.06em;padding:6px 12px;border-radius:3px;cursor:pointer;flex-shrink:0;" style-hover="background:rgba(85,214,232,0.28);color:#e8edf0;">CRAFT</button>
+                </div>
+                <sc-if value="{{ m.selected }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin:2px 2px 0;padding:8px 12px;background:rgba(85,214,232,0.06);border:1px solid rgba(85,214,232,0.2);border-top:none;border-radius:0 0 4px 4px;display:flex;flex-direction:column;gap:3px;">
+                    <span style="color:#8fa0ab;font-size:11px;font-family:monospace;">COST · {{ m.cost }}</span>
+                    <span style="color:#8fa0ab;font-size:11px;font-family:monospace;">OWNED · {{ m.owned }}</span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:rgba(15,19,24,0.72);backdrop-filter:blur(10px);border:1px solid rgba(85,214,232,0.25);border-radius:5px;padding:12px;display:flex;gap:8px;">
+      <input value="{{ shipName }}" onChange="{{ onNameChange }}" style="flex:1;background:#0a0d12;border:1px solid rgba(85,214,232,0.3);color:#e8edf0;font-family:monospace;font-size:12px;padding:8px 10px;border-radius:3px;min-width:0;">
+      <button style="background:rgba(85,214,232,0.12);border:1px solid rgba(85,214,232,0.45);color:#8fe9f2;font-family:monospace;font-size:11px;padding:8px 12px;border-radius:3px;cursor:pointer;" style-hover="background:rgba(85,214,232,0.28);">SAVE</button>
+    </div>
+
+    <div style="background:rgba(15,19,24,0.72);backdrop-filter:blur(10px);border:1px solid rgba(85,214,232,0.25);border-radius:5px;overflow:hidden;">
+      <div onClick="{{ togglePresets }}" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;">
+        <span style="color:#a8b4bd;font-size:12px;font-family:monospace;letter-spacing:0.06em;">LOAD FROM PRESET</span>
+        <span style="display:inline-block;transition:transform 0.15s;transform:{{ presetsChevron }};width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #7c8b99;"></span>
+      </div>
+      <sc-if value="{{ presetsOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="border-top:1px solid rgba(85,214,232,0.15);max-height:150px;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:2px;">
+          <sc-for list="{{ presets }}" as="p" hint-placeholder-count="4">
+            <div onClick="{{ p.select }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:3px;cursor:pointer;background:{{ p.bg }};" style-hover="background:rgba(85,214,232,0.1);">
+              <span style="color:#c7d0d8;font-size:12px;font-family:monospace;">{{ p.name }}</span>
+              <span style="color:#55d6e8;font-size:11px;font-family:monospace;opacity:0.7;">LOAD</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- bottom bar -->
+  <div style="position:absolute;left:32px;bottom:60px;display:flex;align-items:center;gap:10px;z-index:2;">
+    <div style="display:flex;align-items:center;gap:8px;background:rgba(15,19,24,0.6);backdrop-filter:blur(8px);border:1px solid rgba(85,214,232,0.28);border-radius:4px;padding:8px 12px;font-family:monospace;font-size:12px;color:#e8edf0;cursor:pointer;">
+      <span>{{ cellsUsed }}<span style="color:#55d6e8;opacity:0.6;">/{{ cellsMax }}</span></span>
+      <span style="display:inline-block;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #7c8b99;"></span>
+    </div>
+    <button style="background:rgba(85,214,232,0.1);border:1px solid rgba(85,214,232,0.35);color:#a8b4bd;font-family:monospace;font-size:12px;padding:9px 16px;border-radius:4px;cursor:pointer;" style-hover="background:rgba(85,214,232,0.22);color:#e8edf0;">ROTATE</button>
+    <button style="background:rgba(226,104,74,0.08);border:1px solid rgba(226,104,74,0.35);color:#d99a86;font-family:monospace;font-size:12px;padding:9px 16px;border-radius:4px;cursor:pointer;" style-hover="background:rgba(226,104,74,0.2);color:#f0d5cc;">REMOVE SELECTED</button>
+    <button style="background:rgba(85,214,232,0.1);border:1px solid rgba(85,214,232,0.35);color:#a8b4bd;font-family:monospace;font-size:12px;padding:9px 16px;border-radius:4px;cursor:pointer;" style-hover="background:rgba(85,214,232,0.22);color:#e8edf0;">VALIDATE LAYOUT</button>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;bottom:20px;text-align:center;color:#5f6d78;font-size:12px;font-family:monospace;letter-spacing:0.03em;z-index:1;">{{ statusText }}</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;rowDensity&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;comfortable&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Modules panel&quot;}}">
+class Component extends DCLogic {
+  state = {
+    presetsOpen: false,
+    shipName: 'my_ship',
+    selectedModule: 'core',
+    activeTab: 'all'
+  };
+
+  select(key) {
+    this.setState(s => ({ selectedModule: s.selectedModule === key ? null : key }));
+  }
+
+  setTab(tab) {
+    this.setState({ activeTab: tab });
+  }
+
+  renderVals() {
+    const rowDensity = this.props?.rowDensity ?? 'comfortable';
+    const rowPad = rowDensity === 'compact' ? '6px 10px' : '9px 12px';
+    const rowGap = rowDensity === 'compact' ? '4px' : '7px';
+
+    const defs = [
+      { key: 'core', name: 'Command Core', glyph: 'CC', owned: 1, cost: '10 Iron, 20 Copper', bg: 'linear-gradient(155deg,#2a5f6b,#173238)', glyphColor: '#8fe9f2', cat: 'Core' },
+      { key: 'hull', name: 'Hull', glyph: 'HL', owned: 2, cost: '2 Metal Sheets, 1 Reinforced Steel', bg: 'linear-gradient(155deg,#4a5763,#2b3542)', glyphColor: '#c7d0d8', cat: 'Structure' },
+      { key: 'heavyhull', name: 'Heavy Hull', glyph: 'HH', owned: 0, cost: '20 Iron', bg: 'linear-gradient(155deg,#333f4d,#1c2329)', glyphColor: '#8b98a3', cat: 'Structure' },
+      { key: 'strut', name: 'Strut', glyph: 'ST', owned: 0, cost: '4 Metal Sheets', bg: 'linear-gradient(155deg,#5a6b7a,#333f4d)', glyphColor: '#c7d0d8', cat: 'Structure' },
+      { key: 'engine', name: 'Engine', glyph: 'EN', owned: 1, cost: '1 Metal Sheets, 2 Wiring, 1 Motor', bg: 'linear-gradient(155deg,#a3822f,#5c4718)', glyphColor: '#ffe6a8', cat: 'Propulsion' },
+      { key: 'weapon', name: 'Weapon Mount', glyph: 'WM', owned: 0, cost: '6 Iron, 2 Wiring', bg: 'linear-gradient(155deg,#a35a3a,#5c2e18)', glyphColor: '#ffcbb0', cat: 'Weapons' },
+      { key: 'sensor', name: 'Sensor Array', glyph: 'SA', owned: 0, cost: '4 Copper, 2 Wiring', bg: 'linear-gradient(155deg,#3a6b7a,#1c3742)', glyphColor: '#a8d9e8', cat: 'Utility' },
+      { key: 'cargo', name: 'Cargo Bay', glyph: 'CB', owned: 0, cost: '8 Metal Sheets', bg: 'linear-gradient(155deg,#2a8fa3,#173a42)', glyphColor: '#8fe9f2', cat: 'Storage' }
+    ];
+
+    const sel = this.state.selectedModule;
+    const activeTab = this.state.activeTab;
+    const tabDefs = ['all', 'Structure', 'Weapons', 'Utility', 'owned'];
+    const tabLabels = { all: 'All', Structure: 'Structure', Weapons: 'Weapons', Utility: 'Utility', owned: 'Owned' };
+    const tabs = tabDefs.map(t => ({
+      label: tabLabels[t],
+      select: () => this.setTab(t),
+      color: activeTab === t ? '#0a0d12' : '#8fa0ab',
+      bg: activeTab === t ? '#55d6e8' : 'rgba(255,255,255,0.03)',
+      border: activeTab === t ? '#55d6e8' : 'rgba(255,255,255,0.08)'
+    }));
+
+    const visibleDefs = defs.filter(d => {
+      if (activeTab === 'all') return true;
+      if (activeTab === 'owned') return d.owned > 0;
+      return d.cat === activeTab;
+    });
+
+    const modules = visibleDefs.map(d => {
+      const isSel = sel === d.key;
+      return {
+        ...d,
+        iconBg: d.bg,
+        selected: isSel,
+        borderW: isSel ? '2px' : '1px',
+        borderColor: isSel ? 'rgba(85,214,232,0.85)' : 'rgba(255,255,255,0.06)',
+        rowBg: isSel ? 'rgba(85,214,232,0.16)' : 'rgba(255,255,255,0.02)',
+        rowShadow: isSel ? '0 0 16px rgba(85,214,232,0.18)' : 'none',
+        iconW: isSel ? '48px' : '38px',
+        iconH: isSel ? '55px' : '44px',
+        glyphSize: isSel ? '12px' : '10px',
+        nameColor: isSel ? '#f0f6f8' : '#c7d0d8',
+        nameWeight: isSel ? '600' : '400',
+        select: () => this.select(d.key),
+        craft: (e) => { e.stopPropagation(); this.select(d.key); }
+      };
+    });
+
+    const catOrder = ['Core', 'Structure', 'Propulsion', 'Weapons', 'Utility', 'Storage'];
+    const groups = catOrder
+      .map(cat => ({ label: cat.toUpperCase(), items: modules.filter(m => m.cat === cat) }))
+      .filter(g => g.items.length > 0);
+
+    const w = 54, h = w * 256 / 222;
+    const hexGrid = [];
+    for (let row = -1; row < 17; row++) {
+      for (let col = -1; col < 28; col++) {
+        const cx = col * w + (row % 2 !== 0 ? w / 2 : 0);
+        const cy = row * h * 0.75;
+        const dist = Math.hypot(cx - 700, cy - 350);
+        const op = Math.max(0.05, 0.22 - dist / 2000);
+        const pts = [
+          [cx, cy - h / 2], [cx + w / 2, cy - h / 4], [cx + w / 2, cy + h / 4],
+          [cx, cy + h / 2], [cx - w / 2, cy + h / 4], [cx - w / 2, cy - h / 4]
+        ].map(p => p.join(',')).join(' ');
+        hexGrid.push({ pts, op: op.toFixed(3) });
+      }
+    }
+
+    const shipHexes = [
+      { x: '0px', y: '0px', bg: 'linear-gradient(155deg,#4a5763,#2b3542)', glyph: 'HL', glyphColor: '#c7d0d8', shadow: '0 0 10px rgba(0,0,0,0.4)' },
+      { x: '48px', y: '0px', bg: 'linear-gradient(155deg,#4a5763,#2b3542)', glyph: 'HL', glyphColor: '#c7d0d8', shadow: '0 0 10px rgba(0,0,0,0.4)' },
+      { x: '96px', y: '0px', bg: 'linear-gradient(155deg,#a3822f,#5c4718)', glyph: 'EN', glyphColor: '#ffe6a8', shadow: '0 0 10px rgba(242,193,78,0.15)' },
+      { x: '24px', y: '54px', bg: 'linear-gradient(155deg,#4a5763,#2b3542)', glyph: 'HL', glyphColor: '#c7d0d8', shadow: '0 0 10px rgba(0,0,0,0.4)' },
+      { x: '72px', y: '54px', bg: 'linear-gradient(155deg,#2a5f6b,#173238)', glyph: 'CC', glyphColor: '#8fe9f2', shadow: '0 0 18px rgba(85,214,232,0.35)' },
+      { x: '120px', y: '54px', bg: 'linear-gradient(155deg,#5a6b7a,#333f4d)', glyph: 'ST', glyphColor: '#c7d0d8', shadow: '0 0 10px rgba(0,0,0,0.4)' },
+      { x: '48px', y: '108px', bg: 'linear-gradient(155deg,#4a5763,#2b3542)', glyph: 'HL', glyphColor: '#c7d0d8', shadow: '0 0 10px rgba(0,0,0,0.4)' }
+    ];
+
+    const presetDefs = ['BattleCruiser_', 'Interceptor_MkII', 'browse_test', 'Goofball', 'LargeMissileCarrier'];
+    const presets = presetDefs.map(name => ({ name, bg: 'transparent', select: () => {} }));
+
+    return {
+      instructionText: sel ? `Selected: ${defs.find(d => d.key === sel)?.name} — click an adjacent cell to place it.` : 'Select a module type, then click an adjacent cell.',
+      tabs, groups,
+      rowPad, rowGap,
+      hexGrid,
+      shipHexes,
+      shipName: this.state.shipName,
+      onNameChange: (e) => this.setState({ shipName: e.target.value }),
+      presetsOpen: this.state.presetsOpen,
+      presetsChevron: this.state.presetsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+      togglePresets: () => this.setState(s => ({ presetsOpen: !s.presetsOpen })),
+      presets,
+      cellsUsed: 63,
+      cellsMax: 160,
+      statusText: 'Near Corporate Station  —  U: Upgrade   B: Build   T: Trade'
+    };
+  }
+}
+
+</script>
+</body>
+</html>

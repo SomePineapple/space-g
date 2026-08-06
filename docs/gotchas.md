@@ -49,6 +49,20 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   draw-call/node counts, not a per-frame cost), not an obvious hot loop.
   Cache such materials as `static var`s and mutate properties in place rather
   than allocating new ones per use.
+- **Deleting a PNG's `.import` file silently resets its import settings to
+  Godot's defaults, which have `mipmaps/generate=false`.** Re-exporting a
+  whole art folder from an external tool typically wipes the `.import` files
+  along with the PNGs, so the setting is lost with no error anywhere. The hex
+  renderers (`ShipLayoutRenderer`, `HexGridControl`) both ask for
+  `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS`, and the module sprites are ~666x768
+  drawn into a ~60px hex (~12x minification), so a missing mip chain shows up
+  as crawling/shimmering edges rather than an obvious break. Confirmed once
+  across the whole `resources/exports/corporate/` folder. Diagnose by diffing
+  a suspect `.import` against an untouched faction's
+  (`diff <(sed -n '/\[params\]/,$p' a.png.import) <(...)`), or in the running
+  game via `load(path).get_image().has_mipmaps()`. Fix: set
+  `mipmaps/generate=true` in every affected `.import`, then
+  `filesystem_manage(op="reimport", paths=[...])`.
 - `editor_manage(op="monitors_get")` reports the **editor process's**
   Performance singleton, not the isolated running game's (can be 100x the
   real node count). For real gameplay numbers, call

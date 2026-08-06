@@ -8,7 +8,10 @@ gotchas pulled out of session history — check it before fighting a weird
 engine/tooling behavior. **`docs/multiplayer.md` is required reading before
 touching ship control, the player-ship lookup, randomness or object spawning**
 — those four areas now have deliberate seams in them and it explains what is
-and (mostly) is not prepared for multiplayer.
+and (mostly) is not prepared for multiplayer. **`docs/HUD-1d-Godot-spec.md`
+plus `docs/hud-1d-reference.png` are the source of truth for the gameplay
+HUD's appearance** — check them before restyling anything under
+`scenes/ui/hud*`.
 
 **Read "Most recent session" first.** Sessions older than the two kept in
 full below are compressed to short summaries — full narrative detail (exact
@@ -17,7 +20,66 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (code review + four-tranche refactor: bugs/perf, DRY, ship.gd decomposition, multiplayer foundations)
+## Most recent session (gameplay HUD rebuilt to the "1d" visual spec)
+
+Short, single-purpose session. The user supplied two files in `docs/` —
+`HUD-1d-Godot-spec.md` (exact colours, layout, anchoring and behaviour per
+widget) and `hud-1d-reference.png` (a mock screenshot of the target) — and
+asked for the existing gameplay HUD to be rebuilt against them. **The spec
+and the reference image are the source of truth for HUD appearance, not this
+file.** Three scoping calls were made via `AskUserQuestion` and should not be
+relitigated without reason: full replacement of the old readout (not
+side-by-side), the flat tinted-glass dropdown backdrop (not a blur shader),
+and the engine default font for now.
+
+- **`HudPalette`** (`scenes/ui/hud_palette.gd`, `RefCounted` + `class_name`,
+  no autoload) holds the spec's colours as consts plus `health_color()` and
+  `group_digits()`. Written as float literals with the hex in a trailing
+  comment because GDScript `const` cannot fold `Color("rrggbb")`.
+  **Material dot colours are deliberately NOT in it** — they come from
+  `MaterialCatalog.color()` so the HUD can't drift from the cargo/trade/
+  crafting panels. This means the material dots don't match the spec's own
+  listed hexes; that was a conscious trade against the project's
+  "don't duplicate gameplay values" rule.
+- **`VitalsReadout`** (`scenes/ui/vitals_readout.gd`) — top-left HP/EN rows:
+  glow dot + 74×5 rounded bar + number, HP tinted good/warning/critical at
+  >50%/>20%. Drawn in `_draw` rather than built from nested Controls (two
+  dots and two capsules vs. six nodes' worth of styleboxes to keep in sync);
+  only the two numbers are real `Label`s. Rounded bar ends are a rect plus a
+  circle at each end — `draw_rect` has square corners and `draw_line` has no
+  round cap.
+- **`CargoWidget`** (`scenes/ui/cargo_widget.gd`) — bottom-left chip
+  (`used/max` + tweened chevron) toggling a 190px dropdown that grows
+  *upward*. The widget anchors bottom-left sized to the chip, and the
+  dropdown hangs off negative Y from there — no anchor gymnastics. Reads
+  `Inventory` directly (`materials_changed`/`cargo_capacity_changed`), so
+  `hud.gd` doesn't relay cargo at all.
+- **`RadarDisplay`** restyled, not rewritten: cyan palette, faked radial
+  gradient (concentric fills — `draw_circle` takes a flat colour), **one
+  faint range ring per 1000 units** so a radar-range upgrade adds rings
+  rather than rescaling a fixed pair, a trailing sweep wedge, expanding ping
+  pulses (blip `age` doubles as the pulse clock — no per-blip `Tween`), a
+  centre ship dot, and a `RANGE N` label. All existing sweep-reveal/blip-
+  matching logic is untouched.
+- **`hud.gd`/`hud.tscn`** — the old dark background rect and the four stacked
+  `Salvage:`/`Health:`/`Energy:`/`Credits:` labels are gone. HUD now only
+  routes ship signals to `VitalsReadout`, formats credits as `1,240 CR`, and
+  keeps the damage vignette and STORAGE FULL cue. `ScannerDisplay`'s
+  `TOP_MARGIN` moved 10 → 52 so it clears the credits readout.
+
+Verified live via `game_eval` + real screenshots against the reference:
+corner anchoring at 1250×648, credits formatting, HP bar going amber at 45%,
+chip text, and the dropdown opening to 190×130 seated 8px above the chip with
+correct per-material counts and a 180°-rotated chevron.
+
+**The chip's actual mouse click is untested.** Injected mouse events don't
+reach the viewport GUI in this MCP environment (`gui_get_hovered_control()`
+returns null even over the chip) — the same class of limitation as the
+C/K/U keybinds in earlier sessions. The handler was called directly instead,
+and a scene-wide hit-test confirmed nothing occludes the chip rect, but one
+real click is worth doing.
+
+## Session before that (code review + four-tranche refactor: bugs/perf, DRY, ship.gd decomposition, multiplayer foundations)
 
 A user-requested four-part code review (duplication / architecture / correctness
 / deliverable) whose implementation was split into four agreed tranches. All
@@ -104,7 +166,7 @@ released each frame), and the lock-on indicator was destroyed the same frame it
 spawned once the lock began landing a frame later (it now tracks confirmed
 state, which is also the correct model for a networked client).
 
-## Session before that (Phase 8.1 Module Upgrades — framework, entry-point revision, hardpoint-modifier wiring)
+## Earlier session (Phase 8.1 Module Upgrades — framework, entry-point revision, hardpoint-modifier wiring)
 
 Implements a user-supplied "Phase 8 — Module Upgrades / 8.1 Upgrade
 framework" spec (styled after a Jedi Survivor-esque radial skill-tree
@@ -243,7 +305,7 @@ that wired two previously-unwired hardpoint kinds.
   the HUD's top-left resource readout was spotted in the verification
   screenshot but not addressed (not what was asked).
 
-## Earlier session (Phase 5 Crafting & Construction Economy, then a fix-up pass)
+## Older session (Phase 5 Crafting & Construction Economy, then a fix-up pass)
 
 Implements a user-supplied "Phase 5 — Crafting and Construction Economy" spec
 across three back-to-back requests in the same session: 5.1 (crafting
@@ -819,7 +881,8 @@ the newest, least-tested, least-content-filled system in the game.
   checked path, used exclusively by `Salvage` pickup, emitting `storage_full`
   on rejection. Dedicated Cargo screen (`cargo_panel.gd`/`.tscn`, **C** key,
   not home-base-gated) shows per-material totals with Discard 10/Discard
-  All buttons; HUD shows a live `Cargo: used/capacity` readout plus a
+  All buttons; the HUD's bottom-left `CargoWidget` chip shows a live
+  `used/max` readout (its dropdown lists per-material counts), plus a
   transient "STORAGE FULL" flash. Ship builder blocks removing a Storage
   module if current cargo would exceed the reduced capacity.
 
@@ -1019,7 +1082,9 @@ ship's overall `Health` pool.
 
 ### Information & discovery (Phase 2, ad-hoc spec — not in either roadmap)
 - **Radar** (`scenes/ui/radar_display.gd`): live sweep-reveal, bottom-right,
-  1800-unit range, "Range: N" label under the circle. Categories: Ship,
+  1800-unit range, "RANGE N" label under the circle, cyan per the 1d HUD
+  spec, with one faint range ring per 1000 units of range (so an upgrade
+  adds rings rather than rescaling fixed ones). Categories: Ship,
   Station, Electronic Signal, Enemy Camp, Distress Beacon — **Enemy Camp and
   Distress Beacon now have live instances** (see Points of Interest below);
   Electronic Signal still has none. Never shows anything Scanner identifies.
@@ -1046,6 +1111,26 @@ ship's overall `Health` pool.
   discovery-only, no reward). Each has a real completion/exhausted state
   (camp clears from radar once cleared; beacon clears once its salvage is
   collected; wrecks don't respawn rewards).
+
+### Gameplay HUD (rebuilt to the "1d" spec)
+`scenes/ui/hud.tscn` — a `CanvasLayer` with corner-anchored Control widgets,
+24px margins, no fixed pixel layout. Appearance is governed by
+`docs/HUD-1d-Godot-spec.md` + `docs/hud-1d-reference.png`, not by taste.
+- `VitalsReadout` (top-left) — HP/EN dot+bar+number rows, `_draw`-based.
+- `CargoWidget` (bottom-left) — `used/max` chip, click toggles an
+  upward-growing material list. Subscribes to `Inventory` itself.
+- `RadarDisplay` (bottom-right) and `ScannerDisplay` (top-right, below the
+  credits label) — both still gate themselves on `Ship.has_radar()`/
+  `has_scanner()` every frame.
+- `CreditsLabel` (top-right), plus the pre-existing damage vignette and
+  STORAGE FULL cue.
+- `HudPalette` (`scenes/ui/hud_palette.gd`) is the one place HUD colours
+  live — **except material dot colours, which come from
+  `MaterialCatalog.color()` on purpose.**
+- Known gaps: engine default font (the spec wants an embedded monospace
+  `FontFile`; the project ships no `.ttf`), and the cargo dropdown uses the
+  spec's flat tinted-glass fallback rather than a `BackBufferCopy` + blur
+  shader.
 
 ### World
 - `starfield_layer.gd` + `ParallaxBackground` layers, bloom via one
@@ -1394,11 +1479,26 @@ ship's overall `Health` pool.
 - More than one tier of Tractor/Grinder upgrades — each currently has
   exactly one proof-of-concept node.
 - Upgrade icon art — `ModuleUpgradeNode.glyph` is short placeholder text.
+- An embedded monospace font for the HUD — the 1d spec asks for one
+  (JetBrains Mono / Space Mono as a `FontFile` resource); the project ships
+  no `.ttf` at all, so the HUD currently uses the engine default. Dropping a
+  font in and applying it is a small, self-contained job.
+- A real blur behind the cargo dropdown (`BackBufferCopy` + blur
+  `ShaderMaterial`) — the spec itself calls this optional polish and
+  recommends the flat fallback that's in place.
+- Restyling the remaining full-screen panels (Cargo/Trade/Crafting/Builder/
+  Upgrade menus) to match the new HUD's palette — the 1d spec only covers
+  the in-flight HUD, so those still use their older look.
 
 ## Suggested next step
 
 No specific next item has been chosen yet. Candidates on the table, most
 relevant first:
+- **Look at the new HUD in motion and click the cargo chip** — it was built
+  and screenshotted against the reference, but nobody has seen it while
+  actually flying, and the chip's real mouse click could not be exercised in
+  the MCP session (see "Most recent session"). Cheap to confirm, and it gates
+  any further HUD styling work.
 - **A real human playtest of the refactor** — four tranches reshaped the ship's
   internals and every input path, verified only by scripted checks. Fly it,
   fight something, mine, build a ship, warp. This outranks everything below.

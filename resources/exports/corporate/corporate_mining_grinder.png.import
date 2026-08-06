@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bph6vwqpkf5fy"
-path="res://.godot/imported/corporate_command_core.png-a88e363743ae3b66aa2cc4e6f6e98217.ctex"
+uid="uid://drd4yhvuuce2k"
+path="res://.godot/imported/corporate_mining_grinder.png-d17d0ba8075b3491bb9ba8fc915238ff.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/exports/corporate/corporate_command_core.png"
-dest_files=["res://.godot/imported/corporate_command_core.png-a88e363743ae3b66aa2cc4e6f6e98217.ctex"]
+source_file="res://resources/exports/corporate/corporate_mining_grinder.png"
+dest_files=["res://.godot/imported/corporate_mining_grinder.png-d17d0ba8075b3491bb9ba8fc915238ff.ctex"]
 
 [params]
 
