@@ -8,12 +8,16 @@ extends Node2D
 @export var push_back_strength: float = 40.0
 
 
+## Deliberately every player ship in the group, not PlayerContext's one: the
+## boundary is a property of the region and has to hold whoever is in it. With
+## one ship per player later, each of them needs pushing back, not just the one
+## this machine happens to fly.
 func _physics_process(delta: float) -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if players.is_empty():
-		return
+	for player in get_tree().get_nodes_in_group("player_ship"):
+		_push_back(player, delta)
 
-	var player: Ship = players[0]
+
+func _push_back(player: Ship, delta: float) -> void:
 	var offset: Vector2 = player.global_position - global_position
 	var distance: float = offset.length()
 	if distance <= radius:

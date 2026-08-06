@@ -80,6 +80,12 @@ signal destroyed
 ## Credits charged per point of overall Health restored by repair_fully.
 @export var repair_cost_per_health: float = 1.0
 
+## Commands accumulated since the last physics frame (see submit_intent), and
+## which ShipIntent.Role bits were actually submitted for. Roles missing from
+## that mask are released on consume rather than left holding their last order.
+var _pending_intent: ShipIntent = ShipIntent.new()
+var _submitted_roles: int = 0
+
 var _thrust_input: float = 0.0
 var _turn_input: float = 0.0
 var _boost_active: bool = false
@@ -122,6 +128,23 @@ var _cached_layout_extent: float = -1.0
 @onready var _hardpoints: HardpointBank = $Hardpoints
 @onready var _hull_damage: HullDamageModel = $HullDamage
 @onready var _wreckage: WreckageSpawner = $Wreckage
+
+
+## Claiming the local player's ship happens here rather than in _ready(): every
+## node in a scene enters the tree before any of them is readied, so a UI script
+## calling PlayerContext.get_ship() from its own _ready() is guaranteed to find
+## it. That is the same ordering the group lookup this replaced relied on.
+##
+## The group is still what marks a ship as player-controlled at all; which of
+## them is *this machine's* is the separate question PlayerContext answers, and
+## in a crewed-ship session every peer will answer it with the same ship.
+func _enter_tree() -> void:
+	if is_in_group("player_ship"):
+		PlayerContext.set_ship(self)
+
+
+func _exit_tree() -> void:
+	PlayerContext.clear_ship(self)
 
 
 func _ready() -> void:
@@ -439,39 +462,13 @@ func _try_spend_thrust_energy(delta: float) -> bool:
 
 # --- Hardpoints --------------------------------------------------------------
 
-func fire_primary() -> void:
-	_hardpoints.fire_primary()
-
-
-func fire_secondary() -> void:
-	_hardpoints.fire_secondary()
-
-
-func fire_winch() -> void:
-	_hardpoints.fire_winch()
-
-
-func set_winch_reel_input(is_held: bool) -> void:
-	_hardpoints.set_winch_reel_input(is_held)
-
-
-## Toggled by the toggle_grinder input action ("G" — see ship_input.gd). Every
-## mounted, intact HardpointGrinder pulls this flag each physics frame (same
-## pull-model as is_module_destroyed) rather than being pushed a one-shot
-## command, so a grinder that mounts/repairs mid-toggle picks up the current
-## state immediately instead of needing a fresh key press.
-func toggle_grinder() -> void:
-	_grinder_active = not _grinder_active
-
-
+## Flipped by ShipIntent.toggle_grinder. Every mounted, intact HardpointGrinder
+## pulls this flag each physics frame (same pull-model as is_module_destroyed)
+## rather than being pushed a one-shot command, so a grinder that mounts or
+## repairs mid-toggle picks up the current state immediately instead of needing
+## a fresh key press.
 func is_grinder_active() -> bool:
 	return _grinder_active
-
-
-## Toggled by the scan input action (see ship_input.gd) — starts scanning the
-## nearest valid target if idle, cancels an in-progress scan otherwise.
-func toggle_scan() -> void:
-	_scanner.toggle_scan()
 
 
 func get_scanner() -> Scanner:
@@ -506,23 +503,16 @@ func _has_live_placement(placements: Array[ModulePlacement]) -> bool:
 
 # --- Aim and targeting -------------------------------------------------------
 
-func set_aim_target(target: Vector2) -> void:
-	_aim_target = target
-	_has_aim_target = true
-
-
+## Where this ship's aimable hardpoints point. Falls back to straight ahead
+## when no controller is aiming (see ShipIntent.has_aim_target).
 func get_aim_target() -> Vector2:
 	return _aim_target if _has_aim_target else global_position + transform.x * 1000.0
 
 
-## The object homing missiles should steer toward: manually toggled by the
-## player's lock-on (see ship_input.gd) or automatically set to whatever an
-## AI ship is currently pursuing (see ship_ai.gd). Null means "no lock" —
-## HardpointMissileLauncher then fires unguided, straight-outward missiles.
-func set_locked_target(target: Node2D) -> void:
-	_locked_target = target
-
-
+## The object homing missiles steer toward: set through ShipIntent by the
+## player's lock-on (see ship_input.gd) or by whatever an AI ship is currently
+## pursuing (see ship_ai.gd). Null means "no lock" — HardpointMissileLauncher
+## then fires unguided, straight-outward missiles.
 func get_locked_target() -> Node2D:
 	if _locked_target != null and not is_instance_valid(_locked_target):
 		_locked_target = null
@@ -542,6 +532,14 @@ func is_in_nebula() -> bool:
 
 
 # --- Cargo -------------------------------------------------------------------
+
+## The ship's cargo/credits/research store. Exposed as a component rather than
+## proxied method-by-method because the HUD and every economy panel bind to a
+## dozen of its signals; what they must not do is reach in with
+## get_node("Inventory"), which is the coupling this replaces.
+func get_inventory() -> Inventory:
+	return _inventory
+
 
 func add_material(material_id: String, amount: int) -> void:
 	_inventory.add_material(material_id, amount)
@@ -582,16 +580,53 @@ func capture_tech_part(module_type_id: String, manufacturer_id: String = "") -> 
 
 # --- Flight ------------------------------------------------------------------
 
-func set_thrust_input(thrust: float) -> void:
-	_thrust_input = clampf(thrust, -1.0, 1.0)
+## The single entry point for commanding this ship — the local player's input,
+## an AI personality, and eventually a remote peer all arrive here. `roles` is
+## what the submitter is entitled to command (see ShipIntent.Role); fields
+## outside it are discarded rather than trusted, so several crew members can
+## submit partial intents for one ship and no station can act outside its own.
+##
+## Submissions accumulate until the next _physics_process consumes them.
+## Controllers run at process_physics_priority -1 so their submission lands
+## before the ship reads it, rather than a frame late.
+func submit_intent(intent: ShipIntent, roles: int = ShipIntent.ALL_ROLES) -> void:
+	_pending_intent.merge_from(intent, roles)
+	_submitted_roles |= roles
 
 
-func set_turn_input(turn: float) -> void:
-	_turn_input = clampf(turn, -1.0, 1.0)
+## Applies whatever was submitted this frame. Any role nobody submitted for is
+## released first, so an uncrewed station — a disconnected player, a ship with
+## no controller at all — stops commanding rather than latching its last order.
+func _consume_intent() -> void:
+	_pending_intent.clear_roles(ShipIntent.ALL_ROLES & ~_submitted_roles)
+	_submitted_roles = 0
 
+	_thrust_input = clampf(_pending_intent.thrust, -1.0, 1.0)
+	_turn_input = clampf(_pending_intent.turn, -1.0, 1.0)
+	_boost_active = _pending_intent.boost
 
-func set_boost_input(boosting: bool) -> void:
-	_boost_active = boosting
+	if _pending_intent.has_aim_target:
+		_aim_target = _pending_intent.aim_target
+		_has_aim_target = true
+
+	if _pending_intent.set_lock:
+		_locked_target = _pending_intent.locked_target
+
+	if _pending_intent.fire_primary:
+		_hardpoints.fire_primary()
+	if _pending_intent.fire_secondary:
+		_hardpoints.fire_secondary()
+	if _pending_intent.fire_winch:
+		_hardpoints.fire_winch()
+	_hardpoints.set_winch_reel_input(_pending_intent.winch_reel)
+	if _pending_intent.toggle_scan:
+		_scanner.toggle_scan()
+	if _pending_intent.toggle_grinder:
+		_grinder_active = not _grinder_active
+
+	# Edge commands are consumed once; held states (thrust, turn, boost, reel)
+	# persist until the next submission overwrites them.
+	_pending_intent.clear_one_shots()
 
 
 ## Guarded against a zero/negative mass (a layout whose modules all report no
@@ -605,6 +640,7 @@ func apply_impulse(impulse: Vector2) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_consume_intent()
 	_energy.regenerate(delta)
 	_hull_damage.process(delta)
 	rotation += _turn_input * rotation_speed * delta

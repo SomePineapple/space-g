@@ -1,7 +1,10 @@
 extends Node
 
-## Drives ship.gd's movement/aim/fire inputs entirely from the parent
-## Ship's ShipPersonality resource, so one script covers every AI archetype
+## Fills a ShipIntent from the parent Ship's ShipPersonality resource and
+## submits it each physics frame, exactly the way ship_input.gd submits the
+## local player's — the ship cannot tell the two apart, which is the point:
+## AI-controlled and player-controlled ships share one command path. One script
+## covers every AI archetype
 ## (Rammer, Sniper, ...) instead of a bespoke script per ship. Replaces the
 ## former ai_input.gd and missile_cruiser_ai.gd, whose behaviors are now just
 ## two ShipPersonality resources (see resources/ai/). Obstacle/ship avoidance
@@ -14,6 +17,8 @@ enum MovementIntent { APPROACH, RETREAT, HOLD }
 
 @onready var ship: Ship = get_parent()
 
+## Reused rather than reallocated per frame; submit_intent() copies out of it.
+var _intent: ShipIntent = ShipIntent.new()
 var current_state: State = State.IDLE
 var _suspicion_elapsed: float = 0.0
 var _navigator: AINavigator = AINavigator.new()
@@ -44,6 +49,10 @@ const AIM_JITTER_FRACTION: float = 0.5
 
 
 func _ready() -> void:
+	# Controllers must run before the ship consumes what they submit, otherwise
+	# every command lands a frame late (children process after their parent by
+	# default). Lower priority runs earlier.
+	process_physics_priority = -1
 	# Ship relays its own Health's damaged signal, so this no longer reaches
 	# into the parent's node hierarchy for $Health — and no longer needs its
 	# own copy of the "did health go down" comparison.
@@ -63,12 +72,20 @@ func _physics_process(delta: float) -> void:
 	if personality == null or personality.is_player_controlled:
 		return
 
-	var player: Ship = _find_player()
+	_intent.clear()
+	_decide(personality, delta)
+	# An AI holds every role on the ship it flies — the role split exists to
+	# divide one ship between several human crew, not to limit its pilot.
+	ship.submit_intent(_intent, ShipIntent.ALL_ROLES)
+
+
+func _decide(personality: ShipPersonality, delta: float) -> void:
+	var player: Ship = _find_nearest_player()
 	if player == null:
 		_hold_position()
 		return
 
-	if _navigator.update_stuck_recovery(ship, delta):
+	if _navigator.update_stuck_recovery(ship, _intent, delta):
 		return
 
 	var to_player: Vector2 = player.global_position - ship.global_position
@@ -127,12 +144,13 @@ func _update_leash(distance: float, personality: ShipPersonality, delta: float) 
 		_leash_timer = 0.0
 		_suspicion_elapsed = 0.0
 		_movement_intent = MovementIntent.HOLD
-		ship.set_locked_target(null)
+		_intent.set_lock = true
+		_intent.locked_target = null
 
 
 func _hold_position() -> void:
 	_set_thrust(0.0)
-	ship.set_turn_input(0.0)
+	_intent.turn = 0.0
 
 
 ## Turns to face the target without moving or firing yet — a readable
@@ -142,13 +160,15 @@ func _hold_position() -> void:
 func _track_player(player: Ship, to_player: Vector2, personality: ShipPersonality, delta: float) -> void:
 	var desired_heading: float = _navigator.compute_desired_heading(ship, _safe_direction(to_player), delta, player)
 	var angle_diff: float = wrapf(desired_heading - ship.rotation, -PI, PI)
-	ship.set_turn_input(clampf(angle_diff * personality.turn_response, -1.0, 1.0))
+	_intent.turn = clampf(angle_diff * personality.turn_response, -1.0, 1.0)
 	_set_thrust(0.0)
 
 
 func _engage_player(player: Ship, to_player: Vector2, distance: float, personality: ShipPersonality, delta: float) -> void:
-	ship.set_aim_target(_jittered_aim_point(player, delta))
-	ship.set_locked_target(player)
+	_intent.aim_target = _jittered_aim_point(player, delta)
+	_intent.has_aim_target = true
+	_intent.set_lock = true
+	_intent.locked_target = player
 
 	# Steering heading blends toward-target with obstacle/ship avoidance;
 	# firing accuracy below still checks the *real* angle to the target so
@@ -158,7 +178,7 @@ func _engage_player(player: Ship, to_player: Vector2, distance: float, personali
 	# to dodge, fighting the seek force (see AINavigator.compute_desired_heading).
 	var desired_heading: float = _navigator.compute_desired_heading(ship, _safe_direction(to_player), delta, player)
 	var steer_angle_diff: float = wrapf(desired_heading - ship.rotation, -PI, PI)
-	ship.set_turn_input(clampf(steer_angle_diff * personality.turn_response, -1.0, 1.0))
+	_intent.turn = clampf(steer_angle_diff * personality.turn_response, -1.0, 1.0)
 
 	_update_movement_intent(distance, personality)
 	match _movement_intent:
@@ -172,10 +192,8 @@ func _engage_player(player: Ship, to_player: Vector2, distance: float, personali
 	var aim_angle_diff: float = wrapf(to_player.angle() - ship.rotation, -PI, PI)
 	var facing_player: bool = absf(aim_angle_diff) < deg_to_rad(personality.aim_tolerance_deg)
 	if facing_player and distance < personality.fire_range:
-		if personality.use_primary_weapon:
-			ship.fire_primary()
-		if personality.use_secondary_weapon:
-			ship.fire_secondary()
+		_intent.fire_primary = personality.use_primary_weapon
+		_intent.fire_secondary = personality.use_secondary_weapon
 
 
 ## Decides approach/retreat/hold with a hysteresis band around keep_distance
@@ -204,7 +222,7 @@ func _update_movement_intent(distance: float, personality: ShipPersonality) -> v
 
 
 func _set_thrust(value: float) -> void:
-	ship.set_thrust_input(value)
+	_intent.thrust = value
 	_navigator.note_movement_attempt(value)
 
 
@@ -224,6 +242,16 @@ func _jittered_aim_point(player: Ship, delta: float) -> Vector2:
 	return player.global_position + _aim_jitter_offset
 
 
-func _find_player() -> Ship:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	return players[0] if players.size() > 0 else null
+## Nearest player ship rather than the group's arbitrary first entry. With one
+## player ship these are the same; with several (one ship per player) picking
+## [0] would make every enemy in the region converge on whichever ship happened
+## to be registered first, regardless of distance.
+func _find_nearest_player() -> Ship:
+	var best: Ship = null
+	var best_distance: float = INF
+	for candidate in get_tree().get_nodes_in_group("player_ship"):
+		var distance: float = ship.global_position.distance_squared_to(candidate.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = candidate
+	return best

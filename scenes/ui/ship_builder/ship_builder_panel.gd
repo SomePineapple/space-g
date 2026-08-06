@@ -79,10 +79,9 @@ func _ready() -> void:
 	template_layout = load("res://resources/ships/starter_ship_layout.tres")
 	working_layout = template_layout.duplicate(true)
 
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if not players.is_empty():
-		_inventory = players[0].get_node("Inventory")
-		_player_ship = players[0]
+	_player_ship = PlayerContext.get_ship()
+	if _player_ship != null:
+		_inventory = _player_ship.get_inventory()
 
 	_build_ui()
 	_refresh()
@@ -107,16 +106,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _is_near_home_base() -> bool:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
 	var home_bases: Array = get_tree().get_nodes_in_group("home_base")
-	if players.is_empty() or home_bases.is_empty():
+	if _player_ship == null or home_bases.is_empty():
 		return false
-	return players[0].global_position.distance_to(home_bases[0].global_position) <= home_base_range
+	return _player_ship.global_position.distance_to(home_bases[0].global_position) <= home_base_range
 
 
 func _apply_to_player_ship() -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if players.is_empty():
+	if _player_ship == null:
 		return
 
 	var issues: Array[String] = working_layout.validate_layout()
@@ -124,7 +121,7 @@ func _apply_to_player_ship() -> void:
 		_status_label.text = "Cannot apply to ship: %s" % "; ".join(issues)
 		return
 
-	players[0].apply_layout(working_layout.duplicate(true))
+	_player_ship.apply_layout(working_layout.duplicate(true))
 	_status_label.text = "Applied to ship."
 
 

@@ -18,12 +18,11 @@ var _result_timer: float = 0.0
 
 
 func _ready() -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if players.is_empty():
+	_ship = PlayerContext.get_ship()
+	if _ship == null:
 		return
 
-	_ship = players[0]
-	_scanner = players[0].get_scanner()
+	_scanner = _ship.get_scanner()
 	_scanner.scan_started.connect(_on_scan_started)
 	_scanner.scan_progress_updated.connect(_on_scan_progress)
 	_scanner.scan_completed.connect(_on_scan_completed)

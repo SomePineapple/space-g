@@ -12,10 +12,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _add_resources_to_player() -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if players.is_empty():
+	var ship: Ship = PlayerContext.get_ship()
+	if ship == null:
 		return
 
-	var inventory: Inventory = players[0].get_node("Inventory")
+	var inventory: Inventory = ship.get_inventory()
 	for material_id in MaterialCatalog.ALL_IDS:
 		inventory.add_material(material_id, debug_material_amount)

@@ -75,7 +75,7 @@ func has_snapshot() -> bool:
 
 
 func capture(ship: Node) -> void:
-	var inventory: Node = ship.get_node("Inventory")
+	var inventory: Node = ship.get_inventory()
 	_credits = inventory.get_credits()
 	_material_totals = inventory.get_all_materials().duplicate()
 	_component_totals = inventory.get_all_components().duplicate()
@@ -98,7 +98,7 @@ func apply(ship: Node) -> void:
 
 	ship.apply_layout(_ship_layout.duplicate(true))
 
-	var inventory: Node = ship.get_node("Inventory")
+	var inventory: Node = ship.get_inventory()
 	inventory.add_credits(_credits)
 	for material_id in _material_totals:
 		inventory.add_material(material_id, _material_totals[material_id])

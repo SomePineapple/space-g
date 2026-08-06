@@ -18,11 +18,11 @@ var _storage_full_tween: Tween
 
 
 func _ready() -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if players.is_empty():
+	var ship: Ship = PlayerContext.get_ship()
+	if ship == null:
 		return
 
-	_inventory = players[0].get_node("Inventory")
+	_inventory = ship.get_inventory()
 	_inventory.materials_changed.connect(_on_materials_changed)
 	_inventory.cargo_capacity_changed.connect(_on_cargo_capacity_changed)
 	_update_salvage_label(_inventory.get_all_materials())
@@ -33,7 +33,6 @@ func _ready() -> void:
 	# Health readouts and the damage vignette both come off the Ship's own
 	# relayed signals now, rather than this panel reaching into the ship scene
 	# for its $Health node and re-deriving "was that a hit" itself.
-	var ship: Ship = players[0]
 	ship.health_changed.connect(_update_health_label)
 	ship.damaged.connect(_on_ship_damaged)
 	_update_health_label(ship.get_current_health(), ship.get_max_health())

@@ -88,7 +88,7 @@ func fire() -> void:
 
 
 ## Called every physics frame with the fire_winch action's current held
-## state (see Ship.set_winch_reel_input) — matters while ATTACHED (reels the
+## state (see ShipIntent.winch_reel) — matters while ATTACHED (reels the
 ## target in) or EXTENDED (reels an empty rope back home).
 func set_reel_input(is_held: bool) -> void:
 	_reel_input_held = is_held

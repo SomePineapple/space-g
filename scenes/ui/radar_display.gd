@@ -58,9 +58,7 @@ var _range_label: Label
 
 
 func _ready() -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if not players.is_empty():
-		_player = players[0]
+	_player = PlayerContext.get_ship()
 
 	var diameter: float = radius * 2.0
 	custom_minimum_size = Vector2(diameter + 10.0, diameter + 10.0 + RANGE_LABEL_HEIGHT)

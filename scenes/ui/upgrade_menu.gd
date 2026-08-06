@@ -42,10 +42,9 @@ func _ready() -> void:
 
 	_build_categories()
 
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if not players.is_empty():
-		_ship = players[0]
-		_inventory = _ship.get_node("Inventory")
+	_ship = PlayerContext.get_ship()
+	if _ship != null:
+		_inventory = _ship.get_inventory()
 
 	_build_ui()
 

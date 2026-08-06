@@ -10,9 +10,7 @@ var _label: Label
 
 
 func _ready() -> void:
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if not players.is_empty():
-		_ship = players[0]
+	_ship = PlayerContext.get_ship()
 
 	var home_bases: Array = get_tree().get_nodes_in_group("home_base")
 	if not home_bases.is_empty():

@@ -26,11 +26,11 @@ func _ready() -> void:
 	# open, without hard-coding a reference to this specific panel.
 	add_to_group("menu_panel")
 
-	var players: Array = get_tree().get_nodes_in_group("player_ship")
-	if players.is_empty():
+	var ship: Ship = PlayerContext.get_ship()
+	if ship == null:
 		return
 
-	_inventory = players[0].get_node("Inventory")
+	_inventory = ship.get_inventory()
 	_inventory.materials_changed.connect(_on_state_changed)
 	_inventory.components_changed.connect(_on_state_changed)
 	_inventory.cargo_capacity_changed.connect(_on_state_changed)

@@ -78,11 +78,11 @@ func note_movement_attempt(thrust_input: float) -> void:
 ## Call once per physics frame before any normal movement decision. Returns
 ## true while a recovery maneuver is in progress; the caller should skip its
 ## normal state logic entirely that frame (this already drives thrust/turn).
-func update_stuck_recovery(ship: Ship, delta: float) -> bool:
+func update_stuck_recovery(ship: Ship, intent: ShipIntent, delta: float) -> bool:
 	if _recovery_timer > 0.0:
 		_recovery_timer -= delta
-		ship.set_thrust_input(-1.0)
-		ship.set_turn_input(_recovery_turn_dir)
+		intent.thrust = -1.0
+		intent.turn = _recovery_turn_dir
 		return true
 
 	_recovery_check_timer += delta
