@@ -68,6 +68,13 @@ func _physics_process(delta: float) -> void:
 		_release_target()
 		return
 
+	# Powered down from the HUD (see ShipSystems) — same effect as losing the
+	# module, pulled each frame rather than pushed so re-enabling resumes
+	# immediately.
+	if not _shooter.is_system_enabled(ShipSystems.TRACTOR):
+		_release_target()
+		return
+
 	# is_instance_valid must run before _active_target is ever read/passed
 	# again — a freed object stored in a typed variable throws as soon as
 	# it's passed into another typed parameter, not just when its members

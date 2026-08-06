@@ -258,7 +258,7 @@ static func get_all() -> Array[ModuleType]:
 	# grinder) — a single hex; the mining/contact side is whichever direction
 	# the placement is rotated to face (HardpointGrinder.set_cell_size reaches
 	# the muzzle out from that one hex's centre toward its facing edge).
-	# Toggled on/off by the player (ShipIntent.toggle_grinder, "G") rather than
+	# Toggled on/off by the player (the Grinder system's switch, "G") rather than
 	# always-on like the Tractor Beam, since it deals continuous damage and
 	# should require deliberate activation. Lime-green is the fallback tint
 	# for factions with no grinder art — distinct from every warm-toned module

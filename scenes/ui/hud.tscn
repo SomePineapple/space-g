@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scenes/ui/scanner_display.gd" id="3_scanner"]
 [ext_resource type="Script" path="res://scenes/ui/vitals_readout.gd" id="4_vitals"]
 [ext_resource type="Script" path="res://scenes/ui/cargo_widget.gd" id="5_cargo"]
+[ext_resource type="Script" path="res://scenes/ui/systems_panel.gd" id="6_systems"]
 
 [node name="HUD" type="CanvasLayer" unique_id=309546132]
 script = ExtResource("1_0mwgc")
@@ -12,6 +13,10 @@ script = ExtResource("1_0mwgc")
 [node name="VitalsReadout" type="Control" parent="."]
 mouse_filter = 2
 script = ExtResource("4_vitals")
+
+[node name="SystemsPanel" type="Control" parent="."]
+mouse_filter = 2
+script = ExtResource("6_systems")
 
 [node name="CargoWidget" type="Control" parent="."]
 mouse_filter = 2
@@ -48,6 +53,24 @@ theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 26
 horizontal_alignment = 1
 text = "STORAGE FULL"
+modulate = Color(1, 1, 1, 0)
+
+[node name="PowerWarningLabel" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -180.0
+offset_right = 220.0
+offset_bottom = -152.0
+theme_override_colors/font_color = Color(0.9490, 0.7569, 0.3059, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+text = "POWER SHORTAGE"
 modulate = Color(1, 1, 1, 0)
 
 [node name="DamageFlash" type="ColorRect" parent="."]

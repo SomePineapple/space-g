@@ -9,14 +9,20 @@ extends CanvasLayer
 @export var damage_flash_fade_duration: float = 0.35
 @export var storage_full_display_duration: float = 1.5
 @export var storage_full_fade_duration: float = 0.6
+## Held longer than the storage cue: losing a system to a brownout is a state
+## change the player has to act on, not a transient "that pickup bounced".
+@export var power_warning_display_duration: float = 2.5
+@export var power_warning_fade_duration: float = 0.8
 
 @onready var _vitals: Control = $VitalsReadout
 @onready var _credits_label: Label = $CreditsLabel
 @onready var _damage_flash: ColorRect = $DamageFlash
 @onready var _storage_full_label: Label = $StorageFullLabel
+@onready var _power_warning_label: Label = $PowerWarningLabel
 
 var _damage_flash_tween: Tween
 var _storage_full_tween: Tween
+var _power_warning_tween: Tween
 
 
 func _ready() -> void:
@@ -39,6 +45,9 @@ func _ready() -> void:
 	ship.energy_changed.connect(_vitals.set_energy)
 	_vitals.set_energy(ship.get_energy(), ship.get_max_energy())
 
+	ship.energy_usage_changed.connect(_vitals.set_power_load)
+	ship.get_systems().system_auto_disabled.connect(_on_system_auto_disabled)
+
 
 func _update_credits_label(amount: int) -> void:
 	_credits_label.text = "%s CR" % HudPalette.group_digits(amount)
@@ -53,6 +62,19 @@ func _on_storage_full() -> void:
 	_storage_full_tween = create_tween()
 	_storage_full_tween.tween_interval(storage_full_display_duration)
 	_storage_full_tween.tween_property(_storage_full_label, "modulate:a", 0.0, storage_full_fade_duration)
+
+
+## The ship browned out and cut a system by itself (see ShipSystems) — said
+## out loud, because a system going quiet with no explanation is exactly the
+## confusion power management is supposed to avoid.
+func _on_system_auto_disabled(system_id: StringName) -> void:
+	_power_warning_label.text = "POWER SHORTAGE — %s OFFLINE" % ShipSystems.DISPLAY_NAMES[system_id]
+	if _power_warning_tween:
+		_power_warning_tween.kill()
+	_power_warning_label.modulate.a = 1.0
+	_power_warning_tween = create_tween()
+	_power_warning_tween.tween_interval(power_warning_display_duration)
+	_power_warning_tween.tween_property(_power_warning_label, "modulate:a", 0.0, power_warning_fade_duration)
 
 
 ## Health.damaged already means "current actually dropped" — a ship rebuild in

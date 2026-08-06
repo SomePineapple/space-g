@@ -11,7 +11,11 @@ touching ship control, the player-ship lookup, randomness or object spawning**
 and (mostly) is not prepared for multiplayer. **`docs/HUD-1d-Godot-spec.md`
 plus `docs/hud-1d-reference.png` are the source of truth for the gameplay
 HUD's appearance** — check them before restyling anything under
-`scenes/ui/hud*`.
+`scenes/ui/hud*`. **`docs/design_handoff_ship_builder/` and
+`docs/design_handoff_upgrade_tree/` are likewise the source of truth for the
+ship-builder and module-upgrade screens** — read the whole folder (README,
+LAYOUT_SPEC where present, and the JSON) before touching
+`scenes/ui/ship_builder/` or `scenes/ui/upgrades/`.
 
 **Read "Most recent session" first.** Sessions older than the two kept in
 full below are compressed to short summaries — full narrative detail (exact
@@ -20,7 +24,123 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (gameplay HUD rebuilt to the "1d" visual spec)
+## Most recent session (ship builder + module upgrades rebuilt to their design handoffs; per-instance upgrade system deleted)
+
+Two design handoffs implemented back to back, then a dead-code strip. Both
+handoff folders are the source of truth for their screen's appearance — not
+this file.
+
+### Ship builder (`docs/design_handoff_ship_builder/`)
+
+Full visual rebuild of `ShipBuilderPanel`; gameplay logic preserved. Three
+scoping calls were made via `AskUserQuestion` and should not be relitigated:
+real faction hex art in the module icons with the mock's gradient+glyph as
+fallback, a static cell-count readout (no build-size dropdown — no such system
+exists), and Research/Repair living in the selected row's expansion strip.
+
+New under `scenes/ui/ship_builder/`: `builder_theme.gd` (every colour/metric
+from the handoff plus StyleBox and font factories — monospace via `SystemFont`,
+no font asset added), `module_presentation.gd` (category grouping/glyphs
+derived from `ModuleType`'s own fields rather than a new field on every type),
+`module_hex_icon.gd`, `module_list_view.gd`, `builder_stat_strip.gd`,
+`builder_presets_card.gd`, `builder_backdrop.gd`. `hex_grid_control.gd` gained
+the fading lattice, field glow, vignette, per-module glow, a dashed pulsing
+placement preview and responsive cell sizing. `station_prompt.gd` gained
+`class_name` + `PROMPT_TEXT` so the builder's status line reuses the string.
+
+Known deviations, all commented in-file: Godot has no cheap `backdrop-filter`,
+so cards are translucent-not-blurred; filter tabs are 10px not 10.5px or they
+wrap to two rows in the 336px panel.
+
+### Module upgrades (`docs/design_handoff_upgrade_tree/`)
+
+**This one took three corrections to land — read the whole handoff folder
+before touching it.** The first attempt kept the game's per-mounted-module
+trees and only borrowed the visuals; the user's actual intent was the
+handoff's own data model. The final shape:
+
+- **The rail is the seven systems** (Hull, Propulsion, Weapons, Power,
+  Storage, Sensors, Mining) and each owns **one ship-wide tree**. There are no
+  per-module rows. Weapons is the 17-node tree with Laser/Missile/Rail branch
+  hues and three merge nodes.
+- **Content is `upgrade_data.json` copied to
+  `res://resources/upgrades/upgrade_tree_data.json`** (verbatim apart from
+  dropping `_schema`) — 7 categories, 89 nodes. Adding an upgrade is a data
+  edit; nothing in code enumerates nodes.
+- `ShipUpgradeCatalog` loads it and resolves the handoff's display-string costs
+  ("8 Copper, 3 Wiring") against `MaterialCatalog`/`ComponentCatalog` by
+  display name. Every name in the data currently resolves.
+- `ShipUpgradeService` is the two predicates and nothing else —
+  `is_unlocked` / `is_available`. `parents` is an AND list and arity 2+ *is*
+  the merge mechanic; there is no separate flag.
+- **Unlocks are ship-wide, stored by id per category in `GameState`**
+  (`is_upgrade_unlocked`/`unlock_upgrade`/`get_unlocked_upgrades`, plus
+  `last_upgrade_category`). Deliberately *not* part of `capture()`/`apply()`:
+  those mirror one ship across a warp, whereas unlocks are player progression
+  that outlives any hull.
+
+UI under `scenes/ui/upgrades/`: `upgrade_palette.gd` (OKLCH→sRGB so the
+handoff's hue-per-category tokens stay as numbers), `upgrade_tree_layout.gd`
+(the polar fan — span allocation with mirroring, merge placement at
++0.4×STEP, label anchoring, frame measurement), `upgrade_tree_view.gd`
+(drawing and hit-testing only), `upgrade_rail_list.gd`,
+`upgrade_detail_panel.gd`. `upgrade_menu.gd` assembles them.
+
+Two things worth knowing before editing the view:
+- **The renderer reads only `UpgradeTreeLayout.entries`.** It used to keep its
+  own node list too and crashed indexing a stale id when switching categories
+  mid-frame. Don't reintroduce a second copy.
+- **All trees share one fit scale** — `UpgradeMenu._shared_frame()` unions
+  every tree's extent and passes it as the view's reference frame, so nodes
+  don't resize when you switch system. Each tree still centres on its own
+  extent.
+
+### Dead-code strip
+
+The per-`ModuleInstance` upgrade system (Phase 8.1) was superseded and is
+**deleted**: `module_upgrade_catalog.gd`, `module_upgrade_node.gd`,
+`module_upgrade_service.gd`, `module_upgrade_tree.gd`, and the long-orphaned
+`upgrade_tree_lines.gd`. With them went `ModuleInstance`'s upgrade state
+(`unlocked_upgrade_ids`, `get_stat_modifier`, `get_level`, …),
+`ShipLayout._instance_stat_delta` and its six call sites,
+`HardpointBank._apply_instance_upgrade_modifiers` and its four, and
+`Ship.apply_instance_upgrade_effect`. Net −327 lines.
+
+`ModuleInstance` survives as identity/provenance only — the owned-module pool
+still needs it so removing and re-placing returns the *same* module.
+`HardpointBank.apply_modifiers()` survives and is still used by the
+manufacturer path.
+
+### Verified / not verified
+
+Verified live via `game_eval` and real screenshots: both screens render and
+match their references; builder place/remove/validate/craft/filter/preset;
+upgrade rail switching across all 7 trees, unlocking (costs actually spent),
+merge REQUIRES ALL with unmet dots, progress roll-up, persistence across
+close/reopen. After the strip: ship stats unchanged (mass 3.25, hp 435, thrust
+500, cargo 60, max speed 153.8), 4 hardpoints mount and fire, builder
+round-trips. Game log clean throughout.
+
+Not verified: real mouse/keyboard input into either screen (handlers were
+called directly — the documented MCP limitation), and no human has played it.
+
+### Still open
+
+- **No upgrade changes ship behaviour.** The handoff authors no stat
+  modifiers, so unlocking spends resources and records the id and that is all.
+  The user is writing the upgrade list and will hook effects up next. The
+  wiring points are `ShipUpgradeService.unlock()` (apply the effect) and
+  `HardpointBank.apply_modifiers()` (reach an already-spawned hardpoint
+  without rebuilding it); `Ship._refresh_layout_stats()` re-derives aggregates
+  without touching health or module condition.
+- Node icons are 2-letter glyphs; the schema reserves an `icon` slot.
+- `Missiles` as a separate player-facing category is gone — guns and launchers
+  are both "Weapons" now.
+- Editor-side `PlayerContext`/`GameRng` "not declared" parse errors appear in
+  `logs_read(source="editor")` throughout and are pre-existing autoload reload
+  artefacts; the *running game* log is the one that matters.
+
+## Session before that (gameplay HUD rebuilt to the "1d" visual spec)
 
 Short, single-purpose session. The user supplied two files in `docs/` —
 `HUD-1d-Godot-spec.md` (exact colours, layout, anchoring and behaviour per
@@ -79,231 +199,68 @@ C/K/U keybinds in earlier sessions. The handler was called directly instead,
 and a scene-wide hit-test confirmed nothing occludes the chip rect, but one
 real click is worth doing.
 
-## Session before that (code review + four-tranche refactor: bugs/perf, DRY, ship.gd decomposition, multiplayer foundations)
+## Earlier session (code review + four-tranche refactor: bugs/perf, DRY, ship.gd decomposition, multiplayer foundations)
 
-A user-requested four-part code review (duplication / architecture / correctness
-/ deliverable) whose implementation was split into four agreed tranches. All
-four are done and were verified live via `game_eval` against the running
-project. Tranches 1–3 are committed (`b9122c5`, `5d09b49`, `cebcaea`); tranche 4
-was in progress at the end of the session.
+A user-requested four-part code review implemented as four tranches, all done
+and verified live via `game_eval` (tranches 1–3 committed as `b9122c5`,
+`5d09b49`, `cebcaea`). **No human has played any of it.**
 
-**No human has played any of it.** Everything below is verified by scripted
-checks — numeric before/after comparisons, signal-emission counts, spawn counts
-— not by flying the ship. Tranche 3 moved collision shapes, hardpoint parenting
-and the entire damage model; tranche 4 rerouted every input. A real playtest is
-the outstanding item.
+- **Tranche 1 — bugs/perf**: destroyed engines no longer leave their thrust
+  bonus behind and `max_speed` is re-derived; dictionary indexes on the
+  catalogs and `ShipLayout`; cached extents/particles; throttled energy signal;
+  winch rope leak.
+- **Tranche 2 — DRY**: `DriftingHexPiece`, `ChargedHardpoint`, `BeamVisual`
+  bases; `Health.damaged()` replaced four `_last_known_health` copies. Fixed
+  the white hull flash re-triggering every frame during regrowth.
+- **Tranche 3 — ship.gd 1449 → 779 lines**: four child components on
+  `ship.tscn`, all delegated to and relayed for — `HullDamageModel`,
+  `HardpointBank`, `WreckageSpawner`, `ShipEnergy`. The loot-drop split was
+  deliberately deferred (its exports are overridden in nine scene files; the
+  right home is a `LootTable` Resource).
+- **Tranche 4 — multiplayer seams**: `ShipIntent` (commands as data, filtered
+  by `Role` *on arrival* rather than trusting the sender), `PlayerContext`
+  autoload (replaced twelve `get_nodes_in_group("player_ship")[0]` lookups),
+  `GameRng` autoload (simulation randomness only — presentation stays on
+  global `randf()`), `WorldSpawn`, and `GamePanel` as the base for the five
+  gameplay menus. Two real bugs were found and fixed during its verification:
+  a station that stopped submitting left its last order latched, and the
+  lock-on indicator was destroyed the frame it spawned.
 
-### Tranche 1 — bugs and performance
-- **Real bug fixed**: destroying an upgraded engine left its upgrade bonus on
-  the ship (`_recompute_thrust_stats()` now re-sums live modules instead of
-  subtracting the module type's *base* contribution), and `max_speed` was never
-  re-derived at all, so a ship that lost every engine kept its top speed.
-- Dictionary indexes on `ModuleCatalog`/`MaterialCatalog`/`ComponentCatalog`
-  (`get_by_id` was a linear scan under a per-hex, per-frame call path) and on
-  `ShipLayout` (cell → placement, placement_id → placement, cached occupied
-  cells, invalidated on place/remove/rotate).
-- Cached layout extent, cached thruster particle nodes, throttled the energy
-  signal to whole-number changes, `HardpointWinch` rope leak on `_exit_tree`,
-  zero-mass guards.
-
-### Tranche 2 — DRY extractions
-- `DriftingHexPiece` base for `ShipDebris`/`CapturedTechPart`;
-  `ChargedHardpoint` base for railgun/phase lance; `BeamVisual` shared by
-  tractor beam and grinder (one cached additive material for all beams).
-- `Health.damaged(amount, current)` — fires only on an actual drop. Removed
-  **four** separate `_last_known_health` copies (ship, HUD, ship_ai,
-  camera_shake) and every `get_node("Health")` reach.
-- **Real bug fixed en route**: the white hull flash was gated on
-  `health_changed`, not "did health drop", so passive module regrowth (which
-  heals every physics frame) restarted the flash tween every frame and pinned
-  the hull white for the entire repair.
-
-### Tranche 3 — ship.gd decomposition (1449 → 779 lines)
-Four new child components on `ship.tscn`, all delegated to and relayed for, so
-nothing outside the ship talks to them:
-- `HullDamageModel` — per-module condition, splash/beam resolution, severance,
-  regrowth, paid repair, per-placement collision shapes. Reports back via
-  `modules_changed` / `hull_healed` / `hull_lost` rather than touching Health.
-- `HardpointBank` — owns every mounted hardpoint as its own children; five
-  parallel arrays and five near-identical spawn functions collapsed; lookups
-  now O(1) via `placement_id → node`.
-- `WreckageSpawner` — debris, capturable parts, seam sparks.
-- `ShipEnergy` — the pool, its capacity derivation and its throttled signal.
-
-**Deferred deliberately**: the loot-drop split. Its five tuning exports are
-overridden per archetype in nine scene files and the right destination is a
-`LootTable` Resource, not a node — worth doing properly rather than half-moving.
-
-### Tranche 4 — multiplayer foundations
-**See `docs/multiplayer.md` — it is the authoritative record, including a long
+**`docs/multiplayer.md` is the authoritative record here, including a long
 "what is still single-player-only" section. Do not infer readiness from the
 seams existing.**
 
-The user specified two eventual modes: (1) one ship per player, (2) several
-players crewing one ship. Both shaped the work:
-- **`ShipIntent`** — commands as plain data, tagged by `Role`
-  (HELM/WEAPONS/OPERATIONS). Everything commanding a ship goes through
-  `Ship.submit_intent(intent, roles)`, which **filters by role on arrival
-  rather than trusting the sender** — already the authority check a server
-  needs. `ship_input.gd` and `ship_ai.gd` are both now just intent producers;
-  the ship cannot tell them apart. Ship's individual input setters were removed.
-- **`PlayerContext`** (autoload) — which ship is *this machine's*, plus
-  `local_roles`. Replaced twelve `get_nodes_in_group("player_ship")[0]` lookups.
-  The group stays and is still right for "any player ship" — `region_boundary`
-  and `ship_ai` were changed to iterate it rather than take `[0]`.
-- **`GameRng`** (autoload) — named seeded streams for *simulation* randomness.
-  Presentation randomness (camera shake, starfield) deliberately stays on global
-  `randf()`; the reasoning is in the doc and at the call site.
-- **`WorldSpawn`** — one entry point for objects entering the region (~18 inline
-  `current_scene.add_child` calls). Local-only presentation deliberately excluded.
-- **`GamePanel`** — base for the five gameplay menus; absorbed four copies of
-  the home-base gate, the layout constants and the panel scaffolding.
+## Earlier session (Phase 8.1 Module Upgrades — SUPERSEDED, code deleted)
 
-**Two real bugs found during tranche 4 verification, both introduced by it:** a
-station that stopped submitting left its last order latched (a disconnecting
-helmsman would pin the throttle open — now roles nobody submitted for are
-released each frame), and the lock-on indicator was destroyed the same frame it
-spawned once the lock began landing a frame later (it now tracks confirmed
-state, which is also the correct model for a networked client).
+**Historical only. Almost nothing described here still exists** — the most
+recent session replaced this system wholesale with the ship-wide upgrade trees
+from `docs/design_handoff_upgrade_tree/`. Kept as a short note so a fresh agent
+who meets a stale reference knows what it was.
 
-## Earlier session (Phase 8.1 Module Upgrades — framework, entry-point revision, hardpoint-modifier wiring)
+It built per-`ModuleInstance` upgrades: each specific built module carried its
+own `unlocked_upgrade_ids`, so removing and re-placing a module preserved what
+had been bought on it. `ModuleUpgradeCatalog`/`ModuleUpgradeNode`/
+`ModuleUpgradeService` held ~12 nodes across five `tree_key`s, applied in two
+tiers (aggregate `ModuleType` fields summed by `ShipLayout`, plus live
+hardpoint node properties pushed at spawn). A radial `ModuleUpgradeTree`
+overlay opened from a `UpgradeMenu` category → mounted-instance drilldown.
 
-Implements a user-supplied "Phase 8 — Module Upgrades / 8.1 Upgrade
-framework" spec (styled after a Jedi Survivor-esque radial skill-tree
-screenshot), across three back-to-back requests in the same session: the
-framework + UI itself, a UX pivot (ship-builder button → dedicated U-key
-menu with category submenus), then a scope-closing follow-up (the user
-asking "is the system obvious for future agents to add upgrades easily")
-that wired two previously-unwired hardpoint kinds.
+All of that is deleted. **What survives from it and still matters:**
+- `ModuleInstance` and `ModulePlacement.instance`/`ensure_instance()`, now
+  identity and provenance only — the owned-module pool is
+  `Dictionary[key] -> Array[ModuleInstance]` rather than counts, so a specific
+  built module keeps its identity through Build → Place → Remove → re-Place,
+  and `GameState` snapshots the real pool across warps.
+- `HardpointBank.apply_modifiers()` — additive stat deltas onto an
+  already-spawned hardpoint, skipping properties the node lacks. Still used by
+  the `Manufacturer.stat_modifiers` path and the intended hook for ship-wide
+  upgrade effects.
+- The `toggle_upgrades` ("U") binding and the home-base gate on the screen.
 
-- **Replaced the old ship-wide upgrade system entirely** (explicit
-  `AskUserQuestion` choice) — `UpgradeManager`/`UpgradeCatalog`/`UpgradeNode`/
-  `upgrade_panel.gd(.tscn)` (unlocked-once modifiers pushed onto *every*
-  gun/launcher regardless of which one was bought) deleted outright, along
-  with `ship.tscn`'s `UpgradeManager` node and the original `toggle_upgrades`
-  binding — none of it could satisfy "upgrade individual module instances"
-  or "removing and replacing an upgraded module preserves its state".
-- **New per-instance identity is the load-bearing addition**: `ModuleInstance`
-  (`scripts/economy/module_instance.gd`, a `Resource` — `instance_id`,
-  `unlocked_upgrade_ids`, `get_stat_modifier()`). Previously "owned module"
-  stock was a bare `Dictionary[key]->int` count (fungible), which can't carry
-  per-copy state. `ModulePlacement` gained an `instance` field +
-  `ensure_instance()` (lazy-create, so a pre-Phase-8.1/starter-loadout
-  placement is still upgrade-capable with zero data migration).
-- **`Inventory`'s owned-module pool changed from counts to
-  `Dictionary[key]->Array[ModuleInstance]`** (`take_owned_module()`/
-  `return_owned_module()` replace `spend_owned_module()`/part of
-  `add_owned_module()`) — so a specific built instance's upgrades survive
-  Build → Place → Remove → re-Place. `GameState` now snapshots/restores the
-  real instance pool across warp gates (`get_all_owned_module_instances()`/
-  `restore_owned_module_pool()`), not just counts.
-- **Data-driven trees**: `ModuleUpgradeNode`/`ModuleUpgradeCatalog`
-  (`scripts/economy/`) — deliberately minimal content per the spec's own
-  "framework before individual trees" framing. `tree_key` is a module's
-  `hardpoint_category` if it has one (every weapon/missile tier shares one
-  tree) else its own `module_type_id` (e.g. "engine"). Engine tree branches
-  and reconverges (two lvl-2 nodes → one lvl-3 capstone) and demonstrates a
-  **cross-module requirement** (`requires_ship_modules`) — added because the
-  user flagged "some upgrades will rely on other modules also" — the
-  capstone needs a Reactor installed elsewhere on the ship, independent of
-  the same-tree `requires` chain.
-- **`ModuleUpgradeService`** (stateless `RefCounted`, no manager Node/
-  autoload) — validates/unlocks against any `(ShipLayout, Inventory,
-  ModulePlacement)` triple, so identical code works against the ship
-  builder's draft `working_layout` and the live ship's real `ship_layout`
-  with zero special-casing.
-- **Modifier application is two-tier, mirroring how `Manufacturer.
-  stat_modifiers` already worked**: (1) `ModuleType`'s own aggregate fields
-  (`thrust_contribution`/`health_contribution`/`mass_contribution`/
-  `energy_generation`/`energy_capacity_contribution`/
-  `cargo_capacity_contribution`) — `ShipLayout` sums a new
-  `_instance_stat_delta()` alongside the existing `_manufacturer_stat_delta()`,
-  so Engine/Hull/Reactor/Battery/Storage-style upgrades work with zero
-  `Ship.gd` changes; (2) a live spawned hardpoint node's own properties
-  (weapon/missile/tractor/grinder) — `Ship._apply_instance_upgrade_modifiers()`
-  pushes an instance's unlocked deltas onto its node at spawn time, mirroring
-  `_apply_manufacturer_modifiers()` exactly.
-- **UI pivot mid-session**: first built as an "Upgrade" button inside
-  `ShipBuilderPanel` (operating on its draft `working_layout`); the user
-  found this "clunky" and asked for a dedicated **U** key (`toggle_upgrades`,
-  re-added to `project.godot`) with category submenus instead. Replaced
-  entirely with standalone `scenes/ui/upgrade_menu.gd`/`.tscn` (`UpgradeMenu`,
-  home-base-gated like the builder): left column groups every `ModuleType`
-  into player-facing categories (Weapons/Missiles/Sensors/Mining/Propulsion/
-  Power/Storage/Hull, via `_category_for()` — a UI-only grouping, separate
-  from `tree_key`), middle column lists every live-mounted instance of that
-  category with its level, clicking one opens the radial tree. **Operates on
-  the live ship's own `ship_layout`, not a draft** — this is why `Ship.
-  apply_instance_upgrade_effect()` exists: a deliberately narrow stat
-  refresh (recompute mass/energy/cargo/thrust, push the one new modifier
-  onto the one already-spawned node) that does **not** call the full
-  `_apply_ship_layout()` a real ship-builder Apply uses, because that would
-  silently heal the ship to full and reset every module's condition —
-  correct for "I just rebuilt my ship", wrong for "I bought one thruster
-  upgrade".
-- **Radial tree UI** (`scenes/ui/ship_builder/module_upgrade_tree.gd`,
-  `ModuleUpgradeTree` — name/location kept from the builder-button era, now
-  instantiated by `UpgradeMenu` instead): node positions computed purely
-  from each node's `requires` chain (BFS depth = ring, leaves evenly spread
-  across a fixed arc, parent angle = average of children's — a real
-  radial-tree-layout algorithm, not hand-placed coordinates). Visual states
-  per the reference image: unlocked (bright/gold), ready-to-unlock (glow
-  halo + pulse `Tween`, clickable), reachable-but-blocked (dulled, disabled,
-  tooltip explains why via `ModuleUpgradeService.get_rejection_reason()`),
-  not-yet-reachable (near-invisible). Hover uses Godot's native
-  `tooltip_text` (name/description/cost/before→after per-stat values) rather
-  than a custom side panel — a deliberate simplification, not a limitation
-  hit by accident.
-- **Two real bugs found and fixed via live `game_eval`/screenshot
-  verification, not just code review**: (1) the panel-centering code
-  double-applied a `PANEL_SIZE * 0.5` offset on top of
-  `set_anchors_preset(PRESET_CENTER)`'s own (mistaken-assumption) centering,
-  then the first fix attempt assumed `self.size` was valid synchronously
-  inside `_ready()` (Control layout is deferred a frame — it reads back
-  `(0, 0)`) — final fix reads `get_viewport().get_visible_rect().size`
-  directly, confirmed via `get_global_rect()` and a real screenshot. (2) The
-  user's "is the system obvious for future agents" question prompted an
-  audit that found `Sensors`/`Mining` categories were already clickable in
-  the UI with zero underlying modifier-application wiring
-  (`Ship._spawn_hardpoint_tractor_beams()`/`_spawn_hardpoint_grinders()`
-  never called `_apply_instance_upgrade_modifiers()`) — a genuine
-  silent-no-op trap violating the project's own "never silently no-op" rule.
-  Closed for Tractor Beam/Grinder (structurally identical to guns/launchers
-  — one added call each + a new shared `Ship._find_hardpoint_node_for()`),
-  proven live (`max_range` 250→310, `damage_per_second` 14→20) with one real
-  content node each (`tractor_lvl_1`/`grinder_lvl_1`). **Radar/Scanner are
-  still unwired** — see "Still open".
-
-### Still open from this session
-- **Radar and Scanner have no per-instance upgrade wiring** — unlike every
-  other hardpoint they have no per-placement spawned node at all
-  (`Ship.has_radar()`/`has_scanner()` are pure boolean flags; `Scanner` is a
-  single fixed node on `ship.tscn`, not one per placement). A modifier node
-  targeting them today would parse/cost/unlock fine and then do nothing.
-  Closing this needs Scanner/RadarDisplay to pull their own backing
-  placement's instance modifiers live at point-of-use — a different (pull,
-  not push-at-spawn) mechanism than everything else uses, explicitly scoped
-  out as bigger than what was asked for this session. `ModuleUpgradeCatalog`'s
-  module-level comment documents exactly which `tree_key`s are safe to add
-  content for and which aren't, for whoever picks this up.
-- **Only 12 upgrade nodes total exist** (Engine ×4, Weapon ×3, Missile ×3,
-  Tractor ×1, Grinder ×1) — framework-first scope per the spec's own phrasing
-  ("implement one reusable upgrade system before adding individual upgrade
-  trees"); no Storage/Power/Hull content yet either, despite those
-  categories being fully wired and ready.
-- No upgrade icon art — `ModuleUpgradeNode.glyph` is a short text placeholder
-  (e.g. "I", "II-A"), same situation as `MaterialType.icon`/
-  `ComponentType.icon`.
-- Real key-press simulation into the U-key toggle couldn't be exercised in
-  this MCP session (documented pre-existing limitation — same as C/K
-  before it); the whole category→instance→tree→live-effect pipeline was
-  instead verified by calling `UpgradeMenu`'s methods directly via
-  `game_eval`, plus one real screenshot of the rendered tree.
-- Costs, branch structure, and the one cross-module gate are first-pass
-  design choices, not playtested.
-- A minor cosmetic overlap between the U-key menu's title/category list and
-  the HUD's top-left resource readout was spotted in the verification
-  screenshot but not addressed (not what was asked).
+Radar/Scanner were flagged then as unwireable for stat modifiers because they
+have no per-placement spawned node (`Ship.has_radar()`/`has_scanner()` are
+boolean flags). **That is still true** and still applies to the new system —
+worth checking before authoring Sensors effects.
 
 ## Older session (Phase 5 Crafting & Construction Economy, then a fix-up pass)
 
@@ -800,20 +757,17 @@ ever raw materials (5.3). See the sessions above for full detail; **the old
 "spend build_costs at placement time" ship-builder model no longer
 exists** — `ModuleType.build_costs` is now a construction cost spent only
 when a module is *built* (crafted into owned stock), never at placement.
-**Phase 8.1 (Module Upgrades) is now implemented as a framework** — a
-user-supplied spec, not part of either tracked roadmap file. Upgrades attach
-to one specific built `ModuleInstance`, not the ship as a whole (the old
-ship-wide `UpgradeManager`/`UpgradeCatalog` this replaced no longer exists
-anywhere in the project), opened via a dedicated **U** key menu with
-category submenus (Weapons/Missiles/Sensors/Mining/Propulsion/Power/
-Storage/Hull) rather than from inside the ship builder. **Only Weapons,
-Missiles, Propulsion, and (mechanically, if not yet content-populated)
-Power/Storage/Hull are actually wired to do anything when unlocked — Radar
-and Scanner are not**, since unlike every other hardpoint they have no
-per-placement spawned node to apply a modifier to (see the Module upgrades
-section below). Content is deliberately minimal (12 nodes across 5 trees)
-per the spec's own "framework before individual trees" framing — this is
-the newest, least-tested, least-content-filled system in the game.
+**Module upgrades are ship-wide**, built against
+`docs/design_handoff_upgrade_tree/` and opened with the **U** key: seven
+system trees (Hull, Propulsion, Weapons, Power, Storage, Sensors, Mining),
+89 nodes, unlocks stored by id per category in `GameState`. The earlier
+per-`ModuleInstance` upgrade system (Phase 8.1) and the ship-wide
+`UpgradeManager`/`UpgradeCatalog` before it **both no longer exist anywhere in
+the project**. **No upgrade changes ship behaviour yet** — the handoff authors
+no stat modifiers, so unlocking spends resources and records the id and stops
+there; the effects pass is the next piece of work and the user is writing the
+upgrade list for it. See the Module upgrades section below for the wiring
+points.
 
 ### Ship building (done, wired into the flyable ship)
 - Hex-grid (axial coordinates) layout data model under `scripts/ships/...`:
@@ -822,13 +776,19 @@ the newest, least-tested, least-content-filled system in the game.
   resources), `ship_layout.gd` (place/remove/rotate, BFS connectivity,
   `validate_layout()`/`find_unreachable_from_core()`), `hex_utils.gd`,
   `ship_layout_renderer.gd`.
-- `scenes/ui/ship_builder/` (`hex_grid_control.gd` + `ship_builder_panel.gd`):
-  two-column layout, **R** rotates, **X** deletes. Any visible
-  `"menu_panel"`-grouped CanvasLayer suspends `ship_input.gd` polling. The
-  placement preview (hovering a palette selection over the grid) renders the
-  actual module texture at the real placement rotation with a green/red
-  valid/invalid tint on top — previously a flat color swatch.
-- **Phase 5.2 ownership model**: each palette row is now **Build** (spends
+- `scenes/ui/ship_builder/` — rebuilt against
+  `docs/design_handoff_ship_builder/`, which is the source of truth for its
+  appearance. Full-screen (`CanvasLayer` layer 10 so it occludes the HUD):
+  backdrop, top instruction line + HP/MASS/EN/CARGO strip, hex field, a 336px
+  right column (Modules card, ship name + Save, collapsible Presets), and a
+  bottom bar with the cell pill and ROTATE / REMOVE SELECTED / VALIDATE.
+  `BuilderTheme` holds every colour and metric plus the StyleBox/font
+  factories, and is shared with the upgrade screen. **R** rotates, **X**
+  deletes. Any visible `"menu_panel"`-grouped CanvasLayer suspends
+  `ship_input.gd` polling. The placement preview renders the actual module
+  texture at the real placement rotation under a pulsing dashed cyan/red
+  valid-invalid outline.
+- **Phase 5.2 ownership model**: each module row is now **Craft** (spends
   `ModuleType.build_costs` — materials and/or crafted components, see
   Crafting below — to craft one owned-but-unplaced instance) plus
   **Select/Place** (free; disabled until at least one instance is owned;
@@ -842,7 +802,7 @@ the newest, least-tested, least-content-filled system in the game.
   stripping the starter ship down can never soft-lock rebuilding it.
   Research (permanently unlocks a locked type) and Repair (converts one
   captured/damaged part into an owned instance, see Salvage collection
-  below) are two independent buttons per capturable row — a locked type can
+  below) are two buttons in the selected row's expansion strip — a locked type can
   be researched without ever being repaired, and vice versa. Saving/loading
   custom ships to disk works (saves the placement layout only, not owned
   inventory).
@@ -911,61 +871,55 @@ the newest, least-tested, least-content-filled system in the game.
 - **Repair**: see the Salvage collection section below — converts a
   captured/damaged module part into a placeable owned instance.
 
-### Module upgrades (Phase 8.1)
-- **Per-instance, not ship-wide** — `ModuleInstance` (`scripts/economy/
-  module_instance.gd`) lives on `ModulePlacement.instance` (attached, or
-  `ensure_instance()` lazily creates one) once mounted, or inside
-  `Inventory`'s owned pool (`Dictionary[key]->Array[ModuleInstance]`,
-  `take_owned_module()`/`return_owned_module()`) while built but unplaced —
-  so a specific instance's upgrades survive Build → Place → Remove →
-  re-Place, and two owned copies of the same module type/manufacturer can
-  have completely different upgrade progress.
-- **Data**: `ModuleUpgradeNode`/`ModuleUpgradeCatalog` (`scripts/economy/`)
-  — a node's `tree_key` is a module's `hardpoint_category` if it has one
-  (every tier of weapon/missile hardpoint shares one tree) else its own
-  `module_type_id`. `requires` gates on same-tree prerequisites;
-  `requires_ship_modules` gates on another module type being present
-  anywhere else on the ship (e.g. Engine's capstone needs a Reactor). Only
-  12 nodes exist total across 5 trees (Engine ×4 with a branch/reconverge,
-  Weapon ×3, Missile ×3, Tractor ×1, Grinder ×1) — framework-first content,
-  not a filled-out game; Storage/Power/Hull have zero content despite being
-  fully wired.
-- **Rules**: `ModuleUpgradeService` (stateless, no manager Node) — works
-  against any `(ShipLayout, Inventory, ModulePlacement)`, so the same code
-  validates/unlocks against the ship builder's draft layout and the live
-  ship equally.
-- **Which categories actually do something when unlocked** (see
-  `ModuleUpgradeCatalog`'s own module-level comment for the authoritative,
-  up-to-date list): Engine/Hull/Reactor/Battery/Storage-style modules work
-  through `ShipLayout`'s existing aggregate-stat totals (`_instance_stat_delta`,
-  mirrors `_manufacturer_stat_delta`) — automatic, no `Ship.gd` change
-  needed for a new one. Weapon/Missile/Tractor/Grinder work by pushing
-  modifiers onto that placement's live spawned node
-  (`Ship._apply_instance_upgrade_modifiers()` at spawn,
-  `Ship.apply_instance_upgrade_effect()` on a live in-menu unlock — see
-  `Ship._find_hardpoint_node_for()`). **Radar and Scanner are NOT wired** —
-  they're pure capability flags with no per-placement spawned node
-  (`Ship.has_radar()`/`has_scanner()`; `Scanner` is one fixed node on
-  `ship.tscn`, not one per hardpoint), so a modifier node targeting them
-  today would parse/cost/unlock fine and silently do nothing.
-- **UI**: `scenes/ui/upgrade_menu.gd`/`.tscn` (`UpgradeMenu`, **U** key,
-  home-base-gated) — category list (Weapons/Missiles/Sensors/Mining/
-  Propulsion/Power/Storage/Hull, a UI-only grouping via `_category_for()`,
-  separate from `tree_key`) → live-mounted instances of that category →
-  `scenes/ui/ship_builder/module_upgrade_tree.gd` (`ModuleUpgradeTree`, name
-  kept from an earlier ship-builder-button iteration this replaced): a
-  radial tree whose node positions are computed purely from each node's
-  `requires` chain, not hand-placed. States: unlocked (bright/gold),
-  ready-to-unlock (glow + pulse, clickable), reachable-but-blocked (dulled,
-  disabled, tooltip explains why), not-yet-reachable (near-invisible).
-  Hover uses Godot's native `tooltip_text` for name/description/cost/
-  before→after stat values, not a custom side panel.
-- Operating on the **live ship** (not the ship builder's draft) matters:
-  `Ship.apply_instance_upgrade_effect()` deliberately does NOT call the
-  ship builder's full `_apply_ship_layout()` — that would silently heal the
-  ship to full and reset every module's condition. It only recomputes
-  aggregate stats and pushes the one new modifier onto the one affected
-  node.
+### Module upgrades (ship-wide trees)
+
+Source of truth: `docs/design_handoff_upgrade_tree/` (README + LAYOUT_SPEC +
+`upgrade_data.json`). Read the whole folder before changing this screen.
+
+- **Ship-wide, not per-module.** Seven systems (Hull, Propulsion, Weapons,
+  Power, Storage, Sensors, Mining), one tree each, 89 nodes total. Guns and
+  launchers are both "Weapons".
+- **Content** is `res://resources/upgrades/upgrade_tree_data.json`, a verbatim
+  copy of the handoff's `upgrade_data.json` minus its `_schema` block. Adding
+  an upgrade is a data edit — no code enumerates nodes. Node fields:
+  `id`/`tier`/`parents`/`label`/`glyph`/`desc`/`cost`, optional `icon` and
+  `hue` (starts a coloured branch, inherited by descendants).
+- **`ShipUpgradeCatalog`** loads it and resolves the handoff's display-string
+  costs against `MaterialCatalog`/`ComponentCatalog` by display name, so they
+  are spent from the real inventory. An unrecognised name warns rather than
+  silently costing nothing.
+- **`ShipUpgradeService`** is the whole rule: `is_unlocked` (root is always
+  owned) and `is_available` (every parent unlocked). `parents` is an AND list;
+  arity 2+ *is* the merge mechanic, there is no separate flag.
+- **State** lives in `GameState` — `is_upgrade_unlocked`/`unlock_upgrade`/
+  `get_unlocked_upgrades`, ids only, plus `last_upgrade_category`.
+  Deliberately outside `capture()`/`apply()`: those mirror one ship across a
+  warp, unlocks are player progression that outlives any hull.
+- **UI**: `scenes/ui/upgrade_menu.gd` (`UpgradeMenu`, **U** key,
+  home-base-gated, `CanvasLayer` layer 10 so it occludes the HUD) plus
+  `scenes/ui/upgrades/` — `upgrade_palette.gd` (OKLCH→sRGB; a category's whole
+  palette derives from one hue number), `upgrade_tree_layout.gd` (the polar
+  fan: span allocation, mirroring in the right half, merges placed from their
+  parents' angles at +0.4×STEP, label anchoring that flips near the arc ends),
+  `upgrade_tree_view.gd` (drawing + hit-testing), `upgrade_rail_list.gd`,
+  `upgrade_detail_panel.gd`. Surfaces/text/StyleBoxes come from the ship
+  builder's `BuilderTheme` — same palette, deliberately shared.
+- **Two invariants worth not breaking**: the view renders from
+  `UpgradeTreeLayout.entries` only (it used to keep a parallel node list and
+  crashed on a stale id when switching category mid-frame), and every tree is
+  fitted against one shared reference frame (`UpgradeMenu._shared_frame()`) so
+  node size doesn't change between systems.
+- **Nothing an upgrade unlocks changes ship behaviour yet** — the handoff
+  authors no stat modifiers. Unlocking spends resources and records the id.
+  Effects hook into `ShipUpgradeService.unlock()`;
+  `HardpointBank.apply_modifiers()` reaches an already-spawned hardpoint
+  without rebuilding it, and `Ship._refresh_layout_stats()` re-derives
+  aggregates without touching health or module condition (a full
+  `_apply_ship_layout()` would heal the ship and reset every module).
+- **Radar and Scanner still have no per-placement spawned node**
+  (`Ship.has_radar()`/`has_scanner()` are boolean flags; `Scanner` is one
+  fixed node on `ship.tscn`). Sensors effects will need a pull-at-point-of-use
+  mechanism, not the push-at-spawn one everything else uses.
 
 ### Mining (Phase 4.1 Basic grinder, Phase 4.2 raw materials)
 - `scenes/player/hardpoint_grinder.gd`/`.tscn`: a **single-cell** hex module
@@ -1349,40 +1303,44 @@ ship's overall `Health` pool.
   silently corrupted the *next* property assignment, leaving it at the
   script default with no load error). Check `docs/gotchas.md` before
   hand-editing a `.tscn`, not after.
-- **Module upgrades attach to one specific `ModuleInstance`, not the ship as
-  a whole (Phase 8.1).** Replaces the old ship-wide `UpgradeManager`/
-  `UpgradeCatalog` entirely — chosen explicitly via `AskUserQuestion` over
-  keeping both, since the old system structurally couldn't satisfy "removing
-  and replacing an upgraded module preserves its state" (owned modules were
-  a bare count, not individually tracked objects). Owning a module
-  transitioned from a count to a pool of real instances specifically to make
-  this possible — don't regress `Inventory`'s owned-module pool back to a
-  `Dictionary[key]->int` for any reason, it can no longer represent what's
-  actually being owned.
+- **Module upgrades are ship-wide and driven entirely by
+  `docs/design_handoff_upgrade_tree/`.** This is the third upgrade system the
+  project has had: a ship-wide `UpgradeManager`/`UpgradeCatalog`, then
+  per-`ModuleInstance` trees (Phase 8.1), now the handoff's seven system trees.
+  The user corrected the third one into shape across several messages —
+  the rail is the seven systems, each with **one** tree; there are no
+  per-mounted-module rows and no separate "Missiles" category. Don't
+  reintroduce either without a fresh request, and read the whole handoff
+  folder (README, LAYOUT_SPEC, `upgrade_data.json`) before changing the screen
+  — the first attempt went wrong precisely by implementing the layout spec
+  while keeping the game's own content model.
+- **Upgrade content is data, not code.** `resources/upgrades/
+  upgrade_tree_data.json` is the whole tree; adding an upgrade is a data edit
+  and nothing in code enumerates nodes. Keep it that way.
 - **The upgrade menu is a dedicated `U`-key screen, not a button inside the
   ship builder.** Built inside the ship builder first; the user found that
-  "clunky" and asked for category submenus (Weapons/Sensors/Storage/...)
-  reached via their own key instead — a real, explicit UX correction, not a
-  preference call made unprompted. Don't move upgrading back into the ship
-  builder without a fresh request.
-- **A live per-instance upgrade purchase must never trigger the ship
-  builder's full `_apply_ship_layout()`.** That call silently heals the ship
-  to full and resets every module's condition — correct semantics for "I
-  just applied a rebuilt layout at the workbench," wrong for "I bought one
-  thruster upgrade mid-session." `Ship.apply_instance_upgrade_effect()`
-  exists specifically to recompute only the aggregate stats and the one
-  affected node, nothing else. Any future live (non-ship-builder) mutation
-  of a running ship's stats should follow this same "narrow refresh" shape,
-  not reach for the full apply path out of convenience.
-- **Radar and Scanner upgrades were deliberately left unwired, not silently
-  forgotten.** They're the only hardpoints with no per-placement spawned
-  node (pure capability flags — see the Radar/Scanner decision entry
-  above), so the push-at-spawn modifier mechanism every other hardpoint uses
-  doesn't apply to them. Before adding a `radar`/`scanner`-tree
-  `ModuleUpgradeNode`, first give `Scanner`/`RadarDisplay` a way to pull
-  their own backing placement's instance modifiers live — see
-  `ModuleUpgradeCatalog`'s module-level comment for the up-to-date wiring
-  status of every category.
+  "clunky" and asked for its own key instead — a real, explicit UX correction,
+  not a preference call made unprompted. Don't move upgrading back into the
+  ship builder without a fresh request.
+- **`Inventory`'s owned-module pool must stay a pool of real
+  `ModuleInstance`s**, not a `Dictionary[key]->int` count. It was changed from
+  counts for the per-instance upgrade system, and although that system is gone
+  the pool is still what makes "remove a module and re-place it and it's the
+  *same* module" true.
+- **A narrow live stat refresh must never reach for the ship builder's full
+  `_apply_ship_layout()`.** That call silently heals the ship to full and
+  resets every module's condition — correct for "I just applied a rebuilt
+  layout at the workbench," wrong for anything smaller.
+  `Ship._refresh_layout_stats()` is the narrow path, and
+  `HardpointBank.apply_modifiers()` is how a single stat reaches an
+  already-spawned hardpoint. Any future live mutation of a running ship's
+  stats should follow that shape.
+- **Radar and Scanner cannot take push-at-spawn stat modifiers.** They're the
+  only hardpoints with no per-placement spawned node (pure capability flags —
+  see the Radar/Scanner decision entry above). Before authoring Sensors
+  effects, give `Scanner`/`RadarDisplay` a way to pull their modifiers live at
+  point of use.
+
 
 ## Not yet started (no explicit user request yet — don't start without one)
 
@@ -1470,15 +1428,14 @@ ship's overall `Health` pool.
 - Component drops for the other 6 of `derelict_station.tscn`'s 9 salvage
   nodes, and for `PirateCamp`/other POIs that still only drop material —
   only 3 of the 9 got hand-authored component overrides this session.
-- Radar/Scanner per-instance upgrade wiring — see "Decisions made" above for
-  why it's a different mechanism than every other hardpoint, not just an
-  oversight.
-- Any real Storage/Power/Hull upgrade content — the wiring exists
-  (`ShipLayout._instance_stat_delta` covers all their relevant fields) but
-  zero `ModuleUpgradeNode`s target those trees yet.
-- More than one tier of Tractor/Grinder upgrades — each currently has
-  exactly one proof-of-concept node.
-- Upgrade icon art — `ModuleUpgradeNode.glyph` is short placeholder text.
+- **Stat effects for any upgrade** — all 89 nodes cost resources and unlock,
+  and none of them change ship behaviour. This is the next planned piece and
+  the user is authoring the upgrade list for it.
+- Sensors effects specifically need a pull-at-point-of-use mechanism first —
+  see "Decisions made" above for why Radar/Scanner are different from every
+  other hardpoint, not just an oversight.
+- Upgrade icon art — every node shows a 2-letter glyph; the data schema
+  reserves an `icon` slot per node, sized at 52% of the node diameter.
 - An embedded monospace font for the HUD — the 1d spec asks for one
   (JetBrains Mono / Space Mono as a `FontFile` resource); the project ships
   no `.ttf` at all, so the HUD currently uses the engine default. Dropping a
@@ -1486,32 +1443,32 @@ ship's overall `Health` pool.
 - A real blur behind the cargo dropdown (`BackBufferCopy` + blur
   `ShaderMaterial`) — the spec itself calls this optional polish and
   recommends the flat fallback that's in place.
-- Restyling the remaining full-screen panels (Cargo/Trade/Crafting/Builder/
-  Upgrade menus) to match the new HUD's palette — the 1d spec only covers
-  the in-flight HUD, so those still use their older look.
+- Restyling the remaining full-screen panels (Cargo/Trade/Crafting) to match
+  the newer palette — the Builder and Upgrade screens have been rebuilt
+  against their own design handoffs and share `BuilderTheme`, but the other
+  three still use their older look.
 
 ## Suggested next step
 
 No specific next item has been chosen yet. Candidates on the table, most
 relevant first:
-- **Look at the new HUD in motion and click the cargo chip** — it was built
-  and screenshotted against the reference, but nobody has seen it while
-  actually flying, and the chip's real mouse click could not be exercised in
-  the MCP session (see "Most recent session"). Cheap to confirm, and it gates
-  any further HUD styling work.
+- **Wire stat effects to the upgrade trees.** The user is authoring the
+  upgrade list; hooking it up is the agreed next task. Wiring points are in
+  the Module upgrades section above. Until it's done, unlocking is a
+  resource sink with no gameplay payoff.
+- **Look at the two rebuilt screens and the HUD in motion.** The ship builder,
+  the upgrade screen and the HUD were all verified by `game_eval` plus
+  screenshots, but nobody has clicked through any of them with a real mouse —
+  injected mouse events don't reach the viewport GUI in this MCP environment
+  (see `docs/gotchas.md`). Cheap to confirm, and it gates further UI work.
 - **A real human playtest of the refactor** — four tranches reshaped the ship's
   internals and every input path, verified only by scripted checks. Fly it,
   fight something, mine, build a ship, warp. This outranks everything below.
 - **Commit tranche 4** if it is still uncommitted, and decide whether the
   deferred `LootTable` Resource (see tranche 3) is worth doing now.
-- **A real human playtest of the whole Phase 8.1 module upgrade system** —
-  the U-key menu, the radial tree's readability/feel against the reference
-  design, and every cost/branch/cross-module-gate number are first-pass,
-  reached by design reasoning in an MCP session, not a single minute of
-  human play. This is now the newest, least-content-filled system in the
-  game (12 nodes across 5 trees) and the natural next step before piling
-  more on top of it — see "Not yet started" above for the concrete gaps
-  (Radar/Scanner wiring, Storage/Power/Hull content, more tiers).
+- **Playtest the upgrade screen once effects exist** — the tree's costs and
+  branch structure come straight from the design handoff and have never been
+  balanced against the game's actual material economy.
 - **A real human playtest of the whole Phase 5 crafting/construction/salvage
   economy** — recipe ratios, the 4 rewritten module construction costs,
   repair's half-cost rule, and every per-archetype drop chance are all

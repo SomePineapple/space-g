@@ -2,7 +2,7 @@ class_name HardpointGrinder
 extends Node2D
 
 ## Mining Grinder hex module: a short-range, contact-operation tool the
-## player toggles on/off (see ShipIntent.toggle_grinder, "G"), unlike the
+## player toggles on/off (the Grinder system's power switch, "G"), unlike the
 ## always-on Tractor Beam — grinding deals continuous damage, so it needs
 ## deliberate activation rather than running whenever mounted.
 ##

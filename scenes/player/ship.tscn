@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scenes/player/scanner.gd" id="12_scanner"]
 [ext_resource type="Script" path="res://scenes/player/ship_energy.gd" id="13_energy"]
 [ext_resource type="Script" path="res://scenes/player/hardpoint_bank.gd" id="14_hardpoints"]
+[ext_resource type="Script" path="res://scenes/player/ship_systems.gd" id="17_systems"]
 [ext_resource type="Script" path="res://scenes/player/hull_damage_model.gd" id="15_hulldamage"]
 [ext_resource type="Script" path="res://scenes/world/wreckage_spawner.gd" id="16_wreckage"]
 
@@ -30,6 +31,9 @@ script = ExtResource("12_scanner")
 
 [node name="Energy" type="Node" parent="."]
 script = ExtResource("13_energy")
+
+[node name="Systems" type="Node" parent="."]
+script = ExtResource("17_systems")
 
 [node name="Hardpoints" type="Node2D" parent="."]
 script = ExtResource("14_hardpoints")

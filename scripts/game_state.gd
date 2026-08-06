@@ -33,6 +33,10 @@ var _researched_ids: Array = []
 var _known_manufacturer_ids: Array = []
 var _ship_layout: Resource
 var _health_fraction: float = 1.0
+## ShipSystems power switches (see ShipSystems.get_switch_states) — arriving in
+## a new region with the tractor beam you deliberately shut off back on again
+## would quietly undo the player's power budgeting.
+var _system_switches: Dictionary = {}
 
 ## Ship-wide upgrade unlocks: category key -> Array[String] of node ids
 ## (docs/design_handoff_upgrade_tree/README.md "State management"). Ids only,
@@ -114,6 +118,7 @@ func capture(ship: Node) -> void:
 	_known_manufacturer_ids = inventory.get_known_manufacturer_ids()
 	_ship_layout = ship.ship_layout.duplicate(true)
 	_health_fraction = ship.get_health_fraction()
+	_system_switches = ship.get_systems().get_switch_states()
 
 	_has_snapshot = true
 
@@ -143,6 +148,7 @@ func apply(ship: Node) -> void:
 		inventory.discover_manufacturer(manufacturer_id)
 
 	ship.set_health_fraction(_health_fraction)
+	ship.get_systems().restore_switch_states(_system_switches)
 
 	if not pending_arrival_node_name.is_empty():
 		var arrival: Node2D = ship.get_tree().current_scene.get_node_or_null(pending_arrival_node_name)

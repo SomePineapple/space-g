@@ -20,6 +20,15 @@ const NEBULA_LOCK_RANGE_FRACTION: float = 0.35
 
 const LOCK_INDICATOR_SCENE: PackedScene = preload("res://scenes/ui/lock_on_indicator.tscn")
 
+## Input action -> the ShipSystems id it switches. "toggle_grinder" keeps its
+## established G binding rather than being renumbered alongside the new ones.
+const SYSTEM_TOGGLE_ACTIONS: Dictionary = {
+	"toggle_system_weapons": ShipSystems.WEAPONS,
+	"toggle_system_sensors": ShipSystems.SENSORS,
+	"toggle_system_tractor": ShipSystems.TRACTOR,
+	"toggle_grinder": ShipSystems.GRINDER,
+}
+
 @onready var ship: Ship = get_parent()
 
 ## Reused rather than reallocated per frame; submit_intent() copies out of it.
@@ -69,7 +78,15 @@ func _read_operations() -> void:
 	_intent.fire_winch = Input.is_action_just_pressed("fire_winch")
 	_intent.winch_reel = Input.is_action_pressed("fire_winch")
 	_intent.toggle_scan = Input.is_action_just_pressed("scan")
-	_intent.toggle_grinder = Input.is_action_just_pressed("toggle_grinder")
+	_read_system_toggles()
+
+
+## Power switches for the ship's systems (see ShipSystems). One action per
+## system rather than a cycle-and-confirm, so any system is one key away.
+func _read_system_toggles() -> void:
+	for action_name in SYSTEM_TOGGLE_ACTIONS:
+		if Input.is_action_just_pressed(action_name):
+			_intent.toggled_systems.append(SYSTEM_TOGGLE_ACTIONS[action_name])
 
 
 ## Any "menu_panel"-grouped CanvasLayer (ship builder, upgrade panel) being

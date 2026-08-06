@@ -56,7 +56,10 @@ var locked_target: Node2D = null
 var fire_winch: bool = false
 var winch_reel: bool = false
 var toggle_scan: bool = false
-var toggle_grinder: bool = false
+## ShipSystems ids whose power switch should flip this frame (see
+## ShipSystems.TOGGLEABLE). An array rather than one flag per system so adding
+## a switchable system doesn't widen this class again.
+var toggled_systems: Array[StringName] = []
 
 
 ## Copies only the fields the given roles are entitled to. Roles the caller
@@ -80,7 +83,7 @@ func merge_from(other: ShipIntent, roles: int) -> void:
 		fire_winch = other.fire_winch
 		winch_reel = other.winch_reel
 		toggle_scan = other.toggle_scan
-		toggle_grinder = other.toggle_grinder
+		toggled_systems = other.toggled_systems.duplicate()
 
 
 ## Returns the given roles' fields to "commanding nothing", leaving the rest
@@ -106,7 +109,7 @@ func clear_roles(roles: int) -> void:
 		fire_winch = false
 		winch_reel = false
 		toggle_scan = false
-		toggle_grinder = false
+		toggled_systems.clear()
 
 
 func clear() -> void:
@@ -121,6 +124,6 @@ func clear_one_shots() -> void:
 	fire_secondary = false
 	fire_winch = false
 	toggle_scan = false
-	toggle_grinder = false
+	toggled_systems.clear()
 	set_lock = false
 	locked_target = null

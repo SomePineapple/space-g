@@ -10,6 +10,7 @@ extends CharacterBody2D
 ## in child components it delegates to and relays for:
 ##
 ##   ShipEnergy        the energy pool, its regeneration and its signal
+##   ShipSystems       which systems are switched on and what they idle at
 ##   HardpointBank     every mounted hardpoint, spawning them, firing and aiming
 ##   HullDamageModel   per-module condition, severance and regrowth
 ##   WreckageSpawner   the debris and sparks a severed module throws off
@@ -19,6 +20,9 @@ extends CharacterBody2D
 
 signal layout_applied
 signal energy_changed(current: float, max_energy: float)
+## Relayed from ShipEnergy — how much the ship is drawing per second against
+## how much it can sustain (see the HUD's load bar).
+signal energy_usage_changed(usage: float, generation: float)
 ## Relayed from the internal Health component (see its own signals of the same
 ## name) so external systems — ShipAI, the HUD, the trade panel — can react to
 ## this ship being hurt without reaching into its node hierarchy for $Health,
@@ -102,11 +106,6 @@ var _thruster_particles_normal: Array[GPUParticles2D] = []
 ## so a destroyed/detached engine's particles can be silenced individually
 ## even while other engines (or leftover momentum) keep the ship moving.
 var _thruster_placement_ids: Array[String] = []
-## Toggled by toggle_grinder ("G" — see ship_input.gd), pulled every frame by
-## each mounted HardpointGrinder, same pull-model as is_module_destroyed.
-## Unlike the Tractor Beam, grinding needs deliberate activation since it deals
-## continuous damage.
-var _grinder_active: bool = false
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
@@ -125,6 +124,7 @@ var _cached_layout_extent: float = -1.0
 @onready var _hit_sound_player: AudioStreamPlayer2D = $HitSound
 @onready var _scanner: Scanner = $Scanner
 @onready var _energy: ShipEnergy = $Energy
+@onready var _systems: ShipSystems = $Systems
 @onready var _hardpoints: HardpointBank = $Hardpoints
 @onready var _hull_damage: HullDamageModel = $HullDamage
 @onready var _wreckage: WreckageSpawner = $Wreckage
@@ -152,9 +152,12 @@ func _ready() -> void:
 	# The damage model never touches this ship's Health pool directly — it
 	# reports what happened and the ship decides what that costs.
 	_hull_damage.modules_changed.connect(_recompute_thrust_stats)
+	_hull_damage.modules_changed.connect(_refresh_systems)
 	_hull_damage.hull_healed.connect(_health.heal)
 	_hull_damage.hull_lost.connect(_on_hull_lost)
 	_energy.energy_changed.connect(_on_energy_changed)
+	_energy.usage_changed.connect(_on_energy_usage_changed)
+	_systems.configure(_energy)
 
 	# A restoring player ship is about to have GameState.apply() push its saved
 	# layout in, which rebuilds everything anyway — building the scene's own
@@ -224,6 +227,7 @@ func _refresh_layout_stats() -> void:
 	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
 	_inventory.set_cargo_capacity(base_cargo_capacity + ship_layout.total_cargo_capacity())
 	_recompute_thrust_stats()
+	_refresh_systems()
 
 
 ## Re-derives thrust and the speed caps from whichever engine modules are
@@ -437,6 +441,29 @@ func _on_energy_changed(current: float, maximum: float) -> void:
 	energy_changed.emit(current, maximum)
 
 
+func _on_energy_usage_changed(usage: float, generation: float) -> void:
+	energy_usage_changed.emit(usage, generation)
+
+
+# --- Systems -----------------------------------------------------------------
+
+## The ship's power-management component. Exposed whole (like get_inventory())
+## because the HUD binds to its signals and reads several values per system;
+## what nothing outside may do is reach in with get_node("Systems").
+func get_systems() -> ShipSystems:
+	return _systems
+
+
+## The gate every system consumer asks about: switched on by the player *and*
+## backed by at least one live module.
+func is_system_enabled(system_id: StringName) -> bool:
+	return _systems.is_active(system_id)
+
+
+func _refresh_systems() -> void:
+	_systems.refresh(self, ship_layout)
+
+
 ## Boosted thrust costs proportionally more, same multiplier as the extra
 ## speed/force it grants.
 func _try_spend_thrust_energy(delta: float) -> bool:
@@ -447,13 +474,13 @@ func _try_spend_thrust_energy(delta: float) -> bool:
 
 # --- Hardpoints --------------------------------------------------------------
 
-## Flipped by ShipIntent.toggle_grinder. Every mounted, intact HardpointGrinder
-## pulls this flag each physics frame (same pull-model as is_module_destroyed)
-## rather than being pushed a one-shot command, so a grinder that mounts or
-## repairs mid-toggle picks up the current state immediately instead of needing
-## a fresh key press.
+## The Grinder system's switch ("G" — see ship_input.gd). Every mounted, intact
+## HardpointGrinder pulls this flag each physics frame (same pull-model as
+## is_module_destroyed) rather than being pushed a one-shot command, so a
+## grinder that mounts or repairs mid-toggle picks up the current state
+## immediately instead of needing a fresh key press.
 func is_grinder_active() -> bool:
-	return _grinder_active
+	return is_system_enabled(ShipSystems.GRINDER)
 
 
 func get_scanner() -> Scanner:
@@ -464,17 +491,20 @@ func get_scanner() -> Scanner:
 ## rather than a spawned hardpoint node — it has no fixed facing or world-space
 ## visual of its own, it just gates whether RadarDisplay (the HUD) runs at all.
 ## True if the layout has at least one radar hardpoint that isn't currently
-## destroyed/detached.
+## destroyed/detached, and the Sensors system is switched on — powering sensors
+## down blanks the radar exactly as losing the module does.
 func has_radar() -> bool:
-	if ship_layout == null:
+	if ship_layout == null or not is_system_enabled(ShipSystems.SENSORS):
 		return false
 	return _has_live_placement(ship_layout.get_radar_hardpoint_placements())
 
 
 ## Same "pure capability flag" shape as has_radar() — see
-## ModuleCatalog.SCANNER_HARDPOINT_TYPE_ID.
+## ModuleCatalog.SCANNER_HARDPOINT_TYPE_ID. Also gated on the Sensors system,
+## which means switching sensors off mid-pulse cancels the scan (Scanner
+## re-checks this every frame) rather than letting it finish for free.
 func has_scanner() -> bool:
-	if ship_layout == null:
+	if ship_layout == null or not is_system_enabled(ShipSystems.SENSORS):
 		return false
 	return _has_live_placement(ship_layout.get_scanner_hardpoint_placements())
 
@@ -597,17 +627,20 @@ func _consume_intent() -> void:
 	if _pending_intent.set_lock:
 		_locked_target = _pending_intent.locked_target
 
-	if _pending_intent.fire_primary:
+	# Powered-down weapons simply don't fire — the gate is here rather than in
+	# HardpointBank so every weapon kind is covered by one check.
+	var weapons_online: bool = is_system_enabled(ShipSystems.WEAPONS)
+	if _pending_intent.fire_primary and weapons_online:
 		_hardpoints.fire_primary()
-	if _pending_intent.fire_secondary:
+	if _pending_intent.fire_secondary and weapons_online:
 		_hardpoints.fire_secondary()
 	if _pending_intent.fire_winch:
 		_hardpoints.fire_winch()
 	_hardpoints.set_winch_reel_input(_pending_intent.winch_reel)
 	if _pending_intent.toggle_scan:
 		_scanner.toggle_scan()
-	if _pending_intent.toggle_grinder:
-		_grinder_active = not _grinder_active
+	for system_id in _pending_intent.toggled_systems:
+		_systems.toggle(system_id)
 
 	# Edge commands are consumed once; held states (thrust, turn, boost, reel)
 	# persist until the next submission overwrites them.
@@ -626,7 +659,10 @@ func apply_impulse(impulse: Vector2) -> void:
 
 func _physics_process(delta: float) -> void:
 	_consume_intent()
-	_energy.regenerate(delta)
+	_energy.tick(delta)
+	# Idle load is charged after regeneration, so a ship whose systems out-draw
+	# its reactor spends what it just made and then eats into the reserve.
+	_systems.process(delta)
 	_hull_damage.process(delta)
 	rotation += _turn_input * rotation_speed * delta
 
