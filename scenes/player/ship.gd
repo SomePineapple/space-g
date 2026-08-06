@@ -214,9 +214,11 @@ func _apply_ship_layout() -> void:
 	layout_applied.emit()
 
 
-## The aggregate stats every layout change re-derives, shared by a full rebuild
-## and by a single purchased upgrade (see apply_instance_upgrade_effect), which
-## must move these numbers without disturbing health or module condition.
+## The aggregate stats every layout change re-derives. Kept separate from
+## _apply_ship_layout() so a future caller can move these numbers without
+## disturbing health or module condition — a full apply silently heals the ship
+## and resets every module's condition, which is right for "I rebuilt my ship at
+## the workbench" and wrong for anything narrower.
 func _refresh_layout_stats() -> void:
 	mass = ship_layout.total_mass()
 	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
@@ -225,7 +227,7 @@ func _refresh_layout_stats() -> void:
 
 
 ## Re-derives thrust and the speed caps from whichever engine modules are
-## currently alive, including their own per-instance upgrade deltas.
+## currently alive.
 ##
 ## Deliberately does not re-derive `mass`: a hull losing modules getting lighter
 ## — and therefore more agile — is a gameplay change, not a bug fix.
@@ -242,23 +244,6 @@ func _recompute_thrust_stats() -> void:
 	var acceleration_estimate: float = (thrust_force / mass) if mass > 0.0 else 0.0
 	max_speed = acceleration_estimate * speed_per_acceleration
 	reverse_max_speed = max_speed * reverse_speed_ratio
-
-
-## Applies one just-unlocked per-instance upgrade (Phase 8.1, see UpgradeMenu)
-## to the *live* ship. Deliberately narrower than _apply_ship_layout() (the ship
-## builder's full Apply): it re-derives the aggregate stats and, for a hardpoint
-## with a live spawned node, pushes the single new upgrade's modifiers onto that
-## one node — it never touches health or module-condition state, and respawns
-## nothing. A full _apply_ship_layout() would silently heal the ship to full and
-## reset every module's condition, which is correct for "I just rebuilt my ship
-## at the workbench" but not for "I bought one thruster upgrade". Radar/Scanner
-## have no spawned node at all (pure capability flags, see has_radar/has_scanner)
-## so upgrades targeting them are a no-op here — see ModuleUpgradeCatalog.
-func apply_instance_upgrade_effect(placement: ModulePlacement, upgrade_node: ModuleUpgradeNode) -> void:
-	_refresh_layout_stats()
-	var target_node: Node = _hardpoints.get_node_for(placement.placement_id)
-	if target_node != null:
-		_hardpoints.apply_modifiers(target_node, upgrade_node.modifiers)
 
 
 # --- Geometry ----------------------------------------------------------------

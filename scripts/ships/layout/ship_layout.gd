@@ -57,8 +57,7 @@ func total_mass() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.mass_contribution + _manufacturer_stat_delta(placement, "mass_contribution") \
-				+ _instance_stat_delta(placement, "mass_contribution")
+			total += module_type.mass_contribution + _manufacturer_stat_delta(placement, "mass_contribution")
 	return total
 
 
@@ -67,7 +66,7 @@ func total_max_health() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.health_contribution + _instance_stat_delta(placement, "health_contribution")
+			total += module_type.health_contribution
 	return total
 
 
@@ -78,16 +77,14 @@ func total_thrust() -> float:
 	return total
 
 
-## One placement's effective thrust, including its own per-instance upgrade
-## deltas. Split out of total_thrust() so Ship can re-sum only the modules
-## that are still alive after damage — it previously adjusted thrust_force by
-## the module type's *base* thrust_contribution, which left an upgraded
-## engine's bonus behind on the ship after that engine was destroyed.
+## One placement's effective thrust. Split out of total_thrust() so Ship can
+## re-sum only the modules that are still alive after damage, rather than
+## adjusting thrust_force by the module type's base thrust_contribution.
 func thrust_for(placement: ModulePlacement) -> float:
 	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 	if module_type == null:
 		return 0.0
-	return module_type.thrust_contribution + _instance_stat_delta(placement, "thrust_contribution")
+	return module_type.thrust_contribution
 
 
 func total_energy_generation() -> float:
@@ -95,8 +92,7 @@ func total_energy_generation() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			var base: float = module_type.energy_generation + _manufacturer_stat_delta(placement, "energy_generation") \
-				+ _instance_stat_delta(placement, "energy_generation")
+			var base: float = module_type.energy_generation + _manufacturer_stat_delta(placement, "energy_generation")
 			total += base * _core_distance_energy_multiplier(placement)
 	return total
 
@@ -106,8 +102,8 @@ func total_energy_capacity() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			var base: float = module_type.energy_capacity_contribution + _manufacturer_stat_delta(placement, "energy_capacity_contribution") \
-				+ _instance_stat_delta(placement, "energy_capacity_contribution")
+			var base: float = module_type.energy_capacity_contribution \
+				+ _manufacturer_stat_delta(placement, "energy_capacity_contribution")
 			total += base * _core_distance_energy_multiplier(placement)
 	return total
 
@@ -120,8 +116,8 @@ func total_cargo_capacity() -> float:
 	for placement in placements:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
-			total += module_type.cargo_capacity_contribution + _manufacturer_stat_delta(placement, "cargo_capacity_contribution") \
-				+ _instance_stat_delta(placement, "cargo_capacity_contribution")
+			total += module_type.cargo_capacity_contribution \
+				+ _manufacturer_stat_delta(placement, "cargo_capacity_contribution")
 	return total
 
 
@@ -134,16 +130,6 @@ func _manufacturer_stat_delta(placement: ModulePlacement, field_name: String) ->
 	if manufacturer == null:
 		return 0.0
 	return manufacturer.stat_modifiers.get(field_name, 0.0)
-
-
-## Same idea as _manufacturer_stat_delta, for this specific placement's own
-## ModuleInstance upgrades (Phase 8.1) — never creates an instance just to
-## read it (a placement nobody's upgraded stays a plain 0.0 delta, see
-## ModulePlacement.instance/ensure_instance).
-func _instance_stat_delta(placement: ModulePlacement, field_name: String) -> float:
-	if placement.instance == null:
-		return 0.0
-	return placement.instance.get_stat_modifier(field_name)
 
 
 ## Hex-grid distance from the Core's placement to this one. Anchor-cell to

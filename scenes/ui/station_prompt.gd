@@ -1,5 +1,8 @@
+class_name StationPrompt
 extends CanvasLayer
 
+## Named so the ship builder's status line can show the same docking hint
+## rather than keeping a second copy of the string.
 const PROMPT_TEXT: String = "Near Corporate Station — U: Upgrades   B: Build   T: Trade"
 
 @export var home_base_range: float = 300.0

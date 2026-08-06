@@ -23,11 +23,10 @@ var _credits: int = 0
 var _material_totals: Dictionary = {}
 var _component_totals: Dictionary = {}
 ## key (see owned_module_key) -> Array[ModuleInstance]. A pool of individually
-## tracked instances rather than a bare count (Phase 8.1) — so a specific
-## instance's upgrade state survives being built, placed, removed and
-## re-placed. take_owned_module()/return_owned_module() move a real instance
-## in and out of this pool; add_owned_module() is the only thing that ever
-## creates a brand new (unupgraded) one.
+## tracked instances rather than a bare count, so a specific module keeps its
+## identity through being built, placed, removed and re-placed.
+## take_owned_module()/return_owned_module() move a real instance in and out of
+## this pool; add_owned_module() is the only thing that creates a brand new one.
 var _owned_module_pool: Dictionary = {}
 ## Total cargo capacity, recomputed by Ship whenever its layout changes (see
 ## Ship._refresh_layout_stats) — kept here rather than derived on the

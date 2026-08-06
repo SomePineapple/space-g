@@ -3,9 +3,9 @@ extends HardpointGun
 
 @export var missile_scene: PackedScene = preload("res://scenes/world/missile.tscn")
 
-## Passed onto each spawned Missile. Upgradeable through the "missile"
-## ModuleUpgradeCatalog tree, same as projectile_speed — see
-## Ship._apply_instance_upgrade_modifiers.
+## Passed onto each spawned Missile. Exported (rather than a fixed constant)
+## so it can be tuned per launcher and raised by a stat modifier the same way
+## projectile_speed is — see HardpointBank.apply_modifiers.
 @export var missile_acceleration: float = 900.0
 @export var ignition_delay: float = 1.2
 @export var turn_rate_min: float = 0.35

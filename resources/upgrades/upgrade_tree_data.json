@@ -1,0 +1,1032 @@
+{
+  "categories": [
+    {
+      "key": "hull",
+      "label": "Hull",
+      "hue": 210
+    },
+    {
+      "key": "propulsion",
+      "label": "Propulsion",
+      "hue": 95
+    },
+    {
+      "key": "weapons",
+      "label": "Weapons",
+      "hue": 35
+    },
+    {
+      "key": "power",
+      "label": "Power",
+      "hue": 190
+    },
+    {
+      "key": "storage",
+      "label": "Storage",
+      "hue": 150
+    },
+    {
+      "key": "sensors",
+      "label": "Sensors",
+      "hue": 255
+    },
+    {
+      "key": "mining",
+      "label": "Mining",
+      "hue": 60
+    }
+  ],
+  "trees": {
+    "hull": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Hull",
+        "glyph": "HL",
+        "desc": "Base hull plating, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "plating",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Reinforced Plating",
+        "glyph": "RP",
+        "desc": "+15% structural integrity.",
+        "cost": "12 Metal Sheets"
+      },
+      {
+        "id": "coating",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Ablative Coating",
+        "glyph": "AB",
+        "desc": "Reduces incoming heat/energy weapon damage.",
+        "cost": "8 Copper, 4 Wiring"
+      },
+      {
+        "id": "composite",
+        "tier": 2,
+        "parents": [
+          "plating"
+        ],
+        "label": "Composite Layer",
+        "glyph": "CL",
+        "desc": "+25% structural integrity.",
+        "cost": "18 Metal Sheets, 4 Titanium"
+      },
+      {
+        "id": "spall",
+        "tier": 2,
+        "parents": [
+          "plating"
+        ],
+        "label": "Spall Liner",
+        "glyph": "SL",
+        "desc": "Contains fragments from a breached hull section.",
+        "cost": "10 Metal Sheets"
+      },
+      {
+        "id": "vents",
+        "tier": 2,
+        "parents": [
+          "coating"
+        ],
+        "label": "Thermal Vents",
+        "glyph": "TV",
+        "desc": "Vents excess heat, further reduces energy damage.",
+        "cost": "10 Copper, 6 Wiring"
+      },
+      {
+        "id": "radshield",
+        "tier": 2,
+        "parents": [
+          "coating"
+        ],
+        "label": "Radiation Shield",
+        "glyph": "RS",
+        "desc": "Protects crew and electronics near reactors and stars.",
+        "cost": "6 Copper, 6 Wiring"
+      },
+      {
+        "id": "ferro",
+        "tier": 3,
+        "parents": [
+          "composite"
+        ],
+        "label": "Ferro Lattice",
+        "glyph": "FL",
+        "desc": "Self-repairing micro-lattice woven through the plating.",
+        "cost": "20 Reinforced Steel"
+      },
+      {
+        "id": "nanoweave",
+        "tier": 3,
+        "parents": [
+          "spall"
+        ],
+        "label": "Nanoweave Mesh",
+        "glyph": "NW",
+        "desc": "Catches fragments before they reach the crew compartment.",
+        "cost": "12 Metal Sheets, 4 Titanium"
+      },
+      {
+        "id": "faraday",
+        "tier": 3,
+        "parents": [
+          "radshield"
+        ],
+        "label": "Faraday Cage",
+        "glyph": "FG",
+        "desc": "Immunity to EMP and ion-disruptor effects.",
+        "cost": "10 Copper, 8 Wiring"
+      },
+      {
+        "id": "cryo",
+        "tier": 3,
+        "parents": [
+          "vents"
+        ],
+        "label": "Cryo Coating",
+        "glyph": "CC",
+        "desc": "Sheds heat fast enough to shrug off sustained beam fire.",
+        "cost": "14 Copper, 8 Wiring"
+      },
+      {
+        "id": "bulkhead",
+        "tier": 4,
+        "parents": [
+          "ferro",
+          "cryo"
+        ],
+        "label": "Bulkhead Mk.II",
+        "glyph": "B2",
+        "desc": "Fuses plating and coating research into the toughest hull configuration.",
+        "cost": "30 Reinforced Steel"
+      }
+    ],
+    "propulsion": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Engine",
+        "glyph": "EN",
+        "desc": "Base engine, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "vector",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Thrust Vectoring",
+        "glyph": "TV",
+        "desc": "+20% turn rate.",
+        "cost": "6 Wiring, 2 Motor"
+      },
+      {
+        "id": "overdrive",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Overdrive Coils",
+        "glyph": "OC",
+        "desc": "+15% top speed, generates extra heat.",
+        "cost": "10 Copper, 3 Motor"
+      },
+      {
+        "id": "ion",
+        "tier": 2,
+        "parents": [
+          "vector"
+        ],
+        "label": "Ion Boosters",
+        "glyph": "IB",
+        "desc": "Further improves turn rate and strafing.",
+        "cost": "8 Wiring, 4 Titanium"
+      },
+      {
+        "id": "gyro",
+        "tier": 2,
+        "parents": [
+          "vector"
+        ],
+        "label": "Gyro Stabilizer",
+        "glyph": "GS",
+        "desc": "Cuts drift when firing while turning.",
+        "cost": "6 Wiring, 2 Motor"
+      },
+      {
+        "id": "heatsink",
+        "tier": 2,
+        "parents": [
+          "overdrive"
+        ],
+        "label": "Heat Sink Array",
+        "glyph": "HS",
+        "desc": "Offsets Overdrive heat buildup.",
+        "cost": "12 Copper, 3 Wiring"
+      },
+      {
+        "id": "afterburner",
+        "tier": 2,
+        "parents": [
+          "overdrive"
+        ],
+        "label": "Afterburner",
+        "glyph": "AB",
+        "desc": "Short burst of extra thrust, on cooldown.",
+        "cost": "8 Copper, 2 Motor"
+      },
+      {
+        "id": "vectorthrust",
+        "tier": 3,
+        "parents": [
+          "ion"
+        ],
+        "label": "Vector Thrusters",
+        "glyph": "VT",
+        "desc": "Near-instant heading changes at speed.",
+        "cost": "10 Titanium, 4 Motor"
+      },
+      {
+        "id": "inertial",
+        "tier": 3,
+        "parents": [
+          "gyro"
+        ],
+        "label": "Inertial Damper",
+        "glyph": "ID",
+        "desc": "Kills residual drift the instant you stop thrusting.",
+        "cost": "8 Wiring, 3 Motor"
+      },
+      {
+        "id": "burnchamber",
+        "tier": 3,
+        "parents": [
+          "afterburner"
+        ],
+        "label": "Burn Chamber",
+        "glyph": "BR",
+        "desc": "Doubles afterburner duration before cooldown.",
+        "cost": "10 Copper, 4 Motor"
+      },
+      {
+        "id": "plasmaexhaust",
+        "tier": 3,
+        "parents": [
+          "heatsink"
+        ],
+        "label": "Plasma Exhaust",
+        "glyph": "PX",
+        "desc": "Redirects vented heat into extra thrust.",
+        "cost": "14 Copper, 4 Titanium"
+      },
+      {
+        "id": "fusion",
+        "tier": 4,
+        "parents": [
+          "vectorthrust",
+          "plasmaexhaust"
+        ],
+        "label": "Fusion Drive",
+        "glyph": "FD",
+        "desc": "Top-tier drive combining maneuverability and sustained speed.",
+        "cost": "20 Motor, 10 Titanium"
+      }
+    ],
+    "weapons": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Weapon Systems",
+        "glyph": "WS",
+        "desc": "Base hardpoints, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "lasermount",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "hue": 195,
+        "label": "Laser Mount",
+        "glyph": "LM",
+        "desc": "Opens the energy-weapon branch.",
+        "cost": "6 Iron, 2 Wiring"
+      },
+      {
+        "id": "missilerack",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "hue": 35,
+        "label": "Missile Rack",
+        "glyph": "MR",
+        "desc": "Opens the guided-ordnance branch.",
+        "cost": "6 Iron, 2 Copper"
+      },
+      {
+        "id": "railmount",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "hue": 305,
+        "label": "Rail Mount",
+        "glyph": "RM",
+        "desc": "Opens the kinetic-weapon branch.",
+        "cost": "8 Iron, 3 Copper"
+      },
+      {
+        "id": "autoloader",
+        "tier": 2,
+        "parents": [
+          "lasermount"
+        ],
+        "label": "Beam Cycler",
+        "glyph": "BC",
+        "desc": "+15% laser fire rate.",
+        "cost": "6 Iron, 2 Wiring"
+      },
+      {
+        "id": "focusing",
+        "tier": 2,
+        "parents": [
+          "lasermount"
+        ],
+        "label": "Beam Focusing",
+        "glyph": "BF",
+        "desc": "+15% beam damage at range.",
+        "cost": "5 Copper, 3 Wiring"
+      },
+      {
+        "id": "fins",
+        "tier": 2,
+        "parents": [
+          "missilerack"
+        ],
+        "label": "Guided Fins",
+        "glyph": "GF",
+        "desc": "+30% tracking accuracy.",
+        "cost": "4 Iron, 3 Wiring"
+      },
+      {
+        "id": "cluster",
+        "tier": 2,
+        "parents": [
+          "missilerack"
+        ],
+        "label": "Cluster Warhead",
+        "glyph": "CW",
+        "desc": "Splits into fragments on impact.",
+        "cost": "6 Iron, 2 Copper"
+      },
+      {
+        "id": "sabot",
+        "tier": 2,
+        "parents": [
+          "railmount"
+        ],
+        "label": "Sabot Rounds",
+        "glyph": "SB",
+        "desc": "Discarding sabot slugs punch through plating.",
+        "cost": "10 Iron, 3 Titanium"
+      },
+      {
+        "id": "coilstack",
+        "tier": 2,
+        "parents": [
+          "railmount"
+        ],
+        "label": "Coil Stack",
+        "glyph": "CS",
+        "desc": "+25% slug muzzle velocity.",
+        "cost": "8 Copper, 4 Wiring"
+      },
+      {
+        "id": "phaselens",
+        "tier": 3,
+        "parents": [
+          "autoloader"
+        ],
+        "label": "Phase Lens",
+        "glyph": "PL",
+        "desc": "Tightens the beam, extending effective damage range.",
+        "cost": "8 Copper, 5 Titanium"
+      },
+      {
+        "id": "swarmvolley",
+        "tier": 3,
+        "parents": [
+          "fins"
+        ],
+        "label": "Swarm Volley",
+        "glyph": "SV",
+        "desc": "Launches a coordinated volley sharing one target lock.",
+        "cost": "10 Iron, 6 Wiring"
+      },
+      {
+        "id": "proxfuse",
+        "tier": 3,
+        "parents": [
+          "cluster"
+        ],
+        "label": "Proximity Fuse",
+        "glyph": "PF",
+        "desc": "Detonates just short of the target, so near misses still hurt.",
+        "cost": "8 Iron, 5 Wiring"
+      },
+      {
+        "id": "railspike",
+        "tier": 3,
+        "parents": [
+          "sabot"
+        ],
+        "label": "Rail Spike",
+        "glyph": "RS",
+        "desc": "Depleted-core spike that ignores a fraction of armour.",
+        "cost": "14 Iron, 6 Titanium"
+      },
+      {
+        "id": "unified",
+        "tier": 3,
+        "parents": [
+          "focusing",
+          "fins"
+        ],
+        "label": "Unified Fire Control",
+        "glyph": "UF",
+        "desc": "Needs Beam Focusing and Guided Fins. Lasers strip shields while missiles retarget onto what breaks.",
+        "cost": "18 Wiring, 8 Titanium"
+      },
+      {
+        "id": "chargedslug",
+        "tier": 3,
+        "parents": [
+          "cluster",
+          "coilstack"
+        ],
+        "label": "Charged Slug",
+        "glyph": "CG",
+        "desc": "Needs Cluster Warhead and Coil Stack. Rail slugs carry a fragmenting charge that detonates on impact.",
+        "cost": "16 Iron, 10 Copper"
+      },
+      {
+        "id": "batterysync",
+        "tier": 4,
+        "parents": [
+          "unified",
+          "chargedslug"
+        ],
+        "label": "Battery Sync",
+        "glyph": "BS",
+        "desc": "Fires all three weapon systems as one coordinated salvo.",
+        "cost": "30 Titanium, 20 Wiring"
+      }
+    ],
+    "power": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Reactor Core",
+        "glyph": "RC",
+        "desc": "Base reactor, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "capacitor",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Capacitor Bank",
+        "glyph": "CB",
+        "desc": "+20% energy storage cap.",
+        "cost": "8 Copper, 3 Wiring"
+      },
+      {
+        "id": "overclock",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Overclock Regulator",
+        "glyph": "OR",
+        "desc": "+15% energy regen, generates extra heat.",
+        "cost": "6 Iron, 4 Wiring"
+      },
+      {
+        "id": "superconductor",
+        "tier": 2,
+        "parents": [
+          "capacitor"
+        ],
+        "label": "Superconductor Coils",
+        "glyph": "SC",
+        "desc": "Further raises the energy storage cap.",
+        "cost": "10 Copper, 5 Titanium"
+      },
+      {
+        "id": "backupcell",
+        "tier": 2,
+        "parents": [
+          "capacitor"
+        ],
+        "label": "Backup Cell",
+        "glyph": "BC",
+        "desc": "Keeps critical systems up through a reactor stall.",
+        "cost": "6 Copper, 4 Wiring"
+      },
+      {
+        "id": "exchanger",
+        "tier": 2,
+        "parents": [
+          "overclock"
+        ],
+        "label": "Heat Exchanger",
+        "glyph": "HX",
+        "desc": "Offsets Overclock heat buildup.",
+        "cost": "8 Iron, 4 Copper"
+      },
+      {
+        "id": "router",
+        "tier": 2,
+        "parents": [
+          "overclock"
+        ],
+        "label": "Power Router",
+        "glyph": "PR",
+        "desc": "Shifts spare draw to whichever system needs it most.",
+        "cost": "6 Iron, 3 Wiring"
+      },
+      {
+        "id": "quantumcap",
+        "tier": 3,
+        "parents": [
+          "superconductor"
+        ],
+        "label": "Quantum Capacitor",
+        "glyph": "QC",
+        "desc": "Near-lossless energy storage at high density.",
+        "cost": "12 Titanium, 6 Wiring"
+      },
+      {
+        "id": "emergencybus",
+        "tier": 3,
+        "parents": [
+          "backupcell"
+        ],
+        "label": "Emergency Bus",
+        "glyph": "EB",
+        "desc": "Reroutes the last reserve to engines or shields on demand.",
+        "cost": "8 Copper, 6 Wiring"
+      },
+      {
+        "id": "loadbalancer",
+        "tier": 3,
+        "parents": [
+          "router"
+        ],
+        "label": "Load Balancer",
+        "glyph": "LB",
+        "desc": "Prevents brownouts when several systems spike at once.",
+        "cost": "10 Iron, 5 Wiring"
+      },
+      {
+        "id": "plasmareg",
+        "tier": 3,
+        "parents": [
+          "exchanger"
+        ],
+        "label": "Plasma Regulator",
+        "glyph": "PL",
+        "desc": "Keeps reactor output steady under sustained load.",
+        "cost": "10 Copper, 8 Titanium"
+      },
+      {
+        "id": "zeropoint",
+        "tier": 4,
+        "parents": [
+          "quantumcap",
+          "plasmareg"
+        ],
+        "label": "Zero-Point Cell",
+        "glyph": "ZP",
+        "desc": "Near-limitless energy storage and regen, at the edge of known reactor design.",
+        "cost": "20 Titanium, 10 Wiring"
+      }
+    ],
+    "storage": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Cargo Bay",
+        "glyph": "CB",
+        "desc": "Base cargo bay, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "racking",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Modular Racking",
+        "glyph": "MK",
+        "desc": "+25% cargo capacity.",
+        "cost": "6 Metal Sheets"
+      },
+      {
+        "id": "compression",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Compression Field",
+        "glyph": "CF",
+        "desc": "Compresses loose ore, +15% capacity.",
+        "cost": "5 Copper, 4 Wiring"
+      },
+      {
+        "id": "sorter",
+        "tier": 2,
+        "parents": [
+          "racking"
+        ],
+        "label": "Auto-Sorter",
+        "glyph": "AS",
+        "desc": "Sorts cargo by type automatically for faster unloading.",
+        "cost": "8 Metal Sheets, 3 Wiring"
+      },
+      {
+        "id": "blastdoors",
+        "tier": 2,
+        "parents": [
+          "racking"
+        ],
+        "label": "Blast Doors",
+        "glyph": "BD",
+        "desc": "Seals a breached hold, saving the rest of the cargo.",
+        "cost": "10 Metal Sheets"
+      },
+      {
+        "id": "density",
+        "tier": 2,
+        "parents": [
+          "compression"
+        ],
+        "label": "Density Matrix",
+        "glyph": "DM",
+        "desc": "Further increases effective capacity.",
+        "cost": "10 Copper, 4 Titanium"
+      },
+      {
+        "id": "clamps",
+        "tier": 2,
+        "parents": [
+          "compression"
+        ],
+        "label": "Magnetic Clamps",
+        "glyph": "MC",
+        "desc": "Secures loose metal cargo during hard maneuvers.",
+        "cost": "6 Copper, 3 Wiring"
+      },
+      {
+        "id": "logisticsai",
+        "tier": 3,
+        "parents": [
+          "sorter"
+        ],
+        "label": "Logistics AI",
+        "glyph": "LA",
+        "desc": "Predicts what to unload first at each stop.",
+        "cost": "8 Wiring, 6 Titanium"
+      },
+      {
+        "id": "vacuumseal",
+        "tier": 3,
+        "parents": [
+          "blastdoors"
+        ],
+        "label": "Vacuum Seal",
+        "glyph": "VS",
+        "desc": "Holds pressure in a breached hold, protecting volatile cargo.",
+        "cost": "12 Metal Sheets, 3 Wiring"
+      },
+      {
+        "id": "gravclamp",
+        "tier": 3,
+        "parents": [
+          "clamps"
+        ],
+        "label": "Grav Clamps",
+        "glyph": "GC",
+        "desc": "Secures any cargo type, not just ferrous metal.",
+        "cost": "8 Copper, 6 Titanium"
+      },
+      {
+        "id": "singularity",
+        "tier": 3,
+        "parents": [
+          "density"
+        ],
+        "label": "Singularity Pocket",
+        "glyph": "SP",
+        "desc": "A contained pocket of folded space \u2014 vastly more room than it should hold.",
+        "cost": "15 Titanium, 6 Wiring"
+      },
+      {
+        "id": "deephold",
+        "tier": 4,
+        "parents": [
+          "logisticsai",
+          "singularity"
+        ],
+        "label": "Deep Hold",
+        "glyph": "DH",
+        "desc": "Nearly doubles base cargo capacity.",
+        "cost": "18 Metal Sheets, 8 Titanium"
+      }
+    ],
+    "sensors": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Sensor Array",
+        "glyph": "SA",
+        "desc": "Base sensor array, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "dish",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Long-Range Dish",
+        "glyph": "LD",
+        "desc": "+40% detection range.",
+        "cost": "6 Copper, 3 Wiring"
+      },
+      {
+        "id": "filter",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Signal Filter",
+        "glyph": "SF",
+        "desc": "Cuts through background noise near asteroid fields.",
+        "cost": "5 Iron, 4 Wiring"
+      },
+      {
+        "id": "deepscan",
+        "tier": 2,
+        "parents": [
+          "dish"
+        ],
+        "label": "Deep Scan",
+        "glyph": "DS",
+        "desc": "Reveals resource composition at range.",
+        "cost": "8 Copper, 4 Titanium"
+      },
+      {
+        "id": "cloakdetect",
+        "tier": 2,
+        "parents": [
+          "dish"
+        ],
+        "label": "Cloak Detector",
+        "glyph": "CD",
+        "desc": "Picks up cloaked contacts within half normal range.",
+        "cost": "10 Copper, 6 Wiring"
+      },
+      {
+        "id": "threatid",
+        "tier": 2,
+        "parents": [
+          "filter"
+        ],
+        "label": "Threat ID",
+        "glyph": "TI",
+        "desc": "Flags hostile contacts and their loadouts.",
+        "cost": "10 Iron, 5 Wiring"
+      },
+      {
+        "id": "iffbeacon",
+        "tier": 2,
+        "parents": [
+          "filter"
+        ],
+        "label": "IFF Beacon",
+        "glyph": "IF",
+        "desc": "Distinguishes friendly fleet contacts at a glance.",
+        "cost": "5 Iron, 3 Wiring"
+      },
+      {
+        "id": "spectral",
+        "tier": 3,
+        "parents": [
+          "deepscan"
+        ],
+        "label": "Spectral Analyzer",
+        "glyph": "SN",
+        "desc": "Full material breakdown of any scanned body.",
+        "cost": "10 Titanium, 6 Wiring"
+      },
+      {
+        "id": "phaseunmask",
+        "tier": 3,
+        "parents": [
+          "cloakdetect"
+        ],
+        "label": "Phase Unmask",
+        "glyph": "PU",
+        "desc": "Strips cloaking at full sensor range, not half.",
+        "cost": "12 Copper, 8 Titanium"
+      },
+      {
+        "id": "fleetlink",
+        "tier": 3,
+        "parents": [
+          "iffbeacon"
+        ],
+        "label": "Fleet Link",
+        "glyph": "FK",
+        "desc": "Shares your contact list with every friendly in range.",
+        "cost": "6 Iron, 8 Wiring"
+      },
+      {
+        "id": "predictive",
+        "tier": 3,
+        "parents": [
+          "threatid"
+        ],
+        "label": "Predictive Tracking",
+        "glyph": "PT",
+        "desc": "Projects a target\u2019s likely evasive path.",
+        "cost": "8 Iron, 8 Wiring"
+      },
+      {
+        "id": "omni",
+        "tier": 4,
+        "parents": [
+          "spectral",
+          "predictive"
+        ],
+        "label": "Omni Array",
+        "glyph": "OA",
+        "desc": "Full-spectrum sensor suite, best-in-class range and detail.",
+        "cost": "16 Titanium, 10 Wiring"
+      }
+    ],
+    "mining": [
+      {
+        "id": "root",
+        "tier": 0,
+        "parents": [],
+        "label": "Mining Laser",
+        "glyph": "ML",
+        "desc": "Base mining laser, already installed.",
+        "cost": "\u2014"
+      },
+      {
+        "id": "cutting",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Cutting Head",
+        "glyph": "CH",
+        "desc": "+20% extraction speed.",
+        "cost": "6 Iron, 3 Wiring"
+      },
+      {
+        "id": "refiner",
+        "tier": 1,
+        "parents": [
+          "root"
+        ],
+        "label": "Ore Refiner",
+        "glyph": "OR",
+        "desc": "Refines ore on the fly, less waste per haul.",
+        "cost": "5 Copper, 4 Wiring"
+      },
+      {
+        "id": "diamond",
+        "tier": 2,
+        "parents": [
+          "cutting"
+        ],
+        "label": "Diamond Bit",
+        "glyph": "DB",
+        "desc": "Cuts through dense asteroid cores.",
+        "cost": "8 Iron, 4 Titanium"
+      },
+      {
+        "id": "widebeam",
+        "tier": 2,
+        "parents": [
+          "cutting"
+        ],
+        "label": "Wide Beam",
+        "glyph": "WB",
+        "desc": "Strips softer ore veins faster, over a wider area.",
+        "cost": "6 Iron, 3 Wiring"
+      },
+      {
+        "id": "yield",
+        "tier": 2,
+        "parents": [
+          "refiner"
+        ],
+        "label": "Yield Booster",
+        "glyph": "YB",
+        "desc": "+25% material yield per extraction.",
+        "cost": "10 Copper, 5 Wiring"
+      },
+      {
+        "id": "slagrecycler",
+        "tier": 2,
+        "parents": [
+          "refiner"
+        ],
+        "label": "Slag Recycler",
+        "glyph": "SR",
+        "desc": "Reclaims usable material from refining waste.",
+        "cost": "6 Copper, 4 Wiring"
+      },
+      {
+        "id": "corepiercer",
+        "tier": 3,
+        "parents": [
+          "diamond"
+        ],
+        "label": "Core Piercer",
+        "glyph": "CP",
+        "desc": "Reaches the richest ore at an asteroid\u2019s center first.",
+        "cost": "10 Titanium, 6 Wiring"
+      },
+      {
+        "id": "swarmcutter",
+        "tier": 3,
+        "parents": [
+          "widebeam"
+        ],
+        "label": "Swarm Cutter",
+        "glyph": "SW",
+        "desc": "Splits the beam across several small rocks at once.",
+        "cost": "8 Iron, 6 Wiring"
+      },
+      {
+        "id": "autoassay",
+        "tier": 3,
+        "parents": [
+          "slagrecycler"
+        ],
+        "label": "Auto-Assay",
+        "glyph": "AA",
+        "desc": "Identifies ore grade before you commit to the cut.",
+        "cost": "6 Copper, 6 Wiring"
+      },
+      {
+        "id": "catalytic",
+        "tier": 3,
+        "parents": [
+          "yield"
+        ],
+        "label": "Catalytic Refinery",
+        "glyph": "CR",
+        "desc": "Chemically boosts yield beyond mechanical limits.",
+        "cost": "8 Copper, 8 Titanium"
+      },
+      {
+        "id": "extraction",
+        "tier": 4,
+        "parents": [
+          "corepiercer",
+          "catalytic"
+        ],
+        "label": "Extraction Suite",
+        "glyph": "ES",
+        "desc": "Top-tier mining setup: fast, clean, high-yield.",
+        "cost": "18 Titanium, 8 Wiring"
+      }
+    ]
+  }
+}

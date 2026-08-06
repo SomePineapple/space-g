@@ -24,9 +24,8 @@ enum Phase { CREEPING, COASTING, HOMING }
 ## Turn rate (radians/sec) ramps from _min to _max over turn_rate_ramp_time
 ## once homing begins, so the missile eases into steering instead of
 ## snapping straight at the target the instant it starts homing. Exported
-## (rather than a fixed constant) so a missile-tree ModuleUpgradeNode can
-## raise these the same way it already raises fire_rate/damage — see
-## Ship._apply_instance_upgrade_modifiers.
+## (rather than a fixed constant) so a stat modifier can raise these the same
+## way it raises fire_rate/damage — see HardpointBank.apply_modifiers.
 @export var turn_rate_min: float = 0.35
 @export var turn_rate_max: float = 1.5
 @export var turn_rate_ramp_time: float = 0.6

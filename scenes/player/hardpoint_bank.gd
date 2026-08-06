@@ -151,7 +151,6 @@ func _mount_gun(placement: ModulePlacement) -> HardpointGun:
 	gun.apply_tier(module_type.tier)
 	gun.apply_core_distance_bonus(_layout.distance_from_core(placement))
 	gun.setup(_ship)
-	_apply_instance_upgrade_modifiers(gun, placement)
 	_apply_manufacturer_modifiers(gun, placement)
 	return gun
 
@@ -163,7 +162,6 @@ func _mount_launcher(placement: ModulePlacement) -> HardpointMissileLauncher:
 	launcher.apply_tier(module_type.tier)
 	launcher.apply_core_distance_bonus(_layout.distance_from_core(placement))
 	launcher.setup(_ship)
-	_apply_instance_upgrade_modifiers(launcher, placement)
 	_apply_manufacturer_modifiers(launcher, placement)
 	return launcher
 
@@ -185,7 +183,6 @@ func _mount_winch(placement: ModulePlacement) -> HardpointWinch:
 func _mount_tractor_beam(placement: ModulePlacement) -> HardpointTractorBeam:
 	var tractor_beam: HardpointTractorBeam = _mount(tractor_beam_scene, placement)
 	tractor_beam.setup(_ship)
-	_apply_instance_upgrade_modifiers(tractor_beam, placement)
 	return tractor_beam
 
 
@@ -197,7 +194,6 @@ func _mount_grinder(placement: ModulePlacement) -> HardpointGrinder:
 	grinder.rotation = _fixed_facing(placement)
 	grinder.set_cell_size(_renderer.cell_size)
 	grinder.setup(_ship)
-	_apply_instance_upgrade_modifiers(grinder, placement)
 	return grinder
 
 
@@ -231,24 +227,11 @@ func _apply_manufacturer_modifiers(node: Node, placement: ModulePlacement) -> vo
 		node.set("malfunction_self_damage", manufacturer.malfunction_self_damage)
 
 
-## Applies this placement's own ModuleInstance's unlocked upgrades (Phase 8.1)
-## to its freshly spawned hardpoint node — per-instance, unlike the old ship-wide
-## upgrade tree this replaced. A placement nobody's upgraded yet (instance ==
-## null) is a no-op, the same "existing modules remain valid without upgrades"
-## guarantee ShipLayout._instance_stat_delta gives the non-hardpoint stats.
-func _apply_instance_upgrade_modifiers(node: Node, placement: ModulePlacement) -> void:
-	if placement.instance == null:
-		return
-	for upgrade_id in placement.instance.unlocked_upgrade_ids:
-		var upgrade_node: ModuleUpgradeNode = ModuleUpgradeCatalog.get_by_id(upgrade_id)
-		if upgrade_node != null:
-			apply_modifiers(node, upgrade_node.modifiers)
-
-
 ## Additive stat deltas onto a hardpoint node, skipping any property the node
-## doesn't have. Public because Ship pushes a single just-purchased upgrade's
-## modifiers through it too (see Ship.apply_instance_upgrade_effect) rather than
-## rebuilding the hardpoint.
+## doesn't have. Public so a system that changes one stat on an already-spawned
+## hardpoint can push it through here rather than rebuilding the hardpoint —
+## which is the hook the ship-wide upgrades (ShipUpgradeService) will need once
+## their effects are authored.
 func apply_modifiers(node: Node, modifiers: Dictionary) -> void:
 	for property_name in modifiers:
 		if property_name in node:

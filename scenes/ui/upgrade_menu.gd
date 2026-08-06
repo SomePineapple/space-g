@@ -1,201 +1,388 @@
 extends GamePanel
 
-## Standalone per-instance module upgrade menu (Phase 8.1), opened with a
-## dedicated key (toggle_upgrades — "U") rather than a button buried inside
-## the ship builder, per explicit request: category submenus first (Weapons,
-## Sensors, ...), then pick which mounted instance of that category to
-## upgrade, then its radial tree (ModuleUpgradeTree, same overlay class the
-## ship builder briefly used and this replaced entirely).
+## The Module Upgrades screen, built against docs/design_handoff_upgrade_tree/
+## (README.md + LAYOUT_SPEC.md are the source of truth for its appearance,
+## geometry and rules; upgrade_data.json is its content, copied into
+## res://resources/upgrades/ — see ShipUpgradeCatalog).
 ##
-## Operates on the *live* player ship's own ship_layout, not the ship
-## builder's in-progress working_layout — unlike the builder, this screen
-## never rebuilds the ship wholesale (see Ship.apply_instance_upgrade_effect),
-## so it's safe to use without silently resetting health/module condition.
+## A left rail lists the seven ship systems; the main column shows that
+## system's tree as a radial fan. Unlocks are ship-wide and stored by id in
+## GameState, per the handoff's state model — they are not attached to a
+## particular mounted module.
+##
+## Known gap, accepted deliberately: the handoff authors no stat modifiers, so
+## unlocking spends resources and records the id but does not yet change ship
+## behaviour. ShipUpgradeService is where that hook belongs when the effects
+## pass happens; HardpointBank.apply_modifiers is how a modifier reaches an
+## already-spawned hardpoint without rebuilding it.
 
-const CATEGORY_WIDTH: float = 150.0
-const INSTANCE_LIST_WIDTH: float = 340.0
-const PANEL_HEIGHT: float = 420.0
-## Taller than GamePanel.ROW_HEIGHT — these rows carry two lines of module text.
-const INSTANCE_ROW_HEIGHT: float = 34.0
+const RAIL_WIDTH: float = 250.0
+const RAIL_PADDING_VERTICAL: int = 26
+const RAIL_PADDING_HORIZONTAL: int = 22
+const DETAIL_MARGIN: int = 16
+const TITLE_FONT_SIZE: int = 19
+const HEADER_TITLE_FONT_SIZE: int = 22
+const HEADER_SUBTITLE_FONT_SIZE: int = 13
+const LEGEND_FONT_SIZE: int = 11
+const LEGEND_DOT_SIZE: float = 8.0
+## Where the screen opens when nothing has been viewed yet (handoff default).
+const DEFAULT_CATEGORY: String = "power"
 
-var _category_container: VBoxContainer
-var _instance_container: VBoxContainer
+var _rail_list: UpgradeRailList
+var _detail: UpgradeDetailPanel
+var _tree_view: UpgradeTreeView
+var _header_title: Label
+var _header_progress: Label
+var _legend: HBoxContainer
 
-var _tree_overlay: ModuleUpgradeTree = null
-var _tree_overlay_placement: ModulePlacement = null
+## Array of {"key", "label", "hue", "unlocked", "total"} — the rail's rows.
+var _categories: Array = []
+var _selected_index: int = -1
 
-var _selected_category: String = ""
-## category label -> Array[String] (module_type_id)
-var _categories: Dictionary = {}
-var _category_order: Array[String] = []
+var _hovered_node_id: String = ""
+var _selected_node_id: String = ""
 
 
 func _init() -> void:
 	toggle_action = "toggle_upgrades"
 	requires_home_base = true
+	# Full-screen takeover with its own background: it has to sit above the
+	# gameplay HUD and the station prompt, which share CanvasLayer 1.
+	layer = 10
 
 
 func _setup() -> void:
-	_build_categories()
 	_build_ui()
+	_build_categories()
 
 
 func _on_opened() -> void:
-	_refresh_categories()
+	_refresh_progress()
+	_select_category(_remembered_index())
 
 
-func _on_closed() -> void:
-	_close_tree_overlay()
+# --- Construction -----------------------------------------------------------
+
+func _build_ui() -> void:
+	var root := Control.new()
+	# ...and_offsets_preset, not set_anchors_preset: the latter preserves the
+	# control's current (zero) rect by writing compensating offsets.
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(root)
+	root.add_child(BuilderBackdrop.new())
+
+	var columns := HBoxContainer.new()
+	columns.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	columns.add_theme_constant_override("separation", 0)
+	root.add_child(columns)
+
+	columns.add_child(_build_rail())
+	columns.add_child(_build_main_column())
 
 
-## Groups every ModuleType into a small set of player-facing categories —
-## purely a UI grouping, doesn't touch ModuleType.hardpoint_category itself.
-## Every current module type matches one of these buckets; a hypothetical
-## future one that doesn't falls back to "Other" rather than being dropped.
-func _category_for(module_type: ModuleType) -> String:
-	match module_type.hardpoint_category:
-		"weapon":
-			return "Weapons"
-		"missile":
-			return "Missiles"
-		"radar", "scanner", "tractor":
-			return "Sensors"
-		"grinder":
-			return "Mining"
-	match module_type.id:
-		"engine":
-			return "Propulsion"
-		"reactor_mk1", "battery_mk1":
-			return "Power"
-		"storage_mk1":
-			return "Storage"
-		"hull", "heavy_hull", "strut", "command_core":
-			return "Hull"
-	return "Other"
+func _build_rail() -> PanelContainer:
+	var rail := PanelContainer.new()
+	rail.custom_minimum_size = Vector2(RAIL_WIDTH, 0)
+	var style: StyleBoxFlat = BuilderTheme.flat_style(
+		BuilderTheme.with_alpha(BuilderTheme.GLASS, 0.55), Color.TRANSPARENT, 0)
+	style.border_width_right = 1
+	style.border_color = BuilderTheme.with_alpha(BuilderTheme.CYAN, 0.18)
+	style.content_margin_top = RAIL_PADDING_VERTICAL
+	style.content_margin_bottom = RAIL_PADDING_VERTICAL
+	rail.add_theme_stylebox_override("panel", style)
 
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	rail.add_child(column)
+
+	var title_margin := MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", RAIL_PADDING_HORIZONTAL)
+	title_margin.add_theme_constant_override("margin_right", RAIL_PADDING_HORIZONTAL)
+	title_margin.add_theme_constant_override("margin_bottom", 20)
+	title_margin.add_child(BuilderTheme.sans_label("Module Upgrades", TITLE_FONT_SIZE, BuilderTheme.TEXT_BRIGHT))
+	column.add_child(title_margin)
+
+	_rail_list = UpgradeRailList.new()
+	_rail_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_rail_list.category_selected.connect(_select_category)
+	column.add_child(_rail_list)
+
+	var detail_margin := MarginContainer.new()
+	detail_margin.add_theme_constant_override("margin_left", DETAIL_MARGIN)
+	detail_margin.add_theme_constant_override("margin_right", DETAIL_MARGIN)
+	detail_margin.add_theme_constant_override("margin_top", DETAIL_MARGIN)
+	column.add_child(detail_margin)
+
+	_detail = UpgradeDetailPanel.new()
+	_detail.unlock_pressed.connect(_on_unlock_pressed)
+	detail_margin.add_child(_detail)
+	return rail
+
+
+func _build_main_column() -> VBoxContainer:
+	var main := VBoxContainer.new()
+	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 0)
+
+	var header_margin := MarginContainer.new()
+	header_margin.add_theme_constant_override("margin_left", 40)
+	header_margin.add_theme_constant_override("margin_right", 40)
+	header_margin.add_theme_constant_override("margin_top", 16)
+	header_margin.add_theme_constant_override("margin_bottom", 6)
+	main.add_child(header_margin)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	header_margin.add_child(header)
+
+	_header_title = BuilderTheme.sans_label("", HEADER_TITLE_FONT_SIZE, BuilderTheme.TEXT_SELECTED)
+	_header_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	header.add_child(_header_title)
+
+	var subtitle: Label = BuilderTheme.mono_label("Upgrade Tree", HEADER_SUBTITLE_FONT_SIZE, BuilderTheme.TEXT_HINT)
+	subtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	subtitle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	header.add_child(subtitle)
+
+	_legend = HBoxContainer.new()
+	_legend.add_theme_constant_override("separation", 14)
+	_legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	header.add_child(_legend)
+
+	_header_progress = BuilderTheme.mono_label("", HEADER_SUBTITLE_FONT_SIZE, BuilderTheme.TEXT_HINT)
+	_header_progress.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	header.add_child(_header_progress)
+
+	_tree_view = UpgradeTreeView.new()
+	_tree_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tree_view.node_hovered.connect(_on_node_hovered)
+	_tree_view.hover_exited.connect(_on_tree_hover_exited)
+	_tree_view.node_clicked.connect(_on_node_clicked)
+	main.add_child(_tree_view)
+	return main
+
+
+# --- Categories -------------------------------------------------------------
 
 func _build_categories() -> void:
 	_categories.clear()
-	_category_order.clear()
-	for module_type in ModuleCatalog.get_all():
-		var label: String = _category_for(module_type)
-		if not _categories.has(label):
-			_categories[label] = []
-			_category_order.append(label)
-		_categories[label].append(module_type.id)
+	for category in ShipUpgradeCatalog.get_categories():
+		var progress: Vector2i = ShipUpgradeService.progress(category["key"])
+		_categories.append({
+			"key": category["key"],
+			"label": category["label"],
+			"hue": float(category["hue"]),
+			"unlocked": progress.x,
+			"total": progress.y,
+		})
+	_rail_list.set_categories(_categories)
+	_tree_view.set_reference_frame(_shared_frame())
 
 
-func _build_ui() -> void:
-	var panel := Control.new()
-	panel.position = Vector2(20, 108)
-	add_child(panel)
-
-	var bg := ColorRect.new()
-	bg.size = Vector2(CATEGORY_WIDTH + INSTANCE_LIST_WIDTH + 24, PANEL_HEIGHT)
-	bg.color = Color(0.05, 0.07, 0.1, 0.75)
-	panel.add_child(bg)
-
-	var title := Label.new()
-	title.text = "Module Upgrades"
-	title.position = Vector2(8, 6)
-	title.add_theme_font_size_override("font_size", 18)
-	panel.add_child(title)
-
-	_category_container = VBoxContainer.new()
-	_category_container.position = Vector2(8, 36)
-	_category_container.size = Vector2(CATEGORY_WIDTH - 16, PANEL_HEIGHT - 44)
-	_category_container.add_theme_constant_override("separation", 4)
-	panel.add_child(_category_container)
-
-	_instance_container = VBoxContainer.new()
-	_instance_container.position = Vector2(CATEGORY_WIDTH + 16, 36)
-	_instance_container.size = Vector2(INSTANCE_LIST_WIDTH - 16, PANEL_HEIGHT - 44)
-	_instance_container.add_theme_constant_override("separation", 4)
-	panel.add_child(_instance_container)
+func _refresh_progress() -> void:
+	for index in _categories.size():
+		var progress: Vector2i = ShipUpgradeService.progress(_categories[index]["key"])
+		_rail_list.update_progress(index, progress.x)
 
 
-func _refresh_categories() -> void:
-	for child in _category_container.get_children():
-		child.queue_free()
-
-	for label in _category_order:
-		var button := Button.new()
-		button.text = label
-		button.toggle_mode = true
-		button.button_pressed = (label == _selected_category)
-		button.pressed.connect(_on_category_pressed.bind(label))
-		_category_container.add_child(button)
-
-	_refresh_instances()
-
-
-func _on_category_pressed(label: String) -> void:
-	_selected_category = label
-	for child in _category_container.get_children():
-		child.button_pressed = (child.text == label)
-	_refresh_instances()
+## The union of every tree's extent. Feeding this to the view as its fit
+## target keeps one node size across the whole screen — otherwise a narrow
+## tree would scale up to fill the panel and the nodes would visibly change
+## size every time the player picked a different system.
+func _shared_frame() -> Rect2:
+	var frame: Rect2 = Rect2()
+	var first: bool = true
+	for category in _categories:
+		var layout := UpgradeTreeLayout.new()
+		layout.build(_tree_nodes(category["key"]), category["hue"])
+		frame = layout.frame if first else frame.merge(layout.frame)
+		first = false
+	return frame
 
 
-## Lists every placement on the live ship whose type falls in the selected
-## category, one button per mounted instance — a category can have zero, one
-## or several (e.g. two Weapon hardpoints), each upgraded independently.
-func _refresh_instances() -> void:
-	for child in _instance_container.get_children():
-		child.queue_free()
+func _remembered_index() -> int:
+	var wanted: String = GameState.last_upgrade_category
+	if wanted.is_empty():
+		wanted = DEFAULT_CATEGORY
+	for index in _categories.size():
+		if _categories[index]["key"] == wanted:
+			return index
+	return 0 if not _categories.is_empty() else -1
 
-	if _selected_category.is_empty() or ship == null or ship.ship_layout == null:
+
+func _select_category(index: int) -> void:
+	_selected_index = index
+	_rail_list.set_selected(index)
+	_selected_node_id = ""
+	_hovered_node_id = ""
+	if index < 0:
 		return
 
-	var type_ids: Array = _categories.get(_selected_category, [])
-	var placements: Array = ship.ship_layout.placements.filter(func(p): return type_ids.has(p.module_type_id))
+	var category: Dictionary = _categories[index]
+	GameState.last_upgrade_category = category["key"]
+	_header_title.text = category["label"]
+	_tree_view.set_tree(_tree_nodes(category["key"]), category["hue"])
+	_rebuild_legend(category["key"])
+	_refresh_states()
+	_detail.show_message("Hover a node for details.")
 
-	if placements.is_empty():
-		var empty_label := Label.new()
-		empty_label.text = "No %s modules mounted." % _selected_category
-		_instance_container.add_child(empty_label)
+
+# --- Tree -------------------------------------------------------------------
+
+## Adapts the catalog's rows into the shape UpgradeTreeView expects. `hue` is
+## optional in the data and marks the start of a coloured branch.
+func _tree_nodes(category_key: String) -> Array:
+	var result: Array = []
+	for node in ShipUpgradeCatalog.get_tree(category_key):
+		result.append({
+			"id": node["id"],
+			"parents": node["parents"].duplicate(),
+			"tier": node["tier"],
+			"label": node["label"],
+			"glyph": node["glyph"],
+			"branch_hue": float(node["hue"]) if node.has("hue") else -1.0,
+		})
+	return result
+
+
+func _refresh_states() -> void:
+	if _selected_index < 0:
 		return
-
-	for placement in placements:
-		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-		var tree_size: int = ModuleUpgradeService.get_tree_for_placement(placement).size()
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(0, INSTANCE_ROW_HEIGHT)
-
-		if tree_size == 0:
-			button.text = "%s at (%d, %d) — no upgrades yet" % [module_type.display_name, placement.hex_coord.x, placement.hex_coord.y]
-			button.disabled = true
+	var category_key: String = _categories[_selected_index]["key"]
+	var states: Dictionary = {}
+	for node in ShipUpgradeCatalog.get_tree(category_key):
+		if ShipUpgradeService.is_unlocked(category_key, node["id"]):
+			states[node["id"]] = UpgradeTreeView.STATE_UNLOCKED
+		elif ShipUpgradeService.is_available(category_key, node):
+			states[node["id"]] = UpgradeTreeView.STATE_AVAILABLE
 		else:
-			var level: int = placement.ensure_instance().get_level()
-			button.text = "%s at (%d, %d) — Level %d/%d" % [module_type.display_name, placement.hex_coord.x, placement.hex_coord.y, level, tree_size]
-			button.pressed.connect(_on_instance_pressed.bind(placement))
+			states[node["id"]] = UpgradeTreeView.STATE_LOCKED
+	_tree_view.set_states(states)
 
-		_instance_container.add_child(button)
-
-
-func _on_instance_pressed(placement: ModulePlacement) -> void:
-	if _tree_overlay == null:
-		_tree_overlay = ModuleUpgradeTree.new()
-		add_child(_tree_overlay)
-		_tree_overlay.closed.connect(_close_tree_overlay)
-		_tree_overlay.upgrade_unlocked.connect(_on_upgrade_unlocked)
-
-	_tree_overlay_placement = placement
-	_tree_overlay.open(ship.ship_layout, inventory, placement)
+	var progress: Vector2i = ShipUpgradeService.progress(category_key)
+	_header_progress.text = "%d/%d unlocked" % [progress.x, progress.y]
+	_header_progress.add_theme_color_override("font_color",
+		UpgradePalette.bright(_categories[_selected_index]["hue"]))
+	_rail_list.update_progress(_selected_index, progress.x)
 
 
-func _close_tree_overlay() -> void:
-	if _tree_overlay != null:
-		_tree_overlay.queue_free()
-	_tree_overlay = null
-	_tree_overlay_placement = null
+## Only shown for trees that declare branch hues — currently Weapons, whose
+## laser / missile / rail mounts each start their own colour.
+func _rebuild_legend(category_key: String) -> void:
+	_clear_legend()
+	for node in ShipUpgradeCatalog.get_tree(category_key):
+		if not node.has("hue"):
+			continue
+		var unlocked: bool = ShipUpgradeService.is_unlocked(category_key, node["id"])
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		row.add_child(BuilderTheme.make_glow_dot(UpgradePalette.bright(float(node["hue"])), LEGEND_DOT_SIZE))
+		row.add_child(BuilderTheme.mono_label(node["label"], LEGEND_FONT_SIZE,
+			BuilderTheme.TEXT_BODY if unlocked else BuilderTheme.TEXT_LABEL))
+		_legend.add_child(row)
 
 
-## Applies the just-unlocked upgrade to the live ship (see
-## Ship.apply_instance_upgrade_effect) and refreshes the instance list's
-## level readout — costs were already spent inside ModuleUpgradeTree itself.
-func _on_upgrade_unlocked(upgrade_id: String) -> void:
-	if _tree_overlay_placement == null:
+func _clear_legend() -> void:
+	for child in _legend.get_children():
+		child.queue_free()
+
+
+# --- Detail panel -----------------------------------------------------------
+
+func _on_node_hovered(node_id: String) -> void:
+	_hovered_node_id = node_id
+	_show_detail(node_id)
+
+
+## Hover takes precedence over the last click, falling back to it on mouse-out
+## so the panel never flickers empty (handoff "Interactions").
+func _on_tree_hover_exited() -> void:
+	_hovered_node_id = ""
+	if _selected_node_id.is_empty():
+		_detail.show_message("Hover a node for details.")
+	else:
+		_show_detail(_selected_node_id)
+
+
+## Clicking an available node unlocks it; anything else just selects, so a
+## locked node can still be inspected.
+func _on_node_clicked(node_id: String) -> void:
+	_selected_node_id = node_id
+	if _can_unlock(node_id):
+		_unlock(node_id)
+	else:
+		_show_detail(node_id)
+
+
+func _show_detail(node_id: String) -> void:
+	if _selected_index < 0:
 		return
-	var node: ModuleUpgradeNode = ModuleUpgradeCatalog.get_by_id(upgrade_id)
-	ship.apply_instance_upgrade_effect(_tree_overlay_placement, node)
-	_refresh_instances()
+	var category_key: String = _categories[_selected_index]["key"]
+	var node: Dictionary = ShipUpgradeCatalog.get_node(category_key, node_id)
+	if node.is_empty():
+		return
+
+	var unlocked: bool = ShipUpgradeService.is_unlocked(category_key, node_id)
+	var state: String = UpgradeTreeView.STATE_UNLOCKED
+	if not unlocked:
+		state = UpgradeTreeView.STATE_AVAILABLE if ShipUpgradeService.is_available(category_key, node) \
+			else UpgradeTreeView.STATE_LOCKED
+	var reason: String = "" if unlocked else ShipUpgradeService.get_rejection_reason(
+		inventory, category_key, node_id)
+	var is_root: bool = node_id == ShipUpgradeCatalog.ROOT_ID
+
+	_detail.show_node({
+		"id": node_id,
+		"label": node["label"],
+		"tier": node["tier"],
+		"is_base": is_root,
+		"description": node["desc"],
+		"cost_text": "" if is_root else node["cost"],
+		"effect_text": "",
+		"state": state,
+		"hue": _tree_view.hue_of(node_id),
+		"can_unlock": reason.is_empty() and not unlocked,
+		"reason": "" if state != UpgradeTreeView.STATE_AVAILABLE else reason,
+		"requirements": _requirements_for(category_key, node),
+	})
+
+
+## The handoff's REQUIRES ALL block, shown for merge nodes — those needing two
+## or more branches to converge.
+func _requirements_for(category_key: String, node: Dictionary) -> Array:
+	if node["parents"].size() < 2:
+		return []
+	var rows: Array = []
+	for parent_id in node["parents"]:
+		var parent: Dictionary = ShipUpgradeCatalog.get_node(category_key, parent_id)
+		rows.append({
+			"label": parent.get("label", parent_id),
+			"met": ShipUpgradeService.is_unlocked(category_key, parent_id),
+			"hue": _tree_view.hue_of(parent_id),
+		})
+	return rows
+
+
+# --- Unlocking --------------------------------------------------------------
+
+func _can_unlock(node_id: String) -> bool:
+	if _selected_index < 0:
+		return false
+	return ShipUpgradeService.can_unlock(inventory, _categories[_selected_index]["key"], node_id)
+
+
+func _on_unlock_pressed(node_id: String) -> void:
+	if not node_id.is_empty() and _can_unlock(node_id):
+		_unlock(node_id)
+
+
+## Re-deriving availability afterwards is what makes newly unlockable children
+## start their dashed pulse and the connector to the parent brighten — there
+## is no animation to author, it falls out of the state change.
+func _unlock(node_id: String) -> void:
+	var category_key: String = _categories[_selected_index]["key"]
+	if not ShipUpgradeService.unlock(inventory, category_key, node_id):
+		return
+	_refresh_states()
+	_rebuild_legend(category_key)
+	_show_detail(node_id)

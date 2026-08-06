@@ -24,15 +24,25 @@ var _has_snapshot: bool = false
 var _credits: int = 0
 var _material_totals: Dictionary = {}
 var _component_totals: Dictionary = {}
-## key -> Array[ModuleInstance] — the real owned-module pool (Phase 8.1), not
-## just counts, so upgrade state on an owned-but-unplaced instance survives a
-## warp the same way a placed one already does via _ship_layout below.
+## key -> Array[ModuleInstance] — the real owned-module pool, not just counts,
+## so an owned-but-unplaced module keeps its identity across a warp the same
+## way a placed one already does via _ship_layout below.
 var _owned_module_pool: Dictionary = {}
 var _captured_tech_totals: Dictionary = {}
 var _researched_ids: Array = []
 var _known_manufacturer_ids: Array = []
 var _ship_layout: Resource
 var _health_fraction: float = 1.0
+
+## Ship-wide upgrade unlocks: category key -> Array[String] of node ids
+## (docs/design_handoff_upgrade_tree/README.md "State management"). Ids only,
+## so adding upgrades to the catalog later never invalidates this. Deliberately
+## NOT part of capture()/apply() below: those mirror one ship's state across a
+## warp, whereas these are player progression that outlives any given hull, and
+## this autoload already persists for the session.
+var _upgrade_unlocks: Dictionary = {}
+## Category the upgrade screen was last showing, restored when it reopens.
+var last_upgrade_category: String = ""
 
 ## Name of a node in the *destination* scene to arrive at — set by WarpGate
 ## just before a GATE-mode change_scene_to_file, normally naming the paired
@@ -72,6 +82,25 @@ func get_preloaded_scene(path: String) -> PackedScene:
 
 func has_snapshot() -> bool:
 	return _has_snapshot
+
+
+# --- Ship-wide upgrade unlocks ----------------------------------------------
+# Read and written through ShipUpgradeService; nothing else should touch
+# _upgrade_unlocks directly.
+
+func is_upgrade_unlocked(category_key: String, node_id: String) -> bool:
+	return _upgrade_unlocks.get(category_key, []).has(node_id)
+
+
+func unlock_upgrade(category_key: String, node_id: String) -> void:
+	if not _upgrade_unlocks.has(category_key):
+		_upgrade_unlocks[category_key] = []
+	if not _upgrade_unlocks[category_key].has(node_id):
+		_upgrade_unlocks[category_key].append(node_id)
+
+
+func get_unlocked_upgrades(category_key: String) -> Array:
+	return _upgrade_unlocks.get(category_key, []).duplicate()
 
 
 func capture(ship: Node) -> void:
