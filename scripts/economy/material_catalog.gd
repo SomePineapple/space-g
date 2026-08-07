@@ -40,13 +40,18 @@ static func get_all() -> Array[MaterialType]:
 		return _cached_types
 
 	var types: Array[MaterialType] = []
-	# yield_multiplier scales down per-drop amount as sell/buy price climbs, so
-	# rarer materials feel scarcer to collect, not just more valuable to sell.
-	types.append(_make(IRON, "Iron", Color(0.72, 0.7, 0.68), 2, 4, 1.0))
-	types.append(_make(COPPER, "Copper", Color(0.85, 0.45, 0.2), 4, 8, 0.85))
-	types.append(_make(NICKEL, "Nickel", Color(0.75, 0.8, 0.78), 5, 10, 0.65))
-	types.append(_make(TITANIUM, "Titanium", Color(0.65, 0.6, 0.8), 9, 18, 0.45))
-	types.append(_make(GLASS, "Glass", Color(0.75, 0.9, 0.95), 6, 12, 0.6))
+	# Prices, volatilities, categories and colours are the trade-market
+	# handoff's own numbers for these five materials
+	# (docs/design_handoff_trade_market/README.md "Per-material data" and
+	# "Design tokens").
+	#
+	# yield_multiplier scales down per-drop amount as price climbs, so rarer,
+	# pricier materials feel scarcer to collect, not just better to sell.
+	types.append(_make(IRON, "Iron", Color(0.6235, 0.6902, 0.7412), 40, 3.0, "Ore", 1.0))
+	types.append(_make(COPPER, "Copper", Color(0.8784, 0.5451, 0.2980), 80, 6.0, "Ore", 0.85))
+	types.append(_make(NICKEL, "Nickel", Color(0.6588, 0.7529, 0.7843), 100, 7.0, "Ore", 0.65))
+	types.append(_make(TITANIUM, "Titanium", Color(0.7961, 0.8392, 0.8784), 180, 13.0, "Ore", 0.45))
+	types.append(_make(GLASS, "Glass", Color(0.5608, 0.9137, 0.9490), 120, 9.0, "Refined", 0.6))
 
 	_cached_types = types
 	for type in types:
@@ -74,14 +79,32 @@ static func icon(material_id: String) -> Texture2D:
 	return type.icon if type != null else null
 
 
-static func sell_price(material_id: String) -> int:
+## The market's anchor price. The live price the player actually pays comes
+## from MarketService, which drifts around this — nothing should quote this
+## number to the player directly.
+static func base_price(material_id: String) -> int:
 	var type: MaterialType = get_by_id(material_id)
-	return type.sell_price if type != null else 0
+	return type.base_price if type != null else 0
 
 
-static func buy_price(material_id: String) -> int:
+static func volatility(material_id: String) -> float:
 	var type: MaterialType = get_by_id(material_id)
-	return type.buy_price if type != null else 0
+	return type.volatility if type != null else 0.0
+
+
+static func category(material_id: String) -> String:
+	var type: MaterialType = get_by_id(material_id)
+	return type.category if type != null else ""
+
+
+## Distinct categories in catalog order — the market's tab strip is built from
+## this, so adding a category is a _make() call and nothing else.
+static func categories() -> Array[String]:
+	var result: Array[String] = []
+	for type in get_all():
+		if not type.category.is_empty() and not result.has(type.category):
+			result.append(type.category)
+	return result
 
 
 static func yield_multiplier(material_id: String) -> float:
@@ -89,14 +112,16 @@ static func yield_multiplier(material_id: String) -> float:
 	return type.yield_multiplier if type != null else 1.0
 
 
-static func _make(id: String, type_display_name: String, type_color: Color, type_sell_price: int, type_buy_price: int,
-		type_yield_multiplier: float = 1.0, type_icon: Texture2D = null) -> MaterialType:
+static func _make(id: String, type_display_name: String, type_color: Color, type_base_price: int,
+		type_volatility: float, type_category: String, type_yield_multiplier: float = 1.0,
+		type_icon: Texture2D = null) -> MaterialType:
 	var type := MaterialType.new()
 	type.id = id
 	type.display_name = type_display_name
 	type.color = type_color
-	type.sell_price = type_sell_price
-	type.buy_price = type_buy_price
+	type.base_price = type_base_price
+	type.volatility = type_volatility
+	type.category = type_category
 	type.yield_multiplier = type_yield_multiplier
 	type.icon = type_icon
 	return type

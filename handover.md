@@ -11,11 +11,13 @@ touching ship control, the player-ship lookup, randomness or object spawning**
 and (mostly) is not prepared for multiplayer. **`docs/HUD-1d-Godot-spec.md`
 plus `docs/hud-1d-reference.png` are the source of truth for the gameplay
 HUD's appearance** — check them before restyling anything under
-`scenes/ui/hud*`. **`docs/design_handoff_ship_builder/` and
-`docs/design_handoff_upgrade_tree/` are likewise the source of truth for the
-ship-builder and module-upgrade screens** — read the whole folder (README,
-LAYOUT_SPEC where present, and the JSON) before touching
-`scenes/ui/ship_builder/` or `scenes/ui/upgrades/`. **`docs/performance.md`
+`scenes/ui/hud*`. **`docs/design_handoff_ship_builder/`,
+`docs/design_handoff_upgrade_tree/` and `docs/design_handoff_scanner_radar/`
+are likewise the source of truth for the ship-builder, module-upgrade and
+scanner screens** — read the whole folder (README, LAYOUT_SPEC/STYLE_GUIDE
+where present, and the JSON/HTML) before touching
+`scenes/ui/ship_builder/`, `scenes/ui/upgrades/` or `scenes/ui/scanner_*`.
+**`docs/performance.md`
 is required reading before writing or changing any `_draw()` loop, starfield
 or particle emitter** — it records why the 2D canvas renderer's lack of
 command batching dominated frame cost, how the starfield and hull renderers
@@ -28,7 +30,114 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (ship builder + module upgrades rebuilt to their design handoffs; per-instance upgrade system deleted)
+## Most recent session (scanner rebuilt as the directional A-scope from `docs/design_handoff_scanner_radar/`)
+
+Short, single-purpose session. The user supplied a fourth design handoff and
+asked for "the new scanner UI hooked up to the scanner system, still returning
+the first n (depending on upgrades) results". **The handoff folder is the
+source of truth for this screen, not this file.**
+
+The handoff offers four presentations (1A cone, 1B grid, 1C B-scope, 1D
+A-scope) of one shared scan model and says only one ships; **1D was
+implemented**, as the README recommends. The other three were not built.
+
+### The scan model replaced the channel-bar model
+
+`scenes/player/scanner.gd` was rewritten. Gone: the 1.5s channel with a
+progress fraction that resolved into a static list. Now:
+
+- **Directional.** The beam has a world-space bearing (0° = +X, wrapped to
+  ±180) and a width clamped 6°–120°. World rather than ship-relative on
+  purpose — a snapshot has to stay put while the ship turns under it.
+- **Time of flight.** `WAVEFRONT_SPEED` is a fixed 1000 u/s; `scan_range`
+  (3000, was 3600) is MAXR and **is the upgradeable stat**. `cooldown` is 6s,
+  so a full cycle is 9s. Firing is rejected silently while cooling down.
+- **Contacts are snapshotted once, when the ping fires**, then emitted one at
+  a time via `contact_resolved` as the wavefront reaches each range. Nothing
+  is tracked live; letting markers follow moving objects would break the
+  fiction the display represents.
+- **`max_results` still caps the returns** (the user's "first n") — candidates
+  are filtered to the beam, sorted nearest-first, then truncated. That
+  ordering is what makes the cap mean "nearest n", so don't reorder it.
+- Contact dicts gained `bearing` and `signature`. `Scanner.signature_of()`
+  maps scan categories to the handoff's rock/ice/wreck plus a **`body`** type
+  this project added for planets — the README explicitly invites extending the
+  type table.
+- `toggle_scan()` → `fire_ping()` (one call site, `ship.gd`). The old
+  `scan_progress_updated` signal is gone.
+
+Everything the old scanner did that wasn't about presentation survives
+unchanged: the scannable/asteroid-cluster split, count-named clusters,
+`already_known`, `mark_identified()` at fire time, and the self-cancel when
+`has_scanner()` goes false mid-pulse.
+
+### The instrument
+
+Three new files under `scenes/ui/`:
+
+- **`scanner_palette.gd`** — the handoff's 1D tokens (green accent, not the
+  HUD's cyan — deliberately its own palette, not an alias of `HudPalette`),
+  the signature colour/strength tables, geometry consts, `mono_font()` (same
+  `SystemFont` approach as `BuilderTheme`, no font asset added) and stylebox
+  factories.
+- **`scanner_scope.gd`** (`ScannerScope`) — the 360×360 A-scope, a direct port
+  of the handoff's `drawScope()`. **Horizontal axis is RANGE, not position.**
+  Beam bar with amber edge handles, a 260-segment polyline trace redrawn every
+  frame (noise scaled by distance + a Gaussian bump per return, σ widening
+  with range), transmit line with gradient trail, and peak callouts that
+  stagger upward 14px at a time when they'd collide. Owns the drag-to-aim
+  only; everything around it belongs to the display.
+- **`scanner_display.gd`** — rewritten as the column shell: header, scope
+  frame, PING/`COOL 4.3s` button, `BEAM`/`GAIN` readouts, returns list, and
+  the `?` help card (copy verbatim from the prototype).
+
+Deviations, all commented in-file: the canvas `shadowBlur` phosphor glow is a
+wide faint polyline under the sharp one; the rotated `↑ SIGNAL` caption is
+stacked glyphs (rotating `draw_string` needs a canvas transform for two
+words); `blipIn` is fade-only (animating position inside a container fights
+the layout); the column got a backdrop the handoff doesn't have, because its
+page background is a starfield in-game; range gridlines scale to keep ~6
+labels instead of a fixed 500u step, which collides past ~6000 range.
+
+### Decisions worth not relitigating
+
+- **The panel is toggled, not always-on.** At 388×568 the column cannot share
+  a 1152×648 HUD with the other widgets. **While open it covers the radar
+  dial** — that is the known cost of the current placement.
+- **V opens the panel and fires a ping in the same press.** Opening is local
+  HUD input (`_unhandled_input`); firing still goes through
+  `ShipIntent.toggle_scan` → `Ship` → `Scanner.fire_ping()`, so the
+  multiplayer seam is intact. X or Escape closes.
+- **Beam aim bypasses `ShipIntent`** — the HUD calls `scanner.set_beam()`
+  directly, the same shape as the old display reaching for `get_scanner()`.
+  A remote peer aiming would need an intent field. See `docs/multiplayer.md`.
+- `already_known` contacts are dimmed rather than given a fifth column; the
+  handoff's row is four columns wide.
+
+### Verified / not verified
+
+Verified live via `game_eval` and real screenshots, game log clean: trace,
+peaks, staggered callouts, transmit line, help card, cooldown countdown and
+recovery, the `max_results` cap (120° beam → exactly 5 rows), the empty case
+(`NOISE ONLY — NO RETURN`), sensors-off cancelling a pulse and hiding the
+panel, V opening the panel and firing in one press, and drag re-aim /
+edge-resize / 6°–120° clamps.
+
+Not verified: real mouse drag on the beam bar (handlers were called directly —
+the documented MCP limitation), and no human has played it.
+
+### Still open
+
+- **No upgrade raises `scan_range` yet.** The `sensors` tree exists but
+  `ShipUpgradeService` still authors no stat modifiers (see the section
+  below), so `scan_range` / `max_results` remain plain exports. The handoff
+  also asks whether upgrades should lower the noise floor or shorten the
+  cooldown — undecided.
+- No audio. The README notes an A-scope wants a transmit chirp and a
+  per-return blip.
+- 1A/1B/1C were not built and there is no option switch.
+
+## Session before that (ship builder + module upgrades rebuilt to their design handoffs; per-instance upgrade system deleted)
 
 Two design handoffs implemented back to back, then a dead-code strip. Both
 handoff folders are the source of truth for their screen's appearance — not
@@ -144,64 +253,29 @@ called directly — the documented MCP limitation), and no human has played it.
   `logs_read(source="editor")` throughout and are pre-existing autoload reload
   artefacts; the *running game* log is the one that matters.
 
-## Session before that (gameplay HUD rebuilt to the "1d" visual spec)
+## Earlier session (gameplay HUD rebuilt to the "1d" visual spec)
 
-Short, single-purpose session. The user supplied two files in `docs/` —
-`HUD-1d-Godot-spec.md` (exact colours, layout, anchoring and behaviour per
-widget) and `hud-1d-reference.png` (a mock screenshot of the target) — and
-asked for the existing gameplay HUD to be rebuilt against them. **The spec
-and the reference image are the source of truth for HUD appearance, not this
-file.** Three scoping calls were made via `AskUserQuestion` and should not be
-relitigated without reason: full replacement of the old readout (not
-side-by-side), the flat tinted-glass dropdown backdrop (not a blur shader),
-and the engine default font for now.
+The user supplied `docs/HUD-1d-Godot-spec.md` + `docs/hud-1d-reference.png`
+and asked for the gameplay HUD to be rebuilt against them; **those two files,
+not this one, govern HUD appearance.** Three scoping calls (full replacement
+not side-by-side, flat tinted-glass dropdown not a blur shader, engine default
+font for now) should not be relitigated.
 
-- **`HudPalette`** (`scenes/ui/hud_palette.gd`, `RefCounted` + `class_name`,
-  no autoload) holds the spec's colours as consts plus `health_color()` and
-  `group_digits()`. Written as float literals with the hex in a trailing
-  comment because GDScript `const` cannot fold `Color("rrggbb")`.
-  **Material dot colours are deliberately NOT in it** — they come from
-  `MaterialCatalog.color()` so the HUD can't drift from the cargo/trade/
-  crafting panels. This means the material dots don't match the spec's own
-  listed hexes; that was a conscious trade against the project's
-  "don't duplicate gameplay values" rule.
-- **`VitalsReadout`** (`scenes/ui/vitals_readout.gd`) — top-left HP/EN rows:
-  glow dot + 74×5 rounded bar + number, HP tinted good/warning/critical at
-  >50%/>20%. Drawn in `_draw` rather than built from nested Controls (two
-  dots and two capsules vs. six nodes' worth of styleboxes to keep in sync);
-  only the two numbers are real `Label`s. Rounded bar ends are a rect plus a
-  circle at each end — `draw_rect` has square corners and `draw_line` has no
-  round cap.
-- **`CargoWidget`** (`scenes/ui/cargo_widget.gd`) — bottom-left chip
-  (`used/max` + tweened chevron) toggling a 190px dropdown that grows
-  *upward*. The widget anchors bottom-left sized to the chip, and the
-  dropdown hangs off negative Y from there — no anchor gymnastics. Reads
-  `Inventory` directly (`materials_changed`/`cargo_capacity_changed`), so
-  `hud.gd` doesn't relay cargo at all.
-- **`RadarDisplay`** restyled, not rewritten: cyan palette, faked radial
-  gradient (concentric fills — `draw_circle` takes a flat colour), **one
-  faint range ring per 1000 units** so a radar-range upgrade adds rings
-  rather than rescaling a fixed pair, a trailing sweep wedge, expanding ping
-  pulses (blip `age` doubles as the pulse clock — no per-blip `Tween`), a
-  centre ship dot, and a `RANGE N` label. All existing sweep-reveal/blip-
-  matching logic is untouched.
-- **`hud.gd`/`hud.tscn`** — the old dark background rect and the four stacked
-  `Salvage:`/`Health:`/`Energy:`/`Credits:` labels are gone. HUD now only
-  routes ship signals to `VitalsReadout`, formats credits as `1,240 CR`, and
-  keeps the damage vignette and STORAGE FULL cue. `ScannerDisplay`'s
-  `TOP_MARGIN` moved 10 → 52 so it clears the credits readout.
+Produced `HudPalette` (colours as float consts — GDScript `const` can't fold
+`Color("rrggbb")`; **material dot colours deliberately excluded**, they come
+from `MaterialCatalog.color()` so the HUD can't drift from the cargo/trade/
+crafting panels), `VitalsReadout` (top-left, `_draw`-based dot+bar+number
+rows), `CargoWidget` (bottom-left chip + upward-growing dropdown, subscribes
+to `Inventory` itself so `hud.gd` doesn't relay cargo), and a restyled — not
+rewritten — `RadarDisplay` (cyan, one faint ring per 1000 units of range so an
+upgrade adds rings, trailing sweep wedge, ping pulses clocked off blip `age`).
+`hud.gd`/`hud.tscn` lost the old background rect and four stacked labels.
 
-Verified live via `game_eval` + real screenshots against the reference:
-corner anchoring at 1250×648, credits formatting, HP bar going amber at 45%,
-chip text, and the dropdown opening to 190×130 seated 8px above the chip with
-correct per-material counts and a 180°-rotated chevron.
-
-**The chip's actual mouse click is untested.** Injected mouse events don't
-reach the viewport GUI in this MCP environment (`gui_get_hovered_control()`
-returns null even over the chip) — the same class of limitation as the
-C/K/U keybinds in earlier sessions. The handler was called directly instead,
-and a scene-wide hit-test confirmed nothing occludes the chip rect, but one
-real click is worth doing.
+Verified live against the reference. **The cargo chip's actual mouse click is
+untested** — injected mouse events don't reach the viewport GUI in this MCP
+environment (`gui_get_hovered_control()` returns null even over the chip);
+handlers were called directly and a hit-test confirmed nothing occludes the
+rect, but one real click is worth doing.
 
 ## Earlier session (code review + four-tranche refactor: bugs/perf, DRY, ship.gd decomposition, multiplayer foundations)
 
@@ -1050,16 +1124,19 @@ ship's overall `Health` pool.
   see most recent session) — `Ship.has_radar()` gates the whole display,
   checked live every frame so losing/repairing the module shows/hides the
   HUD immediately.
-- **Scanner** (`scenes/player/scanner.gd` + `scenes/ui/scanner_display.gd`):
-  deliberate long-range pulse (V key), top-right UI, 3600-unit range,
-  closest-5 results. Identifies Planet/Wreck/Ancient Formation individually
-  (`scripts/world/scannable.gd`) and asteroids as count-named clusters
-  ("Asteroid Cluster (6)"). Deliberately excludes the home station and
-  anything radar-only (signals/camps/beacons) — "off the grid" objects only.
-  **Requires a Scanner hardpoint** (magenta hex, `hardpoint_category=
-  "scanner"`, see most recent session) — `toggle_scan()` refuses to start
-  without one, and an in-progress channel self-cancels if the module is
-  lost mid-scan.
+- **Scanner** (`scenes/player/scanner.gd` + `scenes/ui/scanner_display.gd`,
+  `scanner_scope.gd`, `scanner_palette.gd`): a **directional time-of-flight
+  pulse** drawn as the A-scope from `docs/design_handoff_scanner_radar/` (see
+  most recent session — that folder governs its appearance). Aim a beam
+  (6°–120°), fire with V or the PING button, and returns arrive as the
+  wavefront reaches them at 1000 u/s out to `scan_range` 3000, then a 6s
+  cooldown. Still **closest-`max_results` (5)**. Identifies Planet/Wreck/
+  Ancient Formation individually (`scripts/world/scannable.gd`) and asteroids
+  as count-named clusters ("Asteroid Cluster (6)"). Deliberately excludes the
+  home station and anything radar-only (signals/camps/beacons) — "off the
+  grid" objects only. **Requires a Scanner hardpoint** (magenta hex,
+  `hardpoint_category="scanner"`) — `fire_ping()` refuses without one, and a
+  pulse in flight self-cancels if the module or Sensors power is lost.
 - **Points of Interest** (Phase 2.3, `map_tester.tscn`): four hand-placed
   destinations built entirely from existing systems. `scripts/world/poi_camp.gd`
   (Small Pirate Camp, radar `enemy_camp`), `scripts/world/distress_signal.gd`
@@ -1077,9 +1154,11 @@ ship's overall `Health` pool.
 - `VitalsReadout` (top-left) — HP/EN dot+bar+number rows, `_draw`-based.
 - `CargoWidget` (bottom-left) — `used/max` chip, click toggles an
   upward-growing material list. Subscribes to `Inventory` itself.
-- `RadarDisplay` (bottom-right) and `ScannerDisplay` (top-right, below the
-  credits label) — both still gate themselves on `Ship.has_radar()`/
-  `has_scanner()` every frame.
+- `RadarDisplay` (bottom-right) and `ScannerDisplay` (right edge, vertically
+  centred, **only while open** — V opens it, X/Escape closes) — both still
+  gate themselves on `Ship.has_radar()`/`has_scanner()` every frame. The
+  scanner panel covers the radar dial while open; that's the known cost of
+  fitting a 388×568 instrument on a 1152×648 HUD.
 - `CreditsLabel` (top-right), plus the pre-existing damage vignette and
   STORAGE FULL cue.
 - `HudPalette` (`scenes/ui/hud_palette.gd`) is the one place HUD colours
@@ -1343,7 +1422,9 @@ ship's overall `Health` pool.
   only hardpoints with no per-placement spawned node (pure capability flags —
   see the Radar/Scanner decision entry above). Before authoring Sensors
   effects, give `Scanner`/`RadarDisplay` a way to pull their modifiers live at
-  point of use.
+  point of use. `Scanner.scan_range` is the one the scanner handoff names as
+  *the* upgradeable stat, and both the scope's range axis and its gridline
+  spacing already re-derive from it, so raising it needs no UI work.
 
 
 ## Not yet started (no explicit user request yet — don't start without one)
@@ -1460,11 +1541,17 @@ relevant first:
   upgrade list; hooking it up is the agreed next task. Wiring points are in
   the Module upgrades section above. Until it's done, unlocking is a
   resource sink with no gameplay payoff.
-- **Look at the two rebuilt screens and the HUD in motion.** The ship builder,
-  the upgrade screen and the HUD were all verified by `game_eval` plus
-  screenshots, but nobody has clicked through any of them with a real mouse —
-  injected mouse events don't reach the viewport GUI in this MCP environment
-  (see `docs/gotchas.md`). Cheap to confirm, and it gates further UI work.
+- **Look at the rebuilt screens and the HUD in motion.** The ship builder,
+  the upgrade screen, the scanner instrument and the HUD were all verified by
+  `game_eval` plus screenshots, but nobody has clicked or dragged through any
+  of them with a real mouse — injected mouse events don't reach the viewport
+  GUI in this MCP environment (see `docs/gotchas.md`). Cheap to confirm, and
+  it gates further UI work. **The scanner's drag-to-aim beam bar is the most
+  worth trying**, since aiming is the whole interaction.
+- **Decide where the scanner panel lives.** It currently covers the radar dial
+  while open, because a 388×568 instrument doesn't fit a 1152×648 HUD
+  alongside everything else. Options: move it, shrink it, or hide the radar
+  while it's up.
 - **A real human playtest of the refactor** — four tranches reshaped the ship's
   internals and every input path, verified only by scripted checks. Fly it,
   fight something, mine, build a ship, warp. This outranks everything below.
@@ -1495,9 +1582,11 @@ relevant first:
 - Material sell/buy prices and `yield_multiplier` values (Iron/Copper/
   Nickel/Titanium) are first-pass, not tuned against real trading play —
   worth a pass once the base collection rates above feel right.
-- A real playtest pass on Radar (1800) / Scanner (3600) range and Scanner's
-  1.5s channel/5-result-cap feel, now that both have been corrected several
-  times by feel rather than tuned in one deliberate pass.
+- A real playtest pass on Radar (1800) / Scanner (3000) range and the
+  scanner's beam-width / 6s-cooldown / 5-result-cap feel, now that both have
+  been corrected several times by feel rather than tuned in one deliberate
+  pass. The 9s full cycle in particular is the handoff's number, not a played
+  one.
 - Playtest the Tractor Beam's single-target pull speed/range/energy cost
   for real feel, now that it's mounted on a hex rather than always-on —
   same "corrected by feel, not one deliberate pass" caveat as Radar/Scanner.

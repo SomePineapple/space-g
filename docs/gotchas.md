@@ -88,6 +88,18 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   `input_map_manage` can silently overwrite the manual edit. Always use
   `autoload_manage`/`input_map_manage` for anything in `project.godot`;
   direct file edits are fine for `.tscn`/`.gd`.
+- **A new autoload added via `autoload_manage(op="add")` while the editor is
+  running is invisible to the *editor's* GDScript compiler until the editor
+  restarts.** The setting really is written (`project_manage(op="settings_get",
+  key="autoload/<Name>")` returns it) and the **running game is fine** — it
+  reads `project.godot` fresh — but every script referencing the new singleton
+  reports `Compile Error: Identifier not found: <Name>` in the editor's Errors
+  dock, because the autoload's global constant is only registered into the
+  editor's GDScript language at startup (or by the Project Settings > Autoload
+  UI). `scan()`, `reimport()`, and remove-then-re-add through `autoload_manage`
+  all fail to refresh it. Confirmed adding `MarketService`. Don't chase it:
+  verify with `project_run` + `logs_read(source="game")`, and tell the user the
+  red errors clear on the next editor restart.
 - **Editing a `.tres` resource directly on disk while the editor holds a
   stale cached copy of it (e.g. loaded by a script's `load()` call, not open
   as a scene) can get silently reverted.** `project_run(autosave=true)`
