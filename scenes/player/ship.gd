@@ -740,15 +740,18 @@ func _update_engine_particles() -> void:
 		# actually moving forward.
 		var alive: bool = not is_module_destroyed(_thruster_placement_ids[i])
 
-		var particles: GPUParticles2D = _thruster_particles_boost[i]
-		particles.emitting = boosting and alive
-		particles.amount_ratio = 1.0
+		_set_emitting(_thruster_particles_boost[i], boosting and alive)
+		_set_emitting(_thruster_particles_boost_soft[i], boosting and alive)
+		_set_emitting(_thruster_particles_normal[i], thrusting_forward and not boosting and alive)
 
-		var particles_soft: GPUParticles2D = _thruster_particles_boost_soft[i]
-		particles_soft.emitting = boosting and alive
-		particles_soft.amount_ratio = 1.0
 
-		_thruster_particles_normal[i].emitting = thrusting_forward and not boosting and alive
+## GPUParticles2D.set_emitting deliberately never early-outs, so assigning it
+## unconditionally pushes a RenderingServer command per emitter per physics
+## frame — three per thruster, and a large hull has many thrusters. These
+## emitters are not one_shot, so `emitting` is authoritative and safe to test.
+func _set_emitting(particles: GPUParticles2D, should_emit: bool) -> void:
+	if particles.emitting != should_emit:
+		particles.emitting = should_emit
 
 
 # --- Destruction and loot ----------------------------------------------------

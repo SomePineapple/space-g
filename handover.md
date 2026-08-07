@@ -15,7 +15,11 @@ HUD's appearance** — check them before restyling anything under
 `docs/design_handoff_upgrade_tree/` are likewise the source of truth for the
 ship-builder and module-upgrade screens** — read the whole folder (README,
 LAYOUT_SPEC where present, and the JSON) before touching
-`scenes/ui/ship_builder/` or `scenes/ui/upgrades/`.
+`scenes/ui/ship_builder/` or `scenes/ui/upgrades/`. **`docs/performance.md`
+is required reading before writing or changing any `_draw()` loop, starfield
+or particle emitter** — it records why the 2D canvas renderer's lack of
+command batching dominated frame cost, how the starfield and hull renderers
+were rebuilt around that, and how to measure before optimising.
 
 **Read "Most recent session" first.** Sessions older than the two kept in
 full below are compressed to short summaries — full narrative detail (exact
