@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body{margin:0;background:#06080b;}
+  @keyframes marq{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+  @keyframes drift{from{background-position:0 0;}to{background-position:-800px 0;}}
+  @keyframes glowPulse{0%,100%{opacity:0.35;}50%{opacity:0.75;}}
+  @keyframes chatter{0%,70%,100%{opacity:0;transform:translateY(6px);}12%,55%{opacity:1;transform:translateY(0);}}
+  @keyframes flapRow{0%{background:rgba(85,214,232,0.10);}100%{background:transparent;}}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:rgba(85,214,232,0.25);border-radius:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#06080b;font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:56px;box-sizing:border-box;color:#e8edf0;">
+
+<section style="display:flex;flex-direction:column;gap:28px;margin-bottom:80px;">
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="font-family:monospace;font-size:13px;letter-spacing:0.16em;color:#55d6e8;">TURN 2</div>
+    <div style="font-size:26px;font-weight:600;">Exchange Floor, scaled — list + focus</div>
+    <div style="font-size:14px;color:#8b98a4;max-width:900px;">Cards don't scale past about six commodities, so the grid becomes a dense list on the left (14 materials here, categorised — add a hundred and nothing shrinks) with one large focus panel that carries the chart, the trade controls and the economy. Your trades move the price here and bleed into nearby stations, strongest one jump out.</div>
+  </div>
+
+  <div id="2a" style="display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font-family:monospace;font-size:12px;letter-spacing:0.12em;color:#0a0d12;background:#55d6e8;padding:3px 8px;border-radius:3px;">2a</span>
+      <span style="font-size:17px;font-weight:600;">Exchange Floor v2</span>
+      <span style="font-size:13px;color:#8b98a4;">Try the category tabs, pick a material, then buy 100u and watch the nearby markets react.</span>
+    </div>
+
+    <div style="position:relative;width:1600px;height:900px;background:#0a0d12;overflow:hidden;border:1px solid rgba(85,214,232,0.16);">
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse 1100px 700px at 12% 100%,rgba(42,90,100,0.20),transparent 62%),radial-gradient(ellipse 900px 600px at 92% 0%,rgba(60,72,88,0.24),transparent 60%);"></div>
+      <div style="position:absolute;inset:0;opacity:0.5;background-image:repeating-linear-gradient(90deg,rgba(85,214,232,0.05) 0 1px,transparent 1px 96px),repeating-linear-gradient(0deg,rgba(85,214,232,0.04) 0 1px,transparent 1px 96px);"></div>
+
+      <div style="position:relative;display:flex;align-items:center;justify-content:space-between;padding:22px 34px 16px;">
+        <div style="display:flex;align-items:baseline;gap:16px;">
+          <span style="font-size:23px;font-weight:600;">Corporate Station · Exchange</span>
+          <span style="font-family:monospace;font-size:12px;color:#5f6d78;letter-spacing:0.08em;">SECTOR 04 · {{ traderCount }} TRADERS ON DECK</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:26px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+            <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#5f6d78;">CREDITS</span>
+            <span style="font-family:monospace;font-size:22px;color:#f2c14e;">{{ creditsText }}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+            <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#5f6d78;">HOLD {{ holdText }}</span>
+            <div style="width:180px;height:7px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden;"><div style="height:100%;width:{{ holdPct }}%;background:#55d6e8;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:relative;height:38px;border-top:1px solid rgba(85,214,232,0.14);border-bottom:1px solid rgba(85,214,232,0.14);background:rgba(6,9,13,0.7);overflow:hidden;display:flex;align-items:center;">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:120px;background:linear-gradient(rgba(85,214,232,0.10),rgba(85,214,232,0.10)),#0a0d12;border-right:1px solid rgba(85,214,232,0.2);display:flex;align-items:center;justify-content:center;z-index:2;font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">LIVE FEED</div>
+        <div style="display:flex;width:max-content;animation:marq 60s linear infinite;padding-left:130px;">
+          <sc-for list="{{ tickerLoop }}" as="t" hint-placeholder-count="14">
+            <span style="font-family:monospace;font-size:12.5px;color:{{ t.color }};padding:0 26px;white-space:nowrap;">{{ t.text }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="position:relative;display:flex;gap:20px;padding:20px 34px;height:756px;box-sizing:border-box;">
+
+        <!-- commodity list -->
+        <div style="width:440px;flex-shrink:0;display:flex;flex-direction:column;background:rgba(16,20,26,0.6);border:1px solid rgba(255,255,255,0.07);min-height:0;">
+          <div style="display:flex;gap:6px;padding:12px 12px 10px;flex-wrap:wrap;">
+            <sc-for list="{{ catTabs }}" as="c" hint-placeholder-count="5">
+              <button onClick="{{ c.select }}" style="background:{{ c.bg }};color:{{ c.color }};border:none;font-family:monospace;font-size:11px;letter-spacing:0.06em;padding:6px 11px;cursor:pointer;">{{ c.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:1.5fr 0.9fr 0.7fr 0.8fr;gap:0;padding:0 14px 8px;font-family:monospace;font-size:10px;letter-spacing:0.12em;color:#4e5a64;border-bottom:1px solid rgba(255,255,255,0.07);">
+            <span>MATERIAL</span><span>PRICE</span><span>24H</span><span style="text-align:right;">TREND</span>
+          </div>
+          <div style="flex:1;min-height:0;overflow-y:auto;">
+            <sc-for list="{{ listRows }}" as="r" hint-placeholder-count="14">
+              <div onClick="{{ r.select }}" style="display:grid;grid-template-columns:1.5fr 0.9fr 0.7fr 0.8fr;align-items:center;gap:0;padding:0 14px;height:52px;cursor:pointer;background:{{ r.bg }};border-left:2px solid {{ r.edge }};border-bottom:1px solid rgba(255,255,255,0.04);" style-hover="background:rgba(255,255,255,0.05);">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                  <span style="width:8px;height:8px;background:{{ r.color }};display:block;flex-shrink:0;"></span>
+                  <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
+                    <span style="font-size:14px;color:{{ r.nameColor }};">{{ r.name }}</span>
+                    <span style="font-family:monospace;font-size:9.5px;letter-spacing:0.08em;color:#4e5a64;">{{ r.cat }}</span>
+                  </div>
+                  <sc-if value="{{ r.hasHeld }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-family:monospace;font-size:10px;color:#8fe9f2;border:1px solid rgba(85,214,232,0.3);padding:1px 5px;">{{ r.held }}</span>
+                  </sc-if>
+                </div>
+                <span style="font-family:monospace;font-size:14px;color:#dbe3ea;">{{ r.price }}</span>
+                <span style="font-family:monospace;font-size:11.5px;color:{{ r.deltaColor }};">{{ r.deltaText }}</span>
+                <svg viewBox="0 0 56 20" preserveAspectRatio="none" style="width:56px;height:20px;justify-self:end;display:block;">
+                  <path d="{{ r.mini }}" fill="none" stroke="{{ r.color }}" stroke-width="1.3" stroke-linejoin="round"></path>
+                </svg>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);font-family:monospace;font-size:10.5px;color:#5f6d78;">{{ listCount }}</div>
+        </div>
+
+        <!-- focus -->
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
+          <div style="flex:1;min-height:0;background:rgba(16,20,26,0.6);border:1px solid rgba(255,255,255,0.07);border-top:2px solid {{ focus.color }};padding:20px 24px;display:flex;flex-direction:column;box-sizing:border-box;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <span style="font-size:34px;font-weight:600;color:#f0f6f8;line-height:1;">{{ focus.name }}</span>
+                <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#5f6d78;">{{ focus.cat }} · {{ focus.volume }}</span>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:12px;">
+                <span style="font-family:monospace;font-size:44px;color:#f0f6f8;line-height:1;">{{ focus.price }}</span>
+                <span style="font-family:monospace;font-size:13px;color:#5f6d78;">cr/u</span>
+                <span style="font-family:monospace;font-size:17px;color:{{ focus.deltaColor }};">{{ focus.deltaText }}</span>
+              </div>
+            </div>
+
+            <svg viewBox="0 0 900 200" preserveAspectRatio="none" style="width:100%;flex:1;min-height:0;margin:14px 0 10px;display:block;">
+              <path d="{{ focus.area }}" fill="{{ focus.color }}" opacity="0.10"></path>
+              <path d="{{ focus.line }}" fill="none" stroke="{{ focus.color }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>
+            </svg>
+
+            <div style="display:flex;align-items:center;gap:26px;">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.1em;color:#5f6d78;">SUPPLY</span>
+                <div style="width:150px;height:6px;background:rgba(255,255,255,0.07);"><div style="height:100%;width:{{ focus.supply }}%;background:{{ focus.supplyColor }};"></div></div>
+                <span style="font-family:monospace;font-size:11px;color:{{ focus.supplyColor }};">{{ focus.supplyLabel }}</span>
+              </div>
+              <span style="font-family:monospace;font-size:11px;color:#5f6d78;">RANGE {{ focus.lo }}–{{ focus.hi }} cr</span>
+              <span style="font-family:monospace;font-size:11px;color:#5f6d78;">STATION PAYS {{ focus.spread }}</span>
+              <span style="font-family:monospace;font-size:11px;color:{{ focus.pressureColor }};margin-left:auto;">{{ focus.pressureText }}</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(16,20,26,0.75);border:1px solid rgba(255,255,255,0.07);padding:16px 24px;display:flex;align-items:center;gap:22px;">
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#5f6d78;">QUANTITY</span>
+              <div style="display:flex;gap:6px;">
+                <sc-for list="{{ qtyOpts }}" as="q" hint-placeholder-count="4">
+                  <button onClick="{{ q.select }}" style="background:{{ q.bg }};color:{{ q.color }};border:1px solid {{ q.border }};font-family:monospace;font-size:12px;padding:8px 14px;cursor:pointer;">{{ q.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:3px;padding-left:22px;border-left:1px solid rgba(255,255,255,0.08);">
+              <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#5f6d78;">IN HOLD</span>
+              <span style="font-size:14px;color:#c8d3db;">{{ focus.heldText }}</span>
+            </div>
+            <div style="display:flex;gap:10px;margin-left:auto;">
+              <button onClick="{{ focus.buy }}" disabled="{{ focus.buyDisabled }}" style="background:{{ focus.buyBg }};border:1px solid {{ focus.buyBorder }};color:{{ focus.buyColor }};font-family:monospace;font-size:13px;letter-spacing:0.05em;padding:14px 26px;cursor:{{ focus.buyCursor }};">{{ focus.buyLabel }}</button>
+              <button onClick="{{ focus.sell }}" disabled="{{ focus.sellDisabled }}" style="background:{{ focus.sellBg }};border:1px solid {{ focus.sellBorder }};color:{{ focus.sellColor }};font-family:monospace;font-size:13px;letter-spacing:0.05em;padding:14px 26px;cursor:{{ focus.sellCursor }};">{{ focus.sellLabel }}</button>
+            </div>
+          </div>
+
+          <sc-if value="{{ hasImpact }}" hint-placeholder-val="{{ false }}">
+            <div style="background:rgba(85,214,232,0.07);border:1px solid rgba(85,214,232,0.25);padding:12px 20px;display:flex;align-items:center;gap:18px;">
+              <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#8fe9f2;">YOUR IMPACT</span>
+              <span style="font-size:13.5px;color:{{ impactColor }};">{{ impactText }}</span>
+              <span style="font-size:12.5px;color:#8b98a4;margin-left:auto;">spillover {{ impactSpill }}</span>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- right rail -->
+        <div style="width:330px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;min-height:0;">
+          <div style="flex:1.3 1 0;min-height:0;background:rgba(16,20,26,0.7);border:1px solid rgba(255,255,255,0.07);padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow:hidden;">
+            <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;">
+              <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">NEARBY MARKETS · {{ focus.name }}</span>
+              <span style="font-size:11.5px;color:#5f6d78;">Prices react to your trades, strongest within 2 jumps.</span>
+            </div>
+            <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;">
+            <sc-for list="{{ nearby }}" as="n" hint-placeholder-count="5">
+              <div style="display:flex;flex-direction:column;gap:5px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.05);">
+                <div style="display:flex;align-items:baseline;gap:8px;">
+                  <span style="font-size:13.5px;color:#dbe3ea;flex:1;min-width:0;">{{ n.name }}</span>
+                  <span style="font-family:monospace;font-size:13px;color:#c8d3db;">{{ n.price }}</span>
+                  <span style="font-family:monospace;font-size:12px;color:{{ n.diffColor }};width:46px;text-align:right;">{{ n.diffText }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-family:monospace;font-size:10px;color:#4e5a64;">{{ n.jumps }}</span>
+                  <div style="flex:1;height:4px;background:rgba(255,255,255,0.06);"><div style="height:100%;width:{{ n.bar }}%;background:{{ n.diffColor }};opacity:0.6;"></div></div>
+                  <span style="font-family:monospace;font-size:10px;color:{{ n.noteColor }};">{{ n.note }}</span>
+                  <span style="font-family:monospace;font-size:9.5px;color:#8fe9f2;">{{ n.spillText }}</span>
+                </div>
+              </div>
+            </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:1 1 0;min-height:0;background:rgba(16,20,26,0.7);border:1px solid rgba(255,255,255,0.07);padding:14px 16px;display:flex;flex-direction:column;gap:9px;overflow:hidden;">
+            <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;">
+              <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">MARKET FORCES</span>
+              <span style="font-size:11.5px;color:#5f6d78;">{{ forceSummary }}</span>
+            </div>
+            <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:7px;">
+            <sc-for list="{{ forces }}" as="e" hint-placeholder-count="3">
+              <div style="display:flex;align-items:flex-start;gap:9px;opacity:{{ e.opacity }};padding-top:7px;border-top:1px solid rgba(255,255,255,0.05);">
+                <span style="width:7px;height:7px;background:{{ e.matColor }};display:block;flex-shrink:0;margin-top:5px;"></span>
+                <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">
+                  <span style="font-size:12.5px;color:#c8d3db;line-height:1.35;">{{ e.text }}</span>
+                  <span style="font-family:monospace;font-size:9.5px;color:#4e5a64;">{{ e.meta }}</span>
+                </div>
+                <span style="font-family:monospace;font-size:12px;color:{{ e.pctColor }};flex-shrink:0;">{{ e.pctText }}</span>
+              </div>
+            </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:0 0 176px;min-height:0;background:rgba(16,20,26,0.7);border:1px solid rgba(255,255,255,0.07);padding:14px 16px;display:flex;flex-direction:column;gap:9px;overflow:hidden;">
+            <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;flex-shrink:0;">FLOOR ACTIVITY</span>
+            <div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:9px;">
+            <sc-for list="{{ feedShort }}" as="f" hint-placeholder-count="4">
+              <div style="display:flex;gap:9px;align-items:baseline;opacity:{{ f.opacity }};">
+                <span style="font-family:monospace;font-size:10.5px;color:#4e5a64;flex-shrink:0;">{{ f.time }}</span>
+                <span style="font-size:12.5px;color:{{ f.color }};line-height:1.4;">{{ f.text }}</span>
+              </div>
+            </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:absolute;left:0;right:0;bottom:0;height:34px;border-top:1px solid rgba(85,214,232,0.14);background:rgba(6,9,13,0.8);display:flex;align-items:center;gap:28px;padding:0 34px;font-family:monospace;font-size:11.5px;color:#5f6d78;letter-spacing:0.06em;">
+        <span>[↑/↓] SELECT MATERIAL</span><span>[1-4] QUANTITY</span><span>[B] BUY  [S] SELL</span><span>[M] NEARBY MARKETS</span>
+        <span style="margin-left:auto;color:#8fe9f2;">{{ clock }} · NEXT PRICE TICK {{ nextTick }}s</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:28px;opacity:0.75;">
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="font-family:monospace;font-size:13px;letter-spacing:0.16em;color:#55d6e8;">TURN 1 · ARCHIVED</div>
+    <div style="font-size:26px;font-weight:600;">Original exploration — 1a kept, 1b/1c closed</div>
+    <div style="font-size:14px;color:#8b98a4;max-width:820px;">The card grid that 2a grew out of. Kept for reference.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+    <!-- ===================== 1a EXCHANGE FLOOR ===================== -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:baseline;gap:12px;">
+        <span style="font-family:monospace;font-size:12px;letter-spacing:0.12em;color:#0a0d12;background:#55d6e8;padding:3px 8px;border-radius:3px;">1a</span>
+        <span style="font-size:17px;font-weight:600;">Exchange Floor</span>
+        <span style="font-size:13px;color:#8b98a4;">Commodity pit — ticker, sparklines, live dock feed.</span>
+      </div>
+
+      <div style="position:relative;width:1600px;height:900px;background:#0a0d12;overflow:hidden;border:1px solid rgba(85,214,232,0.16);">
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse 1100px 700px at 15% 100%,rgba(42,90,100,0.20),transparent 62%),radial-gradient(ellipse 900px 600px at 92% 0%,rgba(60,72,88,0.24),transparent 60%);"></div>
+        <div style="position:absolute;inset:0;opacity:0.5;background-image:repeating-linear-gradient(90deg,rgba(85,214,232,0.05) 0 1px,transparent 1px 96px),repeating-linear-gradient(0deg,rgba(85,214,232,0.04) 0 1px,transparent 1px 96px);"></div>
+
+        <!-- header -->
+        <div style="position:relative;display:flex;align-items:center;justify-content:space-between;padding:22px 34px 16px;">
+          <div style="display:flex;align-items:baseline;gap:16px;">
+            <span style="font-size:23px;font-weight:600;letter-spacing:0.01em;">Corporate Station · Exchange</span>
+            <span style="font-family:monospace;font-size:12px;color:#5f6d78;letter-spacing:0.08em;">SECTOR 04 · DOCK RING B</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:26px;">
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+              <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#5f6d78;">CREDITS</span>
+              <span style="font-family:monospace;font-size:22px;color:#f2c14e;">{{ creditsText }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span style="font-family:monospace;font-size:10.5px;letter-spacing:0.12em;color:#5f6d78;">HOLD {{ holdText }}</span>
+              <div style="width:180px;height:7px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden;">
+                <div style="height:100%;width:{{ holdPct }}%;background:#55d6e8;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ticker -->
+        <div style="position:relative;height:38px;border-top:1px solid rgba(85,214,232,0.14);border-bottom:1px solid rgba(85,214,232,0.14);background:rgba(6,9,13,0.7);overflow:hidden;display:flex;align-items:center;">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:120px;background:linear-gradient(rgba(85,214,232,0.10),rgba(85,214,232,0.10)),#0a0d12;border-right:1px solid rgba(85,214,232,0.2);display:flex;align-items:center;justify-content:center;z-index:2;font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">LIVE FEED</div>
+          <div style="display:flex;width:max-content;animation:marq 38s linear infinite;padding-left:130px;">
+            <sc-for list="{{ tickerLoop }}" as="t" hint-placeholder-count="12">
+              <span style="font-family:monospace;font-size:12.5px;color:{{ t.color }};padding:0 26px;white-space:nowrap;">{{ t.text }}</span>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- body -->
+        <div style="position:relative;display:flex;gap:22px;padding:22px 34px;height:756px;box-sizing:border-box;">
+          <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:18px;min-width:0;">
+            <sc-for list="{{ market5 }}" as="m" hint-placeholder-count="5">
+              <div style="position:relative;background:linear-gradient(160deg,rgba(43,53,66,0.55),rgba(16,20,26,0.75));border:1px solid rgba(255,255,255,0.07);border-top:2px solid {{ m.color }};display:flex;flex-direction:column;padding:16px 18px;box-sizing:border-box;overflow:hidden;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                  <span style="font-size:17px;font-weight:600;color:#f0f6f8;">{{ m.name }}</span>
+                  <span style="font-family:monospace;font-size:11px;color:#5f6d78;">HELD {{ m.held }}</span>
+                </div>
+                <div style="display:flex;align-items:baseline;gap:10px;margin-top:8px;">
+                  <span style="font-family:monospace;font-size:30px;color:#f0f6f8;line-height:1;">{{ m.price }}</span>
+                  <span style="font-family:monospace;font-size:12px;color:#5f6d78;">cr/u</span>
+                  <span style="font-family:monospace;font-size:13px;color:{{ m.deltaColor }};margin-left:auto;">{{ m.deltaText }}</span>
+                </div>
+                <svg viewBox="0 0 240 54" preserveAspectRatio="none" style="width:100%;height:54px;margin:10px 0 8px;display:block;">
+                  <path d="{{ m.area }}" fill="{{ m.color }}" opacity="0.10"></path>
+                  <path d="{{ m.spark }}" fill="none" stroke="{{ m.color }}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
+                </svg>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#5f6d78;">SUPPLY</span>
+                  <div style="flex:1;height:5px;background:rgba(255,255,255,0.07);overflow:hidden;">
+                    <div style="height:100%;width:{{ m.supply }}%;background:{{ m.supplyColor }};"></div>
+                  </div>
+                  <span style="font-family:monospace;font-size:10.5px;color:{{ m.supplyColor }};">{{ m.supplyLabel }}</span>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:auto;padding-top:14px;">
+                  <button onClick="{{ m.buy }}" style="flex:1;background:rgba(85,214,232,0.10);border:1px solid rgba(85,214,232,0.4);color:#8fe9f2;font-family:monospace;font-size:12.5px;letter-spacing:0.04em;padding:9px 0;cursor:pointer;" style-hover="background:rgba(85,214,232,0.22);">BUY 10 · {{ m.buyCost }}</button>
+                  <button onClick="{{ m.sell }}" style="flex:1;background:rgba(242,193,78,0.08);border:1px solid rgba(242,193,78,0.35);color:#f2c14e;font-family:monospace;font-size:12.5px;letter-spacing:0.04em;padding:9px 0;cursor:pointer;" style-hover="background:rgba(242,193,78,0.2);">SELL 10 · +{{ m.sellGain }}</button>
+                </div>
+              </div>
+            </sc-for>
+
+            <div style="background:rgba(16,20,26,0.6);border:1px dashed rgba(85,214,232,0.22);display:flex;flex-direction:column;padding:16px 18px;box-sizing:border-box;gap:12px;">
+              <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">STATION DEMAND</span>
+              <sc-for list="{{ demands }}" as="d" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                    <span style="font-size:13.5px;color:#c8d3db;">{{ d.name }}</span>
+                    <span style="font-family:monospace;font-size:12px;color:#f2c14e;">{{ d.bonus }}</span>
+                  </div>
+                  <div style="height:4px;background:rgba(255,255,255,0.07);"><div style="height:100%;width:{{ d.pct }}%;background:#f2c14e;opacity:0.75;"></div></div>
+                  <span style="font-family:monospace;font-size:10.5px;color:#5f6d78;">{{ d.note }}</span>
+                </div>
+              </sc-for>
+              <span style="font-size:12px;color:#6d7a86;line-height:1.5;margin-top:auto;">Contracts refresh when a hauler docks. Filling one lifts that commodity's sell price station-wide.</span>
+            </div>
+          </div>
+
+          <!-- right rail -->
+          <div style="width:330px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;">
+            <div style="background:rgba(16,20,26,0.7);border:1px solid rgba(255,255,255,0.07);padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+              <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">DOCK TRAFFIC</span>
+              <div style="display:flex;gap:6px;">
+                <sc-for list="{{ berths }}" as="b" hint-placeholder-count="8">
+                  <div style="flex:1;height:26px;background:{{ b.bg }};border:1px solid {{ b.border }};display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:9.5px;color:{{ b.color }};">{{ b.label }}</div>
+                </sc-for>
+              </div>
+              <span style="font-family:monospace;font-size:10.5px;color:#5f6d78;">{{ berthSummary }}</span>
+            </div>
+
+            <div style="flex:1;min-height:0;background:rgba(16,20,26,0.7);border:1px solid rgba(255,255,255,0.07);padding:14px 16px;display:flex;flex-direction:column;gap:9px;overflow:hidden;">
+              <span style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;">FLOOR ACTIVITY</span>
+              <div style="display:flex;flex-direction:column;gap:9px;overflow:hidden;">
+                <sc-for list="{{ feed }}" as="f" hint-placeholder-count="10">
+                  <div style="display:flex;gap:9px;align-items:baseline;opacity:{{ f.opacity }};">
+                    <span style="font-family:monospace;font-size:10.5px;color:#4e5a64;flex-shrink:0;">{{ f.time }}</span>
+                    <span style="font-size:12.5px;color:{{ f.color }};line-height:1.4;">{{ f.text }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;height:34px;border-top:1px solid rgba(85,214,232,0.14);background:rgba(6,9,13,0.8);display:flex;align-items:center;gap:28px;padding:0 34px;font-family:monospace;font-size:11.5px;color:#5f6d78;letter-spacing:0.06em;">
+          <span>[T] LEAVE MARKET</span><span>[TAB] SWITCH VENDOR</span><span>[SHIFT] TRADE ×100</span>
+          <span style="margin-left:auto;color:#8fe9f2;">{{ clock }} STATION TIME</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const DEFS = [
+  { k: 'iron', name: 'Iron', base: 40, color: '#9fb0bd', vol: 3, cat: 'Ore' },
+  { k: 'copper', name: 'Copper', base: 80, color: '#e08b4c', vol: 6, cat: 'Ore' },
+  { k: 'nickel', name: 'Nickel', base: 100, color: '#a8c0c8', vol: 7, cat: 'Ore' },
+  { k: 'titanium', name: 'Titanium', base: 180, color: '#cbd6e0', vol: 13, cat: 'Ore' },
+  { k: 'glass', name: 'Glass', base: 120, color: '#8fe9f2', vol: 9, cat: 'Refined' },
+  { k: 'cobalt', name: 'Cobalt', base: 210, color: '#7f9fd6', vol: 16, cat: 'Ore' },
+  { k: 'platinum', name: 'Platinum', base: 340, color: '#e2e8ee', vol: 26, cat: 'Ore' },
+  { k: 'silicon', name: 'Silicon', base: 95, color: '#b6c2cc', vol: 8, cat: 'Refined' },
+  { k: 'polymer', name: 'Polymer', base: 150, color: '#c9a3e0', vol: 11, cat: 'Refined' },
+  { k: 'ceramics', name: 'Ceramics', base: 175, color: '#dfc9a8', vol: 12, cat: 'Refined' },
+  { k: 'circuitry', name: 'Circuitry', base: 420, color: '#6fe3a0', vol: 32, cat: 'Tech' },
+  { k: 'coolant', name: 'Coolant', base: 130, color: '#79cfe0', vol: 10, cat: 'Volatile' },
+  { k: 'hydrogen', name: 'Hydrogen', base: 60, color: '#8fb8e8', vol: 5, cat: 'Volatile' },
+  { k: 'deuterium', name: 'Deuterium', base: 280, color: '#f2c14e', vol: 22, cat: 'Volatile' }
+];
+const EVENTS = [
+  { text: 'refinery strike halted {mat} output', dir: 1 },
+  { text: 'dumped a full hold of {mat}', dir: -1 },
+  { text: 'convoy raided — {mat} lost in transit', dir: 1 },
+  { text: 'opened a {mat} surplus auction', dir: -1 },
+  { text: 'signed a fleet contract for {mat}', dir: 1 },
+  { text: 'reopened its {mat} seams', dir: -1 },
+  { text: 'blockade lifted, {mat} flowing again', dir: -1 }
+];
+const STATIONS = [
+  { name: 'Kestrel Yards', jumps: 2, f: 0.93 },
+  { name: 'Halcyon Drift', jumps: 3, f: 1.09 },
+  { name: 'Rell Freeport', jumps: 5, f: 0.84 },
+  { name: 'Ashgrave Hulk', jumps: 1, f: 1.16 },
+  { name: 'Vosk Refinery', jumps: 4, f: 0.98 }
+];
+const NAMES = ['Vela Okonkwo', 'Hauler MERIDIAN', 'Sable Run', 'Tuk & Sons', 'CDF Quartermaster', 'Ashgrave Salvage', 'Nine-Fold Consortium', 'Pilot Ridley'];
+const VERBS = [
+  ['bought 120 Iron at', '#8fe9f2'],
+  ['sold 60 Titanium at', '#f2c14e'],
+  ['docked at berth', '#a8b4bd'],
+  ['filed a demand contract for', '#a8b4bd'],
+  ['undocked, hold full of', '#a8b4bd'],
+  ['sold 200 Glass at', '#f2c14e'],
+  ['bought 90 Copper at', '#8fe9f2']
+];
+
+class Component extends DCLogic {
+  state = { t: 0, credits: 12400, hold: 0, cargo: {}, hist: {}, feed: [], stall: 1, pressure: {}, events: [], qty: 50, sel: 'copper', cat: 'All', impact: null };
+
+  componentDidMount() {
+    const hist = {};
+    DEFS.forEach((d, i) => {
+      const arr = []; let p = d.base;
+      for (let n = 0; n < 26; n++) { p += Math.sin((n + i * 3) * 0.7) * d.vol * 0.5 + (Math.random() - 0.5) * d.vol; arr.push(Math.max(d.base * 0.6, p)); }
+      hist[d.k] = arr;
+    });
+    const feed = []; for (let n = 0; n < 9; n++) feed.push(this.mkLine(n));
+    this.setState({ hist, feed });
+    this.timer = setInterval(() => {
+      this.setState(s => {
+        const hist = {};
+        DEFS.forEach(d => {
+          const arr = s.hist[d.k] ? s.hist[d.k].slice(1) : [d.base];
+          const last = arr[arr.length - 1] || d.base;
+          arr.push(Math.max(d.base * 0.55, Math.min(d.base * 1.6, last + (Math.random() - 0.48) * d.vol)));
+          hist[d.k] = arr;
+        });
+        const feed = [this.mkLine(s.t)].concat(s.feed).slice(0, 9);
+        const pressure = {};
+        Object.keys(s.pressure).forEach(k => { const v = s.pressure[k] * 0.88; if (Math.abs(v) > 0.001) pressure[k] = v; });
+        let events = s.events || [];
+        if (Math.random() < 0.55) {
+          const d = DEFS[Math.floor(Math.random() * DEFS.length)];
+          const st = STATIONS[Math.floor(Math.random() * STATIONS.length)];
+          const kind = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+          const reach = st.jumps <= 2 ? 0.45 : st.jumps <= 3 ? 0.25 : 0.1;
+          const move = kind.dir * (0.02 + Math.random() * 0.05) * reach;
+          pressure[d.k] = (pressure[d.k] || 0) + move;
+          events = [{
+            id: s.t + '-' + d.k, from: st.name, jumps: st.jumps, mat: d.name, matColor: d.color,
+            text: kind.text.replace('{mat}', d.name.toLowerCase()),
+            pct: (move * 100).toFixed(1), dir: kind.dir, age: 0
+          }].concat(events).slice(0, 3);
+        }
+        events = events.map(e => Object.assign({}, e, { age: e.age + 1 }));
+        return { t: s.t + 1, hist, feed, pressure, events };
+      });
+    }, 1800);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  mkLine(n) {
+    const who = NAMES[Math.floor(Math.random() * NAMES.length)];
+    const v = VERBS[Math.floor(Math.random() * VERBS.length)];
+    const tail = v[0].endsWith('at') ? (40 + Math.floor(Math.random() * 160)) + ' cr' : (v[0].endsWith('berth') ? 'B-0' + (1 + Math.floor(Math.random() * 8)) : DEFS[Math.floor(Math.random() * 5)].name);
+    const m = 6 * (n % 60);
+    return { key: n + '-' + Math.random(), time: String(14 + Math.floor(n / 30) % 10).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), text: who + ' ' + v[0] + ' ' + tail, color: v[1] };
+  }
+
+  price(k) {
+    const h = this.state.hist[k]; const d = DEFS.find(x => x.k === k);
+    const raw = h ? h[h.length - 1] : d.base;
+    return Math.round(raw * (1 + (this.state.pressure[k] || 0)));
+  }
+
+  trade(k, dir, n) {
+    const q = n || 10;
+    const p = this.price(k);
+    const d = DEFS.find(x => x.k === k);
+    this.setState(s => {
+      const cargo = Object.assign({}, s.cargo);
+      const have = cargo[k] || 0;
+      const pressure = Object.assign({}, s.pressure);
+      const move = dir * q * 0.0006;
+      const pct = (move * 100).toFixed(1);
+      if (dir > 0) {
+        if (s.credits < p * q || s.hold + q > 160) return {};
+        pressure[k] = (pressure[k] || 0) + move;
+        cargo[k] = have + q;
+        return {
+          cargo, pressure, credits: s.credits - p * q, hold: s.hold + q,
+          impact: { text: 'Your ' + q + 'u buy lifted ' + d.name + ' +' + pct + '% here', spill: '+' + (move * 40).toFixed(1) + '% at Ashgrave Hulk · +' + (move * 28).toFixed(1) + '% at Kestrel Yards', color: '#8fe9f2' }
+        };
+      }
+      if (have < q) return {};
+      pressure[k] = (pressure[k] || 0) + move;
+      cargo[k] = have - q;
+      return {
+        cargo, pressure, credits: s.credits + Math.round(p * 0.5) * q, hold: s.hold - q,
+        impact: { text: 'Your ' + q + 'u sale pushed ' + d.name + ' ' + pct + '% here', spill: (move * 40).toFixed(1) + '% at Ashgrave Hulk · ' + (move * 28).toFixed(1) + '% at Kestrel Yards', color: '#f2c14e' }
+      };
+    });
+  }
+
+  spark(k) {
+    const h = this.state.hist[k] || [];
+    if (!h.length) return { line: '', area: '' };
+    const min = Math.min.apply(null, h), max = Math.max.apply(null, h), rng = (max - min) || 1;
+    const pts = h.map((v, i) => [i * (240 / (h.length - 1)), 50 - ((v - min) / rng) * 44]);
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    return { line, area: line + ' L240 54 L0 54 Z' };
+  }
+
+  renderVals() {
+    const s = this.state, t = s.t;
+    const market = DEFS.map(d => {
+      const h = s.hist[d.k] || [d.base];
+      const p = this.price(d.k);
+      const prev = Math.round(h[Math.max(0, h.length - 9)] || d.base);
+      const delta = p - prev;
+      const sp = this.spark(d.k);
+      const supply = Math.max(6, Math.min(96, Math.round(100 - ((p - d.base * 0.55) / (d.base * 1.05)) * 100)));
+      return {
+        k: d.k, cat: d.cat, name: d.name, color: d.color, price: p, held: (s.cargo[d.k] || 0),
+        deltaText: (delta >= 0 ? '▲ +' : '▼ ') + delta, deltaColor: delta >= 0 ? '#6fe3a0' : '#e07a6a',
+        spark: sp.line, area: sp.area,
+        supply, supplyColor: supply > 66 ? '#6fe3a0' : supply > 33 ? '#f2c14e' : '#e07a6a',
+        supplyLabel: supply > 66 ? 'GLUT' : supply > 33 ? 'STEADY' : 'SCARCE',
+        buyCost: p * 10, sellGain: Math.round(p * 0.5) * 10,
+        buy: () => this.trade(d.k, 1), sell: () => this.trade(d.k, -1)
+      };
+    });
+
+    const tickerBase = market.map(m => ({ text: m.name.toUpperCase() + '  ' + m.price + ' cr  ' + m.deltaText, color: m.deltaColor >= 0 ? m.deltaColor : m.deltaColor }))
+      .concat([{ text: 'CDF CONVOY INBOUND · TITANIUM DEMAND UP', color: '#f2c14e' }, { text: 'BERTH B-06 CLEARED', color: '#5f6d78' }, { text: 'PIRATE ACTIVITY REPORTED · SECTOR 07', color: '#e07a6a' }]);
+
+    const berths = [];
+    for (let i = 0; i < 8; i++) {
+      const busy = ((t + i * 3) % 7) < 4;
+      berths.push({ label: busy ? 'IN USE' : 'FREE', code: 'B-0' + (i + 1), bg: busy ? 'rgba(85,214,232,0.14)' : 'rgba(255,255,255,0.03)', border: busy ? 'rgba(85,214,232,0.4)' : 'rgba(255,255,255,0.1)', color: busy ? '#8fe9f2' : '#4e5a64' });
+    }
+    const busyCount = berths.filter(b => b.label === 'IN USE').length;
+
+    const cats = ['All'].concat(DEFS.map(d => d.cat).filter((c, i, arr) => arr.indexOf(c) === i));
+    const catTabs = cats.map(c => ({
+      label: c === 'All' ? 'All (' + DEFS.length + ')' : c + ' (' + DEFS.filter(d => d.cat === c).length + ')',
+      color: s.cat === c ? '#0a0d12' : '#8b98a4',
+      bg: s.cat === c ? '#55d6e8' : 'rgba(255,255,255,0.04)',
+      select: () => this.setState({ cat: c })
+    }));
+
+    const listRows = market.filter(m => s.cat === 'All' || m.cat === s.cat).map(m => {
+      const h2 = s.hist[m.k] || [];
+      const min = Math.min.apply(null, h2), max = Math.max.apply(null, h2), rng = (max - min) || 1;
+      const mini = h2.slice(-14).map((v, i) => (i ? 'L' : 'M') + (i * (56 / 13)).toFixed(1) + ' ' + (19 - ((v - min) / rng) * 16).toFixed(1)).join(' ');
+      const on = s.sel === m.k;
+      return {
+        name: m.name, cat: m.cat, color: m.color, price: m.price, deltaText: m.deltaText, deltaColor: m.deltaColor,
+        mini, held: m.held ? m.held + 'u' : '', hasHeld: !!m.held,
+        bg: on ? 'rgba(85,214,232,0.10)' : 'transparent',
+        edge: on ? m.color : 'transparent',
+        nameColor: on ? '#f0f6f8' : '#c8d3db',
+        select: () => this.setState({ sel: m.k })
+      };
+    });
+
+    const f = market.find(m => m.k === s.sel) || market[0];
+    const fh = s.hist[f.k] || [f.price];
+    const fmin = Math.min.apply(null, fh), fmax = Math.max.apply(null, fh), frng = (fmax - fmin) || 1;
+    const fpts = fh.map((v, i) => [i * (900 / (fh.length - 1)), 176 - ((v - fmin) / frng) * 150]);
+    const fline = fpts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    const press = s.pressure[f.k] || 0;
+
+    const focus = {
+      name: f.name, cat: f.cat.toUpperCase(), color: f.color, price: f.price, deltaText: f.deltaText, deltaColor: f.deltaColor,
+      held: f.held, heldText: f.held ? f.held + 'u in hold' : 'none in hold',
+      line: fline, area: fline + ' L900 200 L0 200 Z',
+      hi: Math.round(fmax), lo: Math.round(fmin),
+      supply: f.supply, supplyColor: f.supplyColor, supplyLabel: f.supplyLabel,
+      spread: Math.round(f.price * 0.5) + ' cr sell',
+      volume: (300 + ((t * 37 + f.name.length * 91) % 1800)) + 'u traded this shift',
+      buyTotal: (f.price * s.qty).toLocaleString() + ' cr',
+      sellTotal: (Math.round(f.price * 0.5) * s.qty).toLocaleString() + ' cr',
+      buy: () => this.trade(f.k, 1, s.qty),
+      sell: () => this.trade(f.k, -1, s.qty),
+      buyDisabled: !(s.credits >= f.price * s.qty && s.hold + s.qty <= 160),
+      sellDisabled: f.held < s.qty,
+      buyLabel: s.hold + s.qty > 160 ? 'HOLD FULL' : (s.credits < f.price * s.qty ? 'NOT ENOUGH CREDITS' : 'BUY · ' + (f.price * s.qty).toLocaleString() + ' cr'),
+      sellLabel: f.held >= s.qty ? 'SELL · ' + (Math.round(f.price * 0.5) * s.qty).toLocaleString() + ' cr' : 'NOTHING TO SELL',
+      buyBg: s.credits >= f.price * s.qty && s.hold + s.qty <= 160 ? 'rgba(85,214,232,0.12)' : 'rgba(255,255,255,0.03)',
+      buyBorder: s.credits >= f.price * s.qty && s.hold + s.qty <= 160 ? 'rgba(85,214,232,0.45)' : 'rgba(255,255,255,0.1)',
+      buyColor: s.credits >= f.price * s.qty && s.hold + s.qty <= 160 ? '#8fe9f2' : '#4e5a64',
+      buyCursor: s.credits >= f.price * s.qty && s.hold + s.qty <= 160 ? 'pointer' : 'not-allowed',
+      sellBg: f.held >= s.qty ? 'rgba(242,193,78,0.10)' : 'rgba(255,255,255,0.03)',
+      sellBorder: f.held >= s.qty ? 'rgba(242,193,78,0.4)' : 'rgba(255,255,255,0.1)',
+      sellColor: f.held >= s.qty ? '#f2c14e' : '#4e5a64',
+      sellCursor: f.held >= s.qty ? 'pointer' : 'not-allowed',
+      pressureText: press === 0 ? 'Market steady' : (press > 0 ? 'Under upward pressure ' : 'Under downward pressure ') + (press === 0 ? '' : (press > 0 ? '+' : '') + (press * 100).toFixed(1) + '%'),
+      pressureColor: press === 0 ? '#5f6d78' : (press > 0 ? '#8fe9f2' : '#f2c14e'),
+      pressurePct: Math.min(100, Math.abs(press) * 900) 
+    };
+
+    const qtyOpts = [10, 25, 50, 100].map(q => ({
+      label: q + 'u', bg: s.qty === q ? 'rgba(85,214,232,0.2)' : 'rgba(255,255,255,0.04)',
+      color: s.qty === q ? '#8fe9f2' : '#8b98a4', border: s.qty === q ? 'rgba(85,214,232,0.5)' : 'rgba(255,255,255,0.1)',
+      select: () => this.setState({ qty: q })
+    }));
+
+    const nearby = STATIONS.map((st, i) => {
+      const spill = press * (st.jumps <= 2 ? 0.4 : st.jumps <= 3 ? 0.2 : 0.08);
+      const p2 = Math.round(f.price * st.f * (1 + spill));
+      const diff = Math.round(((p2 - f.price) / f.price) * 100);
+      return {
+        name: st.name, jumps: st.jumps + (st.jumps === 1 ? ' jump' : ' jumps'), price: p2 + ' cr',
+        diffText: (diff >= 0 ? '+' : '') + diff + '%',
+        diffColor: diff > 4 ? '#6fe3a0' : diff < -4 ? '#e07a6a' : '#8b98a4',
+        note: diff > 8 ? 'sell here' : diff < -8 ? 'buy here' : 'in line',
+        noteColor: Math.abs(diff) > 8 ? '#f2c14e' : '#4e5a64',
+        spillText: Math.abs(spill) > 0.002 ? 'reacting to you' : '',
+        bar: Math.min(100, 50 + diff * 2)
+      };
+    });
+
+    const forces = (s.events || []).map(e => ({
+      from: e.from, mat: e.mat, matColor: e.matColor,
+      text: e.from + ' ' + e.text,
+      pctText: (e.dir > 0 ? '+' : '') + e.pct + '%',
+      pctColor: e.dir > 0 ? '#6fe3a0' : '#e07a6a',
+      meta: e.jumps + (e.jumps === 1 ? ' jump out' : ' jumps out') + ' · ' + (e.age < 2 ? 'just now' : e.age + ' ticks ago'),
+      opacity: (1 - Math.min(0.55, e.age * 0.09)).toFixed(2),
+      onFocus: e.mat === (market.find(m => m.k === s.sel) || market[0]).name
+    }));
+    const forceSummary = forces.length ? forces.length + ' active price drivers across 5 markets' : 'No outside pressure right now';
+
+    const traders = ['Vela Okonkwo', 'Hauler MERIDIAN', 'Sable Run', 'Nine-Fold Consortium'].map((n, i) => ({
+      name: n, action: ((t + i) % 2 ? 'buying ' : 'selling ') + f.name.toLowerCase(),
+      color: (t + i) % 2 ? '#8fe9f2' : '#f2c14e', dot: (t + i) % 2 ? '#8fe9f2' : '#f2c14e'
+    }));
+
+    const demands = [
+      { name: 'Titanium — fleet refit', bonus: '+35%', pct: 78, note: 'Expires in 2 jumps' },
+      { name: 'Glass — habitat panels', bonus: '+20%', pct: 46, note: 'Open to all traders' },
+      { name: 'Iron — station repair', bonus: '+12%', pct: 24, note: 'Low priority' }
+    ];
+
+    return {
+      market5: market.slice(0, 5),
+      market, demands, berths, catTabs, listRows, focus, qtyOpts, nearby, traders, forces, forceSummary,
+      hasImpact: !!s.impact,
+      impactText: s.impact ? s.impact.text : '',
+      impactSpill: s.impact ? s.impact.spill : '',
+      impactColor: s.impact ? s.impact.color : '#8b98a4',
+      listCount: listRows.length + ' of ' + DEFS.length + ' commodities',
+      tickerLoop: tickerBase.concat(tickerBase),
+      feedShort: s.feed.slice(0, 4).map((f, i) => ({ time: f.time, text: f.text, color: f.color, opacity: (1 - i * 0.14).toFixed(2) })),
+      feed: s.feed.map((f, i) => ({ time: f.time, text: f.text, color: f.color, opacity: (1 - i * 0.085).toFixed(2) })),
+      creditsText: s.credits.toLocaleString() + ' CR',
+      holdText: s.hold + ' / 160',
+      holdPct: Math.round((s.hold / 160) * 100),
+      berthSummary: busyCount + ' of 8 berths occupied · ' + (busyCount * 3 + 4) + ' traders on deck',
+      traderCount: busyCount * 3 + 4,
+      clock: String(14 + (t % 10)).padStart(2, '0') + ':' + String((t * 7) % 60).padStart(2, '0'),
+      nextTick: 1 + (t % 9)
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body{margin:0;background:#0a0d12;}
+  @font-face{font-family:'DevMono';src:local('Menlo');}
+  @keyframes radarSweep{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  @keyframes pingPulse{0%{transform:scale(0.5);opacity:0.9}70%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
+  @keyframes hexGlow{0%,100%{filter:drop-shadow(0 0 1px currentColor)}50%{filter:drop-shadow(0 0 5px currentColor)}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0a0d12;padding:56px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;box-sizing:border-box;">
+  <div style="color:#c7d0d8;font-size:22px;font-weight:600;letter-spacing:0.02em;margin-bottom:4px;">Ship HUD — Health / Energy / Cargo / Radar</div>
+  <div style="color:#6b7784;font-size:13px;margin-bottom:32px;">Bar treatments to compare · click CARGO to expand raw contents · 1d is a fresh minimal-footprint take</div>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;">
+
+    <!-- OPTION A -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:monospace;font-size:11px;color:#0a0d12;background:#55d6e8;padding:2px 8px;border-radius:2px;font-weight:700;">1a</span>
+        <span style="color:#8fa0ab;font-size:13px;font-family:monospace;">Segmented Cell (battery)</span>
+      </div>
+      <div style="position:relative;width:1150px;height:650px;border-radius:6px;overflow:hidden;background:#000;">
+        <img src="uploads/pasted-1786013589759-0.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;">
+        <div style="position:absolute;left:0;top:0;width:820px;height:140px;background:#0a0d12;"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:60px;background:#12161c;border-top:1px solid rgba(85,214,232,0.3);display:flex;align-items:center;gap:24px;padding:0 24px;box-sizing:border-box;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">HP</span>
+            <div style="display:flex;gap:2px;width:110px;height:10px;">
+              <sc-for list="{{ healthSegments }}" as="seg" hint-placeholder-count="12">
+                <div style="flex:1;height:100%;border-radius:1px;background:{{ seg.bg }};"></div>
+              </sc-for>
+            </div>
+            <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ healthCurrent }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">EN</span>
+            <div style="display:flex;gap:2px;width:110px;height:10px;">
+              <sc-for list="{{ energySegments }}" as="seg" hint-placeholder-count="12">
+                <div style="flex:1;height:100%;border-radius:1px;background:{{ seg.bg }};"></div>
+              </sc-for>
+            </div>
+            <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ energyCurrent }}</span>
+          </div>
+          <div style="width:1px;height:24px;background:rgba(255,255,255,0.1);"></div>
+          <div style="position:relative;">
+            <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onClick="{{ toggleA }}">
+              <div style="width:14px;height:14px;background:rgba(85,214,232,0.12);border:1px solid rgba(85,214,232,0.4);"></div>
+              <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">CARGO</span>
+              <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ cargoCurrent }}<span style="color:#55d6e8;opacity:0.6;"> / {{ cargoMax }}</span></span>
+              <span style="display:inline-block;transition:transform 0.15s;transform:{{ chevronA }};width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #7c8b99;"></span>
+            </div>
+            <sc-if value="{{ cargoOpenA }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;bottom:calc(100% + 10px);left:0;width:200px;background:#171d24;border:1px solid rgba(85,214,232,0.3);padding:10px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 -8px 20px rgba(0,0,0,0.5);">
+                <sc-for list="{{ materials }}" as="m" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:monospace;font-size:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:{{ m.color }};display:inline-block;"></span><span style="color:#a8b4bd;">{{ m.name }}</span></div>
+                    <span style="color:#e8edf0;">{{ m.qty }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <div style="margin-left:auto;font-family:monospace;font-size:11px;color:#8fe9f2;letter-spacing:0.06em;">1,240 CR</div>
+        </div>
+
+        <div style="position:absolute;right:0;bottom:0;width:260px;height:230px;background:#0a0d12;"></div>
+        <div style="position:absolute;right:24px;bottom:76px;display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <div style="position:relative;width:150px;height:150px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(42,143,163,0.16),rgba(10,13,18,0.6) 70%,transparent 100%);"></div>
+            <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(85,214,232,0.35);"></div>
+            <sc-for list="{{ radarRings }}" as="ring" hint-placeholder-count="2">
+              <div style="position:absolute;left:{{ ring.pos }};top:{{ ring.pos }};right:{{ ring.pos }};bottom:{{ ring.pos }};border-radius:50%;border:1px solid rgba(85,214,232,0.18);"></div>
+            </sc-for>
+            <div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;animation:radarSweep 4s linear infinite;">
+              <div style="position:absolute;left:50%;top:50%;width:75px;height:75px;background:conic-gradient(from 0deg,rgba(85,214,232,0.45),transparent 45deg);"></div>
+            </div>
+            <sc-for list="{{ pings }}" as="p" hint-placeholder-count="3">
+              <div style="position:absolute;left:{{ p.xPct }};top:{{ p.yPct }};width:6px;height:6px;">
+                <div style="position:absolute;inset:0;border-radius:50%;background:{{ p.color }};box-shadow:0 0 6px {{ p.color }};"></div>
+                <div style="position:absolute;inset:0;border-radius:50%;border:1px solid {{ p.color }};animation:pingPulse 2s ease-out infinite;"></div>
+              </div>
+            </sc-for>
+            <div style="position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#8fe9f2;"></div>
+          </div>
+          <div style="font-family:monospace;font-size:11px;letter-spacing:0.1em;color:#55d6e8;">RANGE {{ radarRange }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPTION C -->
+    <div id="1c" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:monospace;font-size:11px;color:#0a0d12;background:#55d6e8;padding:2px 8px;border-radius:2px;font-weight:700;">1c</span>
+        <span style="color:#8fa0ab;font-size:13px;font-family:monospace;">Chamfered Bar (minimal)</span>
+      </div>
+      <div style="position:relative;width:1150px;height:650px;border-radius:6px;overflow:hidden;background:#000;">
+        <img src="uploads/pasted-1786013589759-0.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;">
+        <div style="position:absolute;left:0;top:0;width:820px;height:140px;background:#0a0d12;"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:60px;background:#12161c;border-top:1px solid rgba(85,214,232,0.3);display:flex;align-items:center;gap:24px;padding:0 24px;box-sizing:border-box;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:12px;height:12px;border-radius:50%;border:2px solid {{ healthColor }};position:relative;flex-shrink:0;"><span style="position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:{{ healthColor }};"></span></div>
+            <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">HP</span>
+            <div style="width:100px;height:12px;background:rgba(255,255,255,0.06);clip-path:polygon(6px 0,100% 0,100% 100%,6px 100%,0 50%);position:relative;overflow:hidden;background-image:repeating-linear-gradient(90deg,transparent,transparent 9%,rgba(10,13,18,0.5) 9%,rgba(10,13,18,0.5) 10%);">
+              <div style="position:absolute;inset:0;width:{{ healthPctStr }};background:{{ healthColor }};clip-path:polygon(6px 0,100% 0,100% 100%,6px 100%,0 50%);"></div>
+            </div>
+            <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ healthCurrent }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:12px;height:12px;border-radius:50%;border:2px solid #55d6e8;position:relative;flex-shrink:0;"><span style="position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:#55d6e8;"></span></div>
+            <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">EN</span>
+            <div style="width:100px;height:12px;background:rgba(255,255,255,0.06);clip-path:polygon(6px 0,100% 0,100% 100%,6px 100%,0 50%);position:relative;overflow:hidden;background-image:repeating-linear-gradient(90deg,transparent,transparent 9%,rgba(10,13,18,0.5) 9%,rgba(10,13,18,0.5) 10%);">
+              <div style="position:absolute;inset:0;width:{{ energyPctStr }};background:#55d6e8;clip-path:polygon(6px 0,100% 0,100% 100%,6px 100%,0 50%);"></div>
+            </div>
+            <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ energyCurrent }}</span>
+          </div>
+          <div style="width:1px;height:24px;background:rgba(255,255,255,0.1);"></div>
+          <div style="position:relative;">
+            <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onClick="{{ toggleC }}">
+              <div style="width:14px;height:14px;background:rgba(85,214,232,0.12);border:1px solid rgba(85,214,232,0.4);"></div>
+              <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#7c8b99;">CARGO</span>
+              <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ cargoCurrent }}<span style="color:#55d6e8;opacity:0.6;"> / {{ cargoMax }}</span></span>
+              <span style="display:inline-block;transition:transform 0.15s;transform:{{ chevronC }};width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #7c8b99;"></span>
+            </div>
+            <sc-if value="{{ cargoOpenC }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;bottom:calc(100% + 10px);left:0;width:200px;background:#171d24;border:1px solid rgba(85,214,232,0.3);padding:10px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 -8px 20px rgba(0,0,0,0.5);">
+                <sc-for list="{{ materials }}" as="m" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:monospace;font-size:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:{{ m.color }};display:inline-block;"></span><span style="color:#a8b4bd;">{{ m.name }}</span></div>
+                    <span style="color:#e8edf0;">{{ m.qty }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <div style="margin-left:auto;font-family:monospace;font-size:11px;color:#8fe9f2;letter-spacing:0.06em;">1,240 CR</div>
+        </div>
+
+        <div style="position:absolute;right:0;bottom:0;width:260px;height:230px;background:#0a0d12;"></div>
+        <div style="position:absolute;right:24px;bottom:76px;display:flex;flex-direction:column;align-items:center;gap:6px;">
+          <div style="position:relative;width:150px;height:150px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(42,143,163,0.16),rgba(10,13,18,0.6) 70%,transparent 100%);"></div>
+            <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(85,214,232,0.35);"></div>
+            <sc-for list="{{ radarRings }}" as="ring" hint-placeholder-count="2">
+              <div style="position:absolute;left:{{ ring.pos }};top:{{ ring.pos }};right:{{ ring.pos }};bottom:{{ ring.pos }};border-radius:50%;border:1px solid rgba(85,214,232,0.18);"></div>
+            </sc-for>
+            <div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;animation:radarSweep 4s linear infinite;">
+              <div style="position:absolute;left:50%;top:50%;width:75px;height:75px;background:conic-gradient(from 0deg,rgba(85,214,232,0.45),transparent 45deg);"></div>
+            </div>
+            <sc-for list="{{ pings }}" as="p" hint-placeholder-count="3">
+              <div style="position:absolute;left:{{ p.xPct }};top:{{ p.yPct }};width:6px;height:6px;">
+                <div style="position:absolute;inset:0;border-radius:50%;background:{{ p.color }};box-shadow:0 0 6px {{ p.color }};"></div>
+                <div style="position:absolute;inset:0;border-radius:50%;border:1px solid {{ p.color }};animation:pingPulse 2s ease-out infinite;"></div>
+              </div>
+            </sc-for>
+            <div style="position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#8fe9f2;"></div>
+          </div>
+          <div style="font-family:monospace;font-size:11px;letter-spacing:0.1em;color:#55d6e8;">RANGE {{ radarRange }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPTION D -->
+    <div id="1d" style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:monospace;font-size:11px;color:#0a0d12;background:#55d6e8;padding:2px 8px;border-radius:2px;font-weight:700;">1d</span>
+        <span style="color:#8fa0ab;font-size:13px;font-family:monospace;">Minimal footprint, corner-anchored, see-through cargo drop</span>
+      </div>
+      <div style="position:relative;width:1150px;height:650px;border-radius:6px;overflow:hidden;background:#000;">
+        <img src="uploads/pasted-1786013589759-0.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;">
+        <div style="position:absolute;left:0;top:0;width:820px;height:140px;background:#0a0d12;"></div>
+        <div style="position:absolute;right:24px;top:20px;font-family:monospace;font-size:11px;color:#8fe9f2;letter-spacing:0.06em;">1,240 CR</div>
+
+        <div style="position:absolute;left:24px;top:24px;display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:{{ healthColor }};box-shadow:0 0 5px {{ healthColor }};display:inline-block;"></span>
+            <div style="width:74px;height:5px;border-radius:3px;background:rgba(255,255,255,0.15);overflow:hidden;"><div style="height:100%;width:{{ healthPctStr }};background:{{ healthColor }};"></div></div>
+            <span style="font-family:monospace;font-size:10px;color:#e8edf0;">{{ healthCurrent }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#55d6e8;box-shadow:0 0 5px #55d6e8;display:inline-block;"></span>
+            <div style="width:74px;height:5px;border-radius:3px;background:rgba(255,255,255,0.15);overflow:hidden;"><div style="height:100%;width:{{ energyPctStr }};background:#55d6e8;"></div></div>
+            <span style="font-family:monospace;font-size:10px;color:#e8edf0;">{{ energyCurrent }}</span>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:24px;bottom:24px;">
+          <div style="position:relative;">
+            <div style="display:flex;align-items:center;gap:7px;cursor:pointer;background:rgba(23,29,36,0.55);backdrop-filter:blur(6px);border:1px solid rgba(85,214,232,0.3);padding:6px 10px;border-radius:3px;" onClick="{{ toggleD }}">
+              <div style="width:11px;height:11px;background:rgba(85,214,232,0.15);border:1px solid rgba(85,214,232,0.45);flex-shrink:0;"></div>
+              <span style="font-family:monospace;font-size:11px;color:#e8edf0;">{{ cargoCurrent }}<span style="color:#55d6e8;opacity:0.6;">/{{ cargoMax }}</span></span>
+              <span style="display:inline-block;transition:transform 0.15s;transform:{{ chevronD }};width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #7c8b99;"></span>
+            </div>
+            <sc-if value="{{ cargoOpenD }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;bottom:calc(100% + 8px);left:0;width:190px;background:rgba(15,19,24,0.4);backdrop-filter:blur(16px);border:1px solid rgba(85,214,232,0.25);border-radius:4px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 -8px 24px rgba(0,0,0,0.35);">
+                <sc-for list="{{ materials }}" as="m" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:monospace;font-size:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:{{ m.color }};display:inline-block;"></span><span style="color:#c7d0d8;">{{ m.name }}</span></div>
+                    <span style="color:#f2f5f6;">{{ m.qty }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div style="position:absolute;right:0;bottom:0;width:260px;height:230px;background:#0a0d12;"></div>
+        <div style="position:absolute;right:24px;bottom:24px;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="position:relative;width:110px;height:110px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(42,143,163,0.14),rgba(10,13,18,0.45) 70%,transparent 100%);"></div>
+            <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(85,214,232,0.3);"></div>
+            <sc-for list="{{ radarRings }}" as="ring" hint-placeholder-count="1">
+              <div style="position:absolute;left:{{ ring.posD }};top:{{ ring.posD }};right:{{ ring.posD }};bottom:{{ ring.posD }};border-radius:50%;border:1px solid rgba(85,214,232,0.16);"></div>
+            </sc-for>
+            <div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;animation:radarSweep 4s linear infinite;">
+              <div style="position:absolute;left:50%;top:50%;width:55px;height:55px;background:conic-gradient(from 0deg,rgba(85,214,232,0.45),transparent 45deg);"></div>
+            </div>
+            <sc-for list="{{ pings }}" as="p" hint-placeholder-count="3">
+              <div style="position:absolute;left:{{ p.xPct }};top:{{ p.yPct }};width:5px;height:5px;">
+                <div style="position:absolute;inset:0;border-radius:50%;background:{{ p.color }};box-shadow:0 0 5px {{ p.color }};"></div>
+                <div style="position:absolute;inset:0;border-radius:50%;border:1px solid {{ p.color }};animation:pingPulse 2s ease-out infinite;"></div>
+              </div>
+            </sc-for>
+            <div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#8fe9f2;"></div>
+          </div>
+          <div style="font-family:monospace;font-size:10px;letter-spacing:0.08em;color:#55d6e8;opacity:0.85;">RANGE {{ radarRange }}</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;radarRange&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1800,&quot;min&quot;:500,&quot;max&quot;:5000,&quot;step&quot;:100,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Radar&quot;}}">
+class Component extends DCLogic {
+  state = { cargoOpen: { a: true, c: false, d: true } };
+
+  colorForPct(pct) {
+    if (pct > 0.5) return '#7ce8b8';
+    if (pct > 0.2) return '#f2c14e';
+    return '#e2684a';
+  }
+
+  makeSegments(pct, count, color) {
+    const filledCount = Math.round(pct * count);
+    return Array.from({ length: count }, (_, i) => ({
+      bg: i < filledCount ? color : 'rgba(255,255,255,0.07)'
+    }));
+  }
+
+  toggle(key) {
+    this.setState(s => ({ cargoOpen: { ...s.cargoOpen, [key]: !s.cargoOpen[key] } }));
+  }
+
+  renderVals() {
+    const healthCurrent = 548, healthMax = 1305;
+    const energyCurrent = 18, energyMax = 50;
+    const cargoCurrent = 59, cargoMax = 160;
+    const healthPct = healthCurrent / healthMax;
+    const energyPct = energyCurrent / energyMax;
+    const cargoPct = cargoCurrent / cargoMax;
+    const healthColor = this.colorForPct(healthPct);
+    const energyColor = '#55d6e8';
+
+    const materials = [
+      { name: 'Iron', qty: 34, color: '#8a97a3' },
+      { name: 'Copper', qty: 12, color: '#c97a4a' },
+      { name: 'Nickel', qty: 5, color: '#c9d3d8' },
+      { name: 'Titanium', qty: 0, color: '#5f8fa3' },
+      { name: 'Glass', qty: 8, color: '#8fe9f2' }
+    ];
+    const pings = [
+      { xPct: '58%', yPct: '22%', color: '#f2c14e' },
+      { xPct: '78%', yPct: '62%', color: '#55d6e8' },
+      { xPct: '25%', yPct: '48%', color: '#e2684a' }
+    ];
+
+    const radarRange = this.props?.radarRange ?? 1800;
+    const dialSize = 150, dialSizeD = 110, step = 1000, rings = [];
+    for (let v = step; v < radarRange; v += step) {
+      const frac = v / radarRange;
+      rings.push({
+        pos: ((dialSize / 2) * (1 - frac)) + 'px',
+        posD: ((dialSizeD / 2) * (1 - frac)) + 'px'
+      });
+    }
+
+    const co = this.state.cargoOpen;
+    return {
+      radarRange, radarRings: rings,
+      healthCurrent, healthMax, energyCurrent, energyMax, cargoCurrent, cargoMax,
+      healthColor,
+      healthPctStr: (healthPct * 100) + '%',
+      energyPctStr: (energyPct * 100) + '%',
+      cargoPctStr: (cargoPct * 100) + '%',
+      healthSegments: this.makeSegments(healthPct, 12, healthColor),
+      energySegments: this.makeSegments(energyPct, 12, energyColor),
+      materials, pings,
+      cargoOpenA: co.a, cargoOpenC: co.c, cargoOpenD: co.d,
+      chevronA: co.a ? 'rotate(180deg)' : 'rotate(0deg)',
+      chevronC: co.c ? 'rotate(180deg)' : 'rotate(0deg)',
+      chevronD: co.d ? 'rotate(180deg)' : 'rotate(0deg)',
+      toggleA: () => this.toggle('a'),
+      toggleC: () => this.toggle('c'),
+      toggleD: () => this.toggle('d')
+    };
+  }
+}
+</script>
+</body>
+</html>

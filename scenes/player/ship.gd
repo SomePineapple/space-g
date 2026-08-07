@@ -638,7 +638,7 @@ func _consume_intent() -> void:
 		_hardpoints.fire_winch()
 	_hardpoints.set_winch_reel_input(_pending_intent.winch_reel)
 	if _pending_intent.toggle_scan:
-		_scanner.toggle_scan()
+		_scanner.fire_ping()
 	for system_id in _pending_intent.toggled_systems:
 		_systems.toggle(system_id)
 

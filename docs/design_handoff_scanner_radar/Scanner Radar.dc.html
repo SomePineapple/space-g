@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body{margin:0;background:#0a0d12;}
+  @keyframes blipIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:14px;padding:48px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0a0d12;min-height:100vh;box-sizing:border-box;">
+  <div style="color:#c7d0d8;font-size:22px;font-weight:600;letter-spacing:0.02em;">Scanner — directional radar concepts</div>
+  <div style="color:#6b7784;font-size:13px;max-width:820px;line-height:1.5;">Replaces the loading-bar + top-5 list. Returns arrive as the wavefront reaches each object (1000 units ≈ 1s), blips persist until the next scan, and the emitter needs a cooldown before it can fire again. Range is the upgradeable stat.</div>
+
+  <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:10px;align-items:flex-start;">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#55d6e8;padding:2px 7px;border-radius:3px;">1A</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Directional cone</div>
+      </div>
+      <div style="position:relative;width:360px;height:360px;background:radial-gradient(circle at 50% 50%,rgba(42,143,163,0.10),rgba(10,13,18,0) 72%);border:1px solid rgba(85,214,232,0.14);border-radius:8px;">
+        <canvas ref="{{ polarRef }}" style="width:360px;height:360px;display:block;cursor:crosshair;touch-action:none;"></canvas>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div onClick="{{ firePolar }}" style="font-family:monospace;font-size:11px;letter-spacing:0.14em;color:{{ polarBtnFg }};background:{{ polarBtnBg }};padding:7px 14px;border-radius:3px;cursor:pointer;user-select:none;min-width:96px;text-align:center;">{{ polarBtn }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#55d6e8;">ARC {{ arcLabel }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#6b7784;">HDG {{ hdgLabel }}</div>
+      </div>
+      <div style="width:360px;min-height:96px;border-top:1px solid rgba(85,214,232,0.12);padding-top:10px;display:flex;flex-direction:column;gap:5px;">
+        <sc-for list="{{ polarHits }}" as="hit" hint-placeholder-count="3">
+          <div style="display:flex;gap:10px;align-items:baseline;font-family:monospace;font-size:12px;color:#7ee0a0;animation:blipIn 220ms ease-out;">
+            <span style="width:12px;color:#3f8f68;">{{ hit.n }}</span>
+            <span style="flex:1;">{{ hit.name }}</span>
+            <span style="color:#55d6e8;">{{ hit.dist }}</span>
+            <span style="color:#4c5a66;">{{ hit.bearing }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ polarIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:monospace;font-size:12px;color:#3d4750;">{{ polarStatus }}</div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#f2c14e;padding:2px 7px;border-radius:3px;">1B</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Coordinate grid</div>
+      </div>
+      <div style="position:relative;width:360px;height:360px;background:rgba(20,26,33,0.5);border:1px solid rgba(242,193,78,0.16);border-radius:8px;">
+        <canvas ref="{{ gridRef }}" style="width:360px;height:360px;display:block;cursor:crosshair;touch-action:none;"></canvas>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div onClick="{{ fireGrid }}" style="font-family:monospace;font-size:11px;letter-spacing:0.14em;color:{{ gridBtnFg }};background:{{ gridBtnBg }};padding:7px 14px;border-radius:3px;cursor:pointer;user-select:none;min-width:96px;text-align:center;">{{ gridBtn }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#6b7784;">OMNI · 3000u</div>
+      </div>
+      <div style="width:360px;min-height:96px;border-top:1px solid rgba(242,193,78,0.12);padding-top:10px;display:flex;flex-direction:column;gap:5px;">
+        <sc-for list="{{ gridHits }}" as="hit" hint-placeholder-count="3">
+          <div style="display:flex;gap:10px;align-items:baseline;font-family:monospace;font-size:12px;color:#7ee0a0;animation:blipIn 220ms ease-out;">
+            <span style="width:26px;color:#f2c14e;">{{ hit.cell }}</span>
+            <span style="flex:1;">{{ hit.name }}</span>
+            <span style="color:#55d6e8;">{{ hit.dist }}</span>
+            <span style="color:#4c5a66;">±{{ hit.err }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ gridIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:monospace;font-size:12px;color:#3d4750;">{{ gridStatus }}</div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#c98fe8;padding:2px 7px;border-radius:3px;">1C</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Bearing strip (B-scope)</div>
+      </div>
+      <div style="position:relative;width:360px;height:360px;background:rgba(20,26,33,0.5);border:1px solid rgba(201,143,232,0.16);border-radius:8px;">
+        <canvas ref="{{ bscopeRef }}" style="width:360px;height:360px;display:block;cursor:ew-resize;touch-action:none;"></canvas>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div onClick="{{ fireBscope }}" style="font-family:monospace;font-size:11px;letter-spacing:0.14em;color:{{ bsBtnFg }};background:{{ bsBtnBg }};padding:7px 14px;border-radius:3px;cursor:pointer;user-select:none;min-width:96px;text-align:center;">{{ bsBtn }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#c98fe8;">SECTOR {{ bsArcLabel }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#6b7784;">HDG {{ bsHdgLabel }}</div>
+      </div>
+      <div style="width:360px;min-height:96px;border-top:1px solid rgba(201,143,232,0.12);padding-top:10px;display:flex;flex-direction:column;gap:5px;">
+        <sc-for list="{{ bsHits }}" as="hit" hint-placeholder-count="3">
+          <div style="display:flex;gap:10px;align-items:baseline;font-family:monospace;font-size:12px;color:#7ee0a0;animation:blipIn 220ms ease-out;">
+            <span style="width:12px;color:#3f8f68;">{{ hit.n }}</span>
+            <span style="flex:1;">{{ hit.name }}</span>
+            <span style="color:#55d6e8;">{{ hit.dist }}</span>
+            <span style="color:#4c5a66;">{{ hit.bearing }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ bsIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:monospace;font-size:12px;color:#3d4750;">{{ bsStatus }}</div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div id="1d" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#7ee0a0;padding:2px 7px;border-radius:3px;">1D</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Return trace (A-scope)</div>
+      </div>
+      <div style="position:relative;width:360px;height:360px;background:rgba(16,22,19,0.6);border:1px solid rgba(126,224,160,0.16);border-radius:8px;">
+        <canvas ref="{{ scopeRef }}" style="width:360px;height:360px;display:block;cursor:ew-resize;touch-action:none;"></canvas>
+        <div onClick="{{ toggleScHelp }}" style="position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;border:1px solid rgba(126,224,160,0.4);color:#7ee0a0;font-family:monospace;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;" style-hover="background:rgba(126,224,160,0.15);">?</div>
+        <sc-if value="{{ scHelp }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;background:rgba(8,14,11,0.94);border-radius:8px;padding:18px;box-sizing:border-box;display:flex;flex-direction:column;gap:11px;font-family:monospace;font-size:11px;line-height:1.5;color:#9fb3a8;">
+            <div style="color:#7ee0a0;letter-spacing:0.12em;">SCOPE — HOW TO READ</div>
+            <div><span style="color:#f2c14e;">BEAM BAR</span> — drag the band to aim, drag the amber arrows to narrow the beam. Narrow beam = higher gain = cleaner trace, further reach.</div>
+            <div><span style="color:#e0ffec;">TRANSMIT LINE</span> — the bright vertical line walking right is the pulse travelling out. 1000 units per second.</div>
+            <div><span style="color:#7ee0a0;">PEAKS</span> — a return. Taller = stronger signal (wrecks read loudest, rock quietest). Peaks smear wider the further out they sit, so distant contacts are vague.</div>
+            <div><span style="color:#6b7784;">NOISE FLOOR</span> — the jitter beneath. It grows with distance; anything not clearing it is not a contact.</div>
+            <div style="margin-top:auto;color:#4c5a66;">Horizontal axis is RANGE, not position. Bearing comes from where you pointed the beam.</div>
+            <div onClick="{{ toggleScHelp }}" style="color:#0a0d12;background:#7ee0a0;padding:6px 12px;border-radius:3px;align-self:flex-start;cursor:pointer;letter-spacing:0.12em;">CLOSE</div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div onClick="{{ fireScope }}" style="font-family:monospace;font-size:11px;letter-spacing:0.14em;color:{{ scBtnFg }};background:{{ scBtnBg }};padding:7px 14px;border-radius:3px;cursor:pointer;user-select:none;min-width:96px;text-align:center;">{{ scBtn }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#7ee0a0;">BEAM {{ scArcLabel }}</div>
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.08em;color:#6b7784;">GAIN {{ scGain }}</div>
+      </div>
+      <div style="width:360px;min-height:96px;border-top:1px solid rgba(126,224,160,0.12);padding-top:10px;display:flex;flex-direction:column;gap:5px;">
+        <sc-for list="{{ scHits }}" as="hit" hint-placeholder-count="3">
+          <div style="display:flex;gap:10px;align-items:baseline;font-family:monospace;font-size:12px;color:#7ee0a0;animation:blipIn 220ms ease-out;">
+            <span style="width:12px;color:#3f8f68;">{{ hit.n }}</span>
+            <span style="flex:1;">{{ hit.name }}</span>
+            <span style="color:#55d6e8;">{{ hit.dist }}</span>
+            <span style="color:#4c5a66;">{{ hit.bearing }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ scIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:monospace;font-size:12px;color:#3d4750;">{{ scStatus }}</div>
+        </sc-if>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1240,&quot;height&quot;:660}}">
+const OBJECTS = [
+  { name: 'Asteroid',  a: -34, d: 780,  t: 'rock' },
+  { name: 'Asteroid',  a: -12, d: 1180, t: 'rock' },
+  { name: 'Ice chunk', a: -50, d: 1520, t: 'ice' },
+  { name: 'Asteroid',  a: -26, d: 2050, t: 'rock' },
+  { name: 'Wreck',     a: -44, d: 2480, t: 'wreck' },
+  { name: 'Asteroid',  a: 62,  d: 940,  t: 'rock' },
+  { name: 'Ice chunk', a: 128, d: 1660, t: 'ice' },
+  { name: 'Asteroid',  a: 168, d: 2260, t: 'rock' },
+  { name: 'Derelict',  a: -142,d: 1340, t: 'wreck' },
+  { name: 'Asteroid',  a: -96, d: 2700, t: 'rock' }
+];
+const MAXR = 3000, SPEED = 1000, COOLDOWN = 6000;
+const TCOL = { rock: '#7ee0a0', ice: '#8fe9f2', wreck: '#f2c14e' };
+const rad = d => d * Math.PI / 180;
+const norm = d => { while (d > 180) d -= 360; while (d < -180) d += 360; return d; };
+
+class Component extends DCLogic {
+  state = {
+    aim: -30, width: 46, bsAim: -30, bsWidth: 70,
+    polarHits: [], gridHits: [], bsHits: [],
+    polarStatus: 'IDLE — drag arrows to aim, then SCAN',
+    gridStatus: 'IDLE — press PULSE',
+    bsStatus: 'IDLE — drag sector edges, then SWEEP',
+    scAim: -30, scWidth: 40, scHits: [],
+    scStatus: 'IDLE — drag the beam bar, then PING',
+    cdP: 0, cdG: 0, cdB: 0, cdS: 0
+  };
+
+  componentDidMount() {
+    this.p = { aim: -30, width: 46, t0: null, hits: [], ready: 0 };
+    this.g = { t0: null, hits: [], ready: 0 };
+    this.b = { aim: -30, width: 70, t0: null, hits: [], ready: 0 };
+    this.setup(this.polar, this.onPolarDown);
+    this.setup(this.grid, null);
+    this.b = this.b;
+    this.sc = { aim: -30, width: 40, t0: null, hits: [], ready: 0, noise: Array.from({ length: 260 }, () => Math.random()) };
+    this.setup(this.bscope, this.onBsDown);
+    this.setup(this.scope, this.onScopeDown);
+    this.loop = () => { this.draw(); this._raf = requestAnimationFrame(this.loop); };
+    this._raf = requestAnimationFrame(this.loop);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this._raf); }
+
+  setup(cv, down) {
+    if (!cv) return;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = 360 * dpr; cv.height = 360 * dpr;
+    cv.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (down) cv.addEventListener('pointerdown', down);
+  }
+
+  drag(cv, onMove) {
+    const move = onMove;
+    const up = () => { cv.removeEventListener('pointermove', move); cv.removeEventListener('pointerup', up); };
+    cv.addEventListener('pointermove', move);
+    cv.addEventListener('pointerup', up);
+  }
+
+  polarPos(e) {
+    const r = this.polar.getBoundingClientRect();
+    const x = e.clientX - r.left - 180, y = e.clientY - r.top - 180;
+    return { ang: Math.atan2(y, x) * 180 / Math.PI, rr: Math.hypot(x, y) };
+  }
+
+  onPolarDown = (e) => {
+    const { ang, rr } = this.polarPos(e);
+    const p = this.p, R = 150;
+    const dL = Math.abs(norm(ang - (p.aim - p.width / 2)));
+    const dR = Math.abs(norm(ang - (p.aim + p.width / 2)));
+    let mode = null;
+    if (rr > R - 26 && rr < R + 26 && Math.min(dL, dR) < 16) mode = dL < dR ? 'L' : 'R';
+    else if (rr < R && Math.abs(norm(ang - p.aim)) < p.width / 2 + 8) mode = 'C';
+    else { p.aim = ang; this.setState({ aim: ang }); return; }
+    const start = ang, aim0 = p.aim;
+    this.polar.setPointerCapture(e.pointerId);
+    this.drag(this.polar, (ev) => {
+      const a = this.polarPos(ev).ang;
+      if (mode === 'C') p.aim = norm(aim0 + norm(a - start));
+      else p.width = Math.max(8, Math.min(180, (mode === 'L' ? -1 : 1) * norm(a - p.aim) * 2));
+      this.setState({ aim: p.aim, width: p.width });
+    });
+  };
+
+  bsGeom() { return { x0: 34, y0: 22, w: 360 - 34 - 14, h: 360 - 22 - 30 }; }
+  bsAngAt(e) {
+    const r = this.bscope.getBoundingClientRect(), G = this.bsGeom();
+    return Math.max(-180, Math.min(180, ((e.clientX - r.left - G.x0) / G.w) * 360 - 180));
+  }
+
+  onBsDown = (e) => {
+    const b = this.b, a = this.bsAngAt(e);
+    const dL = Math.abs(a - (b.aim - b.width / 2)), dR = Math.abs(a - (b.aim + b.width / 2));
+    const nearest = Math.min(dL, dR);
+    const mode = nearest < 10 ? (dL < dR ? 'L' : 'R') : 'C';
+    const start = a, aim0 = b.aim;
+    this.bscope.setPointerCapture(e.pointerId);
+    if (mode === 'C') { b.aim = a; this.setState({ bsAim: b.aim }); }
+    this.drag(this.bscope, (ev) => {
+      const na = this.bsAngAt(ev);
+      if (mode === 'C') b.aim = na;
+      else b.width = Math.max(10, Math.min(240, (mode === 'L' ? -1 : 1) * (na - b.aim) * 2));
+      this.setState({ bsAim: b.aim, bsWidth: b.width });
+    });
+  };
+
+  scGeom() { return { x0: 34, y0: 84, w: 360 - 34 - 14, h: 360 - 84 - 30, barY: 34, barH: 20 }; }
+  scAngAt(e) {
+    const r = this.scope.getBoundingClientRect(), G = this.scGeom();
+    return Math.max(-180, Math.min(180, ((e.clientX - r.left - G.x0) / G.w) * 360 - 180));
+  }
+  onScopeDown = (e) => {
+    const s = this.sc, a = this.scAngAt(e);
+    const dL = Math.abs(a - (s.aim - s.width / 2)), dR = Math.abs(a - (s.aim + s.width / 2));
+    const mode = Math.min(dL, dR) < 10 ? (dL < dR ? 'L' : 'R') : 'C';
+    if (mode === 'C') { s.aim = a; this.setState({ scAim: s.aim }); }
+    this.scope.setPointerCapture(e.pointerId);
+    this.drag(this.scope, (ev) => {
+      const na = this.scAngAt(ev);
+      if (mode === 'C') s.aim = na;
+      else s.width = Math.max(6, Math.min(120, (mode === 'L' ? -1 : 1) * (na - s.aim) * 2));
+      this.setState({ scAim: s.aim, scWidth: s.width });
+    });
+  };
+  fireScope = () => this.fire('sc', 'scHits', 'scStatus', 'TRANSMITTING…');
+  toggleScHelp = () => this.setState(st => ({ scHelp: !st.scHelp }));
+
+  drawScope() {
+    const cv = this.scope; if (!cv) return;
+    const c = cv.getContext('2d'), s = this.sc, G = this.scGeom(), now = performance.now();
+    const X = d => G.x0 + (d / MAXR) * G.w;
+    const XB = a => G.x0 + ((a + 180) / 360) * G.w;
+    const base = G.y0 + G.h;
+    c.clearRect(0, 0, 360, 360);
+    c.font = '10px ui-monospace,Menlo,monospace';
+
+    c.fillStyle = 'rgba(107,119,132,0.7)';
+    c.fillText('BEAM BEARING — drag to aim', G.x0, 22);
+    c.strokeStyle = 'rgba(126,224,160,0.2)'; c.lineWidth = 1;
+    c.strokeRect(G.x0, G.barY, G.w, G.barH);
+    for (let a = -180; a <= 180; a += 45) {
+      const x = XB(a);
+      c.beginPath(); c.moveTo(x, G.barY); c.lineTo(x, G.barY + 4);
+      c.strokeStyle = 'rgba(126,224,160,0.25)'; c.stroke();
+    }
+    const l = s.aim - s.width / 2, r = s.aim + s.width / 2;
+    c.fillStyle = 'rgba(126,224,160,0.3)';
+    c.fillRect(XB(Math.max(-180, l)), G.barY + 1, XB(Math.min(180, r)) - XB(Math.max(-180, l)), G.barH - 2);
+    for (const a of [l, r]) {
+      const x = XB(Math.max(-180, Math.min(180, a))), dir = a === l ? 1 : -1;
+      c.beginPath(); c.moveTo(x, G.barY + G.barH + 2); c.lineTo(x + dir * 6, G.barY + G.barH + 9); c.lineTo(x - dir * 1, G.barY + G.barH + 9);
+      c.closePath(); c.fillStyle = '#f2c14e'; c.fill();
+    }
+    c.fillStyle = 'rgba(126,224,160,0.85)';
+    const aimTxt = (s.aim < 0 ? '' : '+') + Math.round(s.aim) + '°';
+    c.fillText(aimTxt, G.x0 + G.w - 28 - c.measureText(aimTxt).width, G.barY - 6);
+
+    c.fillStyle = 'rgba(126,224,160,0.03)'; c.fillRect(G.x0, G.y0, G.w, G.h);
+    for (let d = 0; d <= MAXR; d += 500) {
+      const x = X(d);
+      c.beginPath(); c.moveTo(x, G.y0); c.lineTo(x, base);
+      c.strokeStyle = d % 1000 ? 'rgba(126,224,160,0.06)' : 'rgba(126,224,160,0.14)'; c.stroke();
+      if (d % 1000 === 0) { c.fillStyle = 'rgba(107,119,132,0.75)'; c.fillText(String(d), x - 12, base + 14); }
+    }
+    c.fillStyle = 'rgba(107,119,132,0.6)';
+    c.fillText('RANGE (units) →', G.x0 + G.w - 92, base + 26);
+    c.save(); c.translate(14, G.y0 + G.h / 2); c.rotate(-Math.PI / 2);
+    c.fillText('↑ SIGNAL', -26, 0); c.restore();
+    c.save(); c.setLineDash([2, 4]);
+    c.beginPath(); c.moveTo(G.x0, base - 14); c.lineTo(G.x0 + G.w, base - 14);
+    c.strokeStyle = 'rgba(107,119,132,0.35)'; c.lineWidth = 1; c.stroke(); c.restore();
+    c.fillStyle = 'rgba(107,119,132,0.5)';
+    c.fillText('noise floor', G.x0 + 4, base - 18);
+    for (let i = 1; i < 4; i++) {
+      const y = G.y0 + (G.h / 4) * i;
+      c.beginPath(); c.moveTo(G.x0, y); c.lineTo(G.x0 + G.w, y);
+      c.strokeStyle = 'rgba(126,224,160,0.05)'; c.stroke();
+    }
+    c.strokeStyle = 'rgba(126,224,160,0.25)'; c.strokeRect(G.x0, G.y0, G.w, G.h);
+
+    let reach = MAXR;
+    if (s.t0 != null) {
+      reach = this.collect(s, 'scHits', 'scStatus', o => Math.abs(norm(o.a - s.aim)) <= s.width / 2);
+      if (reach >= MAXR) { s.t0 = null; reach = MAXR; if (!s.hits.length) this.setState({ scStatus: 'NOISE ONLY — NO RETURN' }); }
+    }
+
+    const N = 260, seg = G.w / N;
+    c.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const d = (i / N) * MAXR, x = G.x0 + i * seg;
+      const far = 0.25 + 0.75 * (d / MAXR);
+      let amp = (s.noise[i % N] - 0.5) * 5 * far + Math.sin(now / 260 + i * 0.7) * 1.4 * far;
+      for (const h of s.hits) {
+        const dd = d - h.o.d, w = 34 + h.o.d * 0.012;
+        const g = Math.exp(-(dd * dd) / (2 * w * w));
+        const str = (h.o.t === 'wreck' ? 1 : h.o.t === 'ice' ? 0.78 : 0.62) * (1 - h.o.d / MAXR * 0.45);
+        amp -= g * str * (G.h * 0.72);
+      }
+      const y = Math.max(G.y0 + 4, Math.min(base - 2, base - 14 + amp));
+      i ? c.lineTo(x, y) : c.moveTo(x, y);
+    }
+    c.strokeStyle = 'rgba(126,224,160,0.92)'; c.lineWidth = 1.4;
+    c.shadowColor = 'rgba(126,224,160,0.55)'; c.shadowBlur = 6; c.stroke(); c.shadowBlur = 0;
+
+    if (s.t0 != null) {
+      const x = X(reach);
+      c.beginPath(); c.moveTo(x, G.y0); c.lineTo(x, base);
+      c.strokeStyle = 'rgba(224,255,236,0.85)'; c.lineWidth = 1.5; c.stroke();
+      const gg = c.createLinearGradient(x - 40, 0, x, 0);
+      gg.addColorStop(0, 'rgba(126,224,160,0)'); gg.addColorStop(1, 'rgba(126,224,160,0.16)');
+      c.fillStyle = gg; c.fillRect(x - 40, G.y0, 40, G.h);
+    }
+
+    const placed = [];
+    for (const h of s.hits) {
+      const x = X(h.o.d);
+      const str = (h.o.t === 'wreck' ? 1 : h.o.t === 'ice' ? 0.78 : 0.62) * (1 - h.o.d / MAXR * 0.45);
+      const apex = Math.max(G.y0 + 30, base - 14 - str * G.h * 0.72);
+      const label = h.o.name.toUpperCase() + ' · ' + h.o.d + 'u';
+      const tw = c.measureText(label).width;
+      const lx = Math.max(G.x0 + 2, Math.min(G.x0 + G.w - tw - 2, x - tw / 2));
+      let ly = apex - 26;
+      while (placed.some(p => lx < p.x + p.w + 4 && p.x < lx + tw + 4 && Math.abs(p.y - ly) < 14) && ly > G.y0 + 2) ly -= 14;
+      placed.push({ x: lx, y: ly, w: tw });
+      c.save(); c.setLineDash([2, 3]);
+      c.beginPath(); c.moveTo(x, apex - 4); c.lineTo(x, ly + 13);
+      c.strokeStyle = 'rgba(199,208,216,0.4)'; c.lineWidth = 1; c.stroke(); c.restore();
+      c.fillStyle = 'rgba(10,16,13,0.85)'; c.fillRect(lx - 3, ly, tw + 6, 13);
+      c.fillStyle = TCOL[h.o.t]; c.fillText(label, lx, ly + 10);
+      c.beginPath(); c.moveTo(x, base - 14); c.lineTo(x, base - 6);
+      c.strokeStyle = TCOL[h.o.t]; c.lineWidth = 2; c.stroke();
+    }
+  }
+
+  fire(k, key, statusKey, msg) {
+    const s = this[k], now = performance.now();
+    if (now < s.ready) return;
+    s.t0 = now; s.hits = []; s.ready = now + (MAXR / SPEED) * 1000 + COOLDOWN;
+    this.setState({ [key]: [], [statusKey]: msg });
+  }
+  firePolar = () => this.fire('p', 'polarHits', 'polarStatus', 'SCANNING…');
+  fireGrid = () => this.fire('g', 'gridHits', 'gridStatus', 'PULSE OUTBOUND…');
+  fireBscope = () => this.fire('b', 'bsHits', 'bsStatus', 'SWEEPING…');
+
+  draw() {
+    const now = performance.now();
+    const cd = s => Math.max(0, (s.ready - now) / 1000);
+    const r1 = +cd(this.p).toFixed(1), r2 = +cd(this.g).toFixed(1), r3 = +cd(this.b).toFixed(1), r4 = +cd(this.sc).toFixed(1);
+    if (r1 !== this.state.cdP || r2 !== this.state.cdG || r3 !== this.state.cdB || r4 !== this.state.cdS)
+      this.setState({ cdP: r1, cdG: r2, cdB: r3, cdS: r4 });
+    this.drawPolar(); this.drawGrid(); this.drawBscope(); this.drawScope();
+  }
+
+  collect(s, key, statusKey, inArc) {
+    const now = performance.now(), el = (now - s.t0) / 1000, reach = el * SPEED;
+    let added = false;
+    for (const o of OBJECTS) {
+      if (s.hits.some(h => h.o === o)) continue;
+      if (!inArc(o)) continue;
+      if (o.d <= reach && o.d <= MAXR) { s.hits.push({ o, t: now }); added = true; }
+    }
+    if (added) {
+      this.setState({
+        [key]: s.hits.map((h, i) => ({
+          n: String(i + 1), name: h.o.name, dist: h.o.d + 'u',
+          bearing: (h.o.a < 0 ? '' : '+') + Math.round(h.o.a) + '°',
+          cell: h.cell || '', err: Math.round(h.o.d * 0.09 / 10) * 10 + 'u'
+        })), [statusKey]: ''
+      });
+    }
+    return reach;
+  }
+
+  drawPolar() {
+    const cv = this.polar; if (!cv) return;
+    const c = cv.getContext('2d'), R = 150, cx = 180, cy = 180, p = this.p;
+    c.clearRect(0, 0, 360, 360);
+    c.font = '10px ui-monospace,Menlo,monospace';
+
+    for (let v = 1000; v <= MAXR; v += 1000) {
+      const r = R * v / MAXR;
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.strokeStyle = v === MAXR ? 'rgba(85,214,232,0.34)' : 'rgba(85,214,232,0.13)';
+      c.lineWidth = 1; c.stroke();
+      c.fillStyle = 'rgba(107,119,132,0.65)';
+      c.fillText(String(v), cx + 4, cy - r + 12);
+    }
+    for (let a = 0; a < 360; a += 45) {
+      c.beginPath(); c.moveTo(cx, cy);
+      c.lineTo(cx + Math.cos(rad(a)) * R, cy + Math.sin(rad(a)) * R);
+      c.strokeStyle = 'rgba(85,214,232,0.07)'; c.stroke();
+    }
+
+    const a0 = rad(p.aim - p.width / 2), a1 = rad(p.aim + p.width / 2);
+    const grd = c.createRadialGradient(cx, cy, 0, cx, cy, R);
+    grd.addColorStop(0, 'rgba(85,214,232,0.30)');
+    grd.addColorStop(1, 'rgba(85,214,232,0.04)');
+    c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, R, a0, a1); c.closePath();
+    c.fillStyle = grd; c.fill();
+    c.strokeStyle = 'rgba(85,214,232,0.42)'; c.lineWidth = 1; c.stroke();
+
+    if (p.t0 != null) {
+      const reach = this.collect(p, 'polarHits', 'polarStatus', o => Math.abs(norm(o.a - p.aim)) <= p.width / 2);
+      if (reach < MAXR) {
+        const wr = R * reach / MAXR;
+        c.beginPath(); c.arc(cx, cy, wr, a0, a1);
+        c.strokeStyle = 'rgba(143,233,242,0.9)'; c.lineWidth = 2.5; c.stroke();
+        c.beginPath(); c.arc(cx, cy, Math.max(0, wr - 7), a0, a1);
+        c.strokeStyle = 'rgba(143,233,242,0.25)'; c.lineWidth = 5; c.stroke();
+      } else {
+        p.t0 = null;
+        if (!p.hits.length) this.setState({ polarStatus: 'NO RETURNS IN ARC' });
+      }
+    }
+
+    for (const h of p.hits) {
+      const o = h.o, r = R * o.d / MAXR, x = cx + Math.cos(rad(o.a)) * r, y = cy + Math.sin(rad(o.a)) * r;
+      const age = (performance.now() - h.t) / 1000, pr = 4 + Math.min(1, age) * 16;
+      c.beginPath(); c.arc(x, y, pr, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(126,224,160,' + Math.max(0, 0.5 - age * 0.5) + ')'; c.lineWidth = 1.5; c.stroke();
+      c.beginPath(); c.moveTo(x, y - 4); c.lineTo(x + 4, y); c.lineTo(x, y + 4); c.lineTo(x - 4, y); c.closePath();
+      c.fillStyle = TCOL[o.t]; c.fill();
+      c.fillStyle = 'rgba(199,208,216,0.75)';
+      c.fillText(o.d + 'u', x + 8, y + 3.5);
+    }
+
+    for (const s of [-1, 1]) {
+      const a = rad(p.aim + s * p.width / 2);
+      const hx = cx + Math.cos(a) * (R + 11), hy = cy + Math.sin(a) * (R + 11);
+      c.save(); c.translate(hx, hy); c.rotate(a);
+      c.beginPath(); c.moveTo(-7, 0); c.lineTo(2, -6); c.lineTo(2, 6); c.closePath();
+      c.fillStyle = '#f2c14e'; c.fill(); c.restore();
+    }
+    c.beginPath(); c.arc(cx, cy, 3, 0, Math.PI * 2); c.fillStyle = '#8fe9f2'; c.fill();
+  }
+
+  drawGrid() {
+    const cv = this.grid; if (!cv) return;
+    const c = cv.getContext('2d'), g = this.g;
+    const pad = 26, S = 360 - pad * 2, cx = pad + S / 2, cy = pad + S / 2, N = 8, cell = S / N;
+    c.clearRect(0, 0, 360, 360);
+    c.font = '10px ui-monospace,Menlo,monospace';
+
+    for (let i = 0; i <= N; i++) {
+      const v = pad + i * cell;
+      c.strokeStyle = 'rgba(242,193,78,0.10)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(v, pad); c.lineTo(v, pad + S); c.stroke();
+      c.beginPath(); c.moveTo(pad, v); c.lineTo(pad + S, v); c.stroke();
+      if (i < N) {
+        c.fillStyle = 'rgba(107,119,132,0.7)';
+        c.fillText('ABCDEFGH'[i], pad + i * cell + cell / 2 - 3, pad - 8);
+        c.fillText(String(i + 1), pad - 14, pad + i * cell + cell / 2 + 3.5);
+      }
+    }
+    c.strokeStyle = 'rgba(242,193,78,0.28)'; c.strokeRect(pad, pad, S, S);
+
+    const toXY = o => ({
+      x: cx + Math.cos(rad(o.a)) * (o.d / MAXR) * (S / 2),
+      y: cy + Math.sin(rad(o.a)) * (o.d / MAXR) * (S / 2)
+    });
+    const cellOf = pt => 'ABCDEFGH'[Math.max(0, Math.min(7, Math.floor((pt.x - pad) / cell)))] + (Math.max(0, Math.min(7, Math.floor((pt.y - pad) / cell))) + 1);
+
+    if (g.t0 != null) {
+      const now = performance.now(), reach = ((now - g.t0) / 1000) * SPEED;
+      let added = false;
+      for (const o of OBJECTS) {
+        if (g.hits.some(h => h.o === o)) continue;
+        if (o.d <= reach && o.d <= MAXR) { g.hits.push({ o, t: now }); added = true; }
+      }
+      if (added) this.setState({
+        gridHits: g.hits.map(h => ({
+          cell: cellOf(toXY(h.o)), name: h.o.name, dist: h.o.d + 'u',
+          err: Math.round(h.o.d * 0.09 / 10) * 10 + 'u'
+        })), gridStatus: ''
+      });
+      if (reach < MAXR) {
+        const wr = (reach / MAXR) * (S / 2);
+        c.save(); c.beginPath(); c.rect(pad, pad, S, S); c.clip();
+        c.beginPath(); c.arc(cx, cy, wr, 0, Math.PI * 2);
+        c.strokeStyle = 'rgba(242,193,78,0.75)'; c.lineWidth = 2; c.stroke();
+        c.beginPath(); c.arc(cx, cy, Math.max(0, wr - 6), 0, Math.PI * 2);
+        c.strokeStyle = 'rgba(242,193,78,0.18)'; c.lineWidth = 4; c.stroke();
+        c.restore();
+      } else { g.t0 = null; if (!g.hits.length) this.setState({ gridStatus: 'NO RETURNS' }); }
+    }
+
+    for (const h of g.hits) {
+      const pt = toXY(h.o), age = (performance.now() - h.t) / 1000;
+      const err = (h.o.d * 0.09 / MAXR) * (S / 2) + 6;
+      c.save(); c.setLineDash([3, 4]);
+      c.beginPath(); c.arc(pt.x, pt.y, err, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(126,224,160,' + (0.35 + 0.25 * Math.max(0, 1 - age)) + ')';
+      c.lineWidth = 1; c.stroke(); c.restore();
+      c.beginPath(); c.arc(pt.x, pt.y, err, 0, Math.PI * 2);
+      c.fillStyle = 'rgba(126,224,160,0.07)'; c.fill();
+      c.beginPath(); c.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+      c.fillStyle = TCOL[h.o.t]; c.fill();
+      c.fillStyle = 'rgba(199,208,216,0.8)';
+      c.fillText(cellOf(pt), pt.x + err + 4, pt.y + 3.5);
+    }
+
+    c.beginPath(); c.arc(cx, cy, 3.5, 0, Math.PI * 2); c.fillStyle = '#8fe9f2'; c.fill();
+    c.beginPath(); c.arc(cx, cy, 7, 0, Math.PI * 2);
+    c.strokeStyle = 'rgba(143,233,242,0.4)'; c.lineWidth = 1; c.stroke();
+  }
+
+  drawBscope() {
+    const cv = this.bscope; if (!cv) return;
+    const c = cv.getContext('2d'), b = this.b, G = this.bsGeom();
+    const X = a => G.x0 + ((a + 180) / 360) * G.w;
+    const Y = d => G.y0 + G.h * (1 - d / MAXR);
+    c.clearRect(0, 0, 360, 360);
+    c.font = '10px ui-monospace,Menlo,monospace';
+
+    c.fillStyle = 'rgba(201,143,232,0.04)'; c.fillRect(G.x0, G.y0, G.w, G.h);
+    for (let d = 0; d <= MAXR; d += 500) {
+      const y = Y(d);
+      c.beginPath(); c.moveTo(G.x0, y); c.lineTo(G.x0 + G.w, y);
+      c.strokeStyle = d % 1000 ? 'rgba(201,143,232,0.07)' : 'rgba(201,143,232,0.16)';
+      c.lineWidth = 1; c.stroke();
+      if (d % 1000 === 0) { c.fillStyle = 'rgba(107,119,132,0.75)'; c.fillText(String(d), 4, y + 3.5); }
+    }
+    for (let a = -180; a <= 180; a += 45) {
+      const x = X(a);
+      c.beginPath(); c.moveTo(x, G.y0); c.lineTo(x, G.y0 + G.h);
+      c.strokeStyle = a === 0 ? 'rgba(201,143,232,0.22)' : 'rgba(201,143,232,0.08)'; c.stroke();
+      if (Math.abs(a) === 180) continue;
+      c.fillStyle = 'rgba(107,119,132,0.75)';
+      const t = (a > 0 ? '+' : '') + a + '°', tw = c.measureText(t).width;
+      c.fillText(t, x - tw / 2, G.y0 + G.h + 14);
+    }
+    c.strokeStyle = 'rgba(201,143,232,0.28)'; c.strokeRect(G.x0, G.y0, G.w, G.h);
+
+    const l = b.aim - b.width / 2, r = b.aim + b.width / 2;
+    const bands = [[Math.max(-180, l), Math.min(180, r)]];
+    if (l < -180) bands.push([l + 360, 180]);
+    if (r > 180) bands.push([-180, r - 360]);
+    for (const [s, e] of bands) {
+      if (e <= s) continue;
+      const gx = c.createLinearGradient(0, G.y0, 0, G.y0 + G.h);
+      gx.addColorStop(0, 'rgba(201,143,232,0.05)');
+      gx.addColorStop(1, 'rgba(201,143,232,0.24)');
+      c.fillStyle = gx; c.fillRect(X(s), G.y0, X(e) - X(s), G.h);
+      c.strokeStyle = 'rgba(201,143,232,0.5)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(X(s), G.y0); c.lineTo(X(s), G.y0 + G.h); c.stroke();
+      c.beginPath(); c.moveTo(X(e), G.y0); c.lineTo(X(e), G.y0 + G.h); c.stroke();
+    }
+    for (const a of [l, r]) {
+      const x = X(norm(a)), dir = a === l ? 1 : -1;
+      c.beginPath(); c.moveTo(x, G.y0 + G.h + 2); c.lineTo(x + dir * 7, G.y0 + G.h + 10); c.lineTo(x - dir * 1, G.y0 + G.h + 10);
+      c.closePath(); c.fillStyle = '#f2c14e'; c.fill();
+    }
+
+    if (b.t0 != null) {
+      const reach = this.collect(b, 'bsHits', 'bsStatus', o => Math.abs(norm(o.a - b.aim)) <= b.width / 2);
+      if (reach < MAXR) {
+        const y = Y(reach);
+        for (const [s, e] of bands) {
+          if (e <= s) continue;
+          c.beginPath(); c.moveTo(X(s), y); c.lineTo(X(e), y);
+          c.strokeStyle = 'rgba(232,200,255,0.95)'; c.lineWidth = 2; c.stroke();
+          const gg = c.createLinearGradient(0, y, 0, y + 26);
+          gg.addColorStop(0, 'rgba(232,200,255,0.22)'); gg.addColorStop(1, 'rgba(232,200,255,0)');
+          c.fillStyle = gg; c.fillRect(X(s), y, X(e) - X(s), 26);
+        }
+      } else { b.t0 = null; if (!b.hits.length) this.setState({ bsStatus: 'NO RETURNS IN SECTOR' }); }
+    }
+
+    for (const h of b.hits) {
+      const x = X(h.o.a), y = Y(h.o.d), age = (performance.now() - h.t) / 1000;
+      c.beginPath(); c.moveTo(x, y - 5); c.lineTo(x + 5, y); c.lineTo(x, y + 5); c.lineTo(x - 5, y); c.closePath();
+      c.fillStyle = TCOL[h.o.t]; c.fill();
+      c.beginPath(); c.arc(x, y, 5 + Math.min(1, age) * 14, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(126,224,160,' + Math.max(0, 0.5 - age * 0.5) + ')'; c.lineWidth = 1.5; c.stroke();
+      c.fillStyle = 'rgba(199,208,216,0.8)';
+      c.fillText(h.o.name.slice(0, 3).toUpperCase() + ' ' + h.o.d, x + 9, y + 3.5);
+    }
+  }
+
+  btn(cd, label, bg, fg) {
+    return cd > 0
+      ? { text: 'COOL ' + cd.toFixed(1) + 's', bg: 'rgba(76,90,102,0.35)', fg: '#6b7784' }
+      : { text: label, bg, fg: fg || '#0a0d12' };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const bp = this.btn(s.cdP, 'SCAN', '#55d6e8');
+    const bg = this.btn(s.cdG, 'PULSE', '#f2c14e');
+    const bb = this.btn(s.cdB, 'SWEEP', '#c98fe8');
+    const bs = this.btn(s.cdS, 'PING', '#7ee0a0');
+    return {
+      scopeRef: el => { this.scope = el; },
+      fireScope: this.fireScope,
+      scBtn: bs.text, scBtnBg: bs.bg, scBtnFg: bs.fg,
+      scArcLabel: Math.round(s.scWidth) + '°',
+      scGain: Math.round(60 - s.scWidth * 0.25) + 'dB',
+      scHits: s.scHits, scIdle: !!s.scStatus, scStatus: s.scStatus,
+      scHelp: !!s.scHelp, toggleScHelp: this.toggleScHelp,
+      polarRef: el => { this.polar = el; },
+      gridRef: el => { this.grid = el; },
+      bscopeRef: el => { this.bscope = el; },
+      firePolar: this.firePolar, fireGrid: this.fireGrid, fireBscope: this.fireBscope,
+      polarBtn: bp.text, polarBtnBg: bp.bg, polarBtnFg: bp.fg,
+      gridBtn: bg.text, gridBtnBg: bg.bg, gridBtnFg: bg.fg,
+      bsBtn: bb.text, bsBtnBg: bb.bg, bsBtnFg: bb.fg,
+      arcLabel: Math.round(s.width) + '°',
+      hdgLabel: (s.aim < 0 ? '' : '+') + Math.round(s.aim) + '°',
+      bsArcLabel: Math.round(s.bsWidth) + '°',
+      bsHdgLabel: (s.bsAim < 0 ? '' : '+') + Math.round(s.bsAim) + '°',
+      polarHits: s.polarHits, gridHits: s.gridHits, bsHits: s.bsHits,
+      polarIdle: !!s.polarStatus, gridIdle: !!s.gridStatus, bsIdle: !!s.bsStatus,
+      polarStatus: s.polarStatus, gridStatus: s.gridStatus, bsStatus: s.bsStatus
+    };
+  }
+}
+
+</script>
+</body>
+</html>
