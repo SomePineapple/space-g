@@ -14,6 +14,14 @@ const GRID_ROWS: int = 20
 
 const SAVE_DIRECTORY: String = "user://ships"
 
+## Phase 0a freeze — see docs/frozen_systems.md. Inventory.research() spends a
+## captured part to unlock *manufacturing* that part's type, which is the exact
+## inversion of the design thesis: a specific gun cut off a specific corvette
+## becomes an anonymous buildable type. The implementation stays in Inventory
+## (nothing is deleted); this constant hides the only entry point to it. Flip to
+## false to restore the button.
+const RESEARCH_FROZEN: bool = true
+
 ## Only weapon/missile hardpoints and the two energy modules currently have
 ## Manufacturer stat_modifiers wired up (see Ship._apply_manufacturer_modifiers/
 ## ShipLayout._manufacturer_stat_delta) — matches the "Weapons + Reactor/Battery"
@@ -378,7 +386,9 @@ func _refresh_module_states() -> void:
 		# damaged/captured part into a placeable owned instance. They are
 		# orthogonal, and neither applies to a manufacturer-flavoured row —
 		# those only ever appear once the base type is already known.
-		if is_generic_row and locked and inventory != null:
+		# An empty research_text hides the row's Research button outright (see
+		# ModuleListView._apply_state), which is how RESEARCH_FROZEN takes effect.
+		if is_generic_row and locked and inventory != null and not RESEARCH_FROZEN:
 			state["research_text"] = "RESEARCH (%d captured)" % inventory.get_captured_tech_count(module_type.id)
 			state["can_research"] = inventory.can_research(module_type.id)
 
@@ -432,7 +442,12 @@ func _on_craft_pressed(key: String) -> void:
 	var split: Array = _split_key(key)
 	var module_type: ModuleType = ModuleCatalog.get_by_id(split[0])
 	if module_type.requires_research and not inventory.is_researched(module_type.id):
-		_report("Cannot craft %s: research it first." % module_type.display_name)
+		# With RESEARCH_FROZEN there is no unlock path left, so don't tell the
+		# player to use a button that no longer exists.
+		if RESEARCH_FROZEN:
+			_report("%s cannot be built — it can only be taken intact off a wreck." % module_type.display_name)
+		else:
+			_report("Cannot craft %s: research it first." % module_type.display_name)
 		_refresh_module_states()
 		return
 
@@ -446,7 +461,7 @@ func _on_craft_pressed(key: String) -> void:
 
 
 func _on_research_pressed(module_type_id: String) -> void:
-	if inventory == null:
+	if inventory == null or RESEARCH_FROZEN:
 		return
 
 	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
