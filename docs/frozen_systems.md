@@ -75,3 +75,45 @@ behaviour changed for any unfrozen screen.
 **Watch for:** nothing calls `GamePanel.open()` from outside the panels
 themselves today, so refusing to open has no other caller to surprise. If that
 changes, `open()` returning false is the signal.
+
+---
+
+## Crafting recipes (CraftingPanel) — frozen Phase 0a
+
+**Flag:** `CraftingPanel.frozen`
+
+**What it did:** converted raw materials into the six `ComponentCatalog`
+intermediates (Metal Sheets, Wiring, Canister, Circuit Board, Reinforced Steel,
+Motor) via `CraftingCatalog` recipes and `Inventory.craft()`.
+
+**Why frozen:** it is the middle of the pipeline the design brief names as the
+failure case — shoot asteroid → material → menu → component → menu → module.
+Every layer is a translation the player has to perform in a list rather than in
+the world.
+
+**What's disabled:** the `toggle_crafting` action ("K") no longer opens the
+screen. No UI anywhere advertised that key, so nothing else needed changing.
+`CraftingCatalog`, `CraftingRecipe`, `ComponentCatalog` and
+`Inventory.craft()/can_craft()` are untouched.
+
+**Components still exist and still arrive** — combat kill-drops roll one with
+`Ship.component_drop_chance` (0.3), of which `rare_component_chance` (0.25) come
+from `RARE_IDS`. Freezing the panel doesn't strand them; it removes the
+manufacturing route and leaves the salvage route, which is the intended
+direction. The comment on `Ship.component_drop_chance` already described salvage
+as "the alternative route to components" — it is now the only route.
+
+**Known consequence, needs a tuning decision:** `hull` and `engine` are the two
+most structural module types and both cost components (Hull: 2 Metal Sheets +
+1 Reinforced Steel; Engine: 1 Metal Sheets + 2 Wiring + 1 Motor). A Motor is one
+of three `RARE_IDS`, so roughly 2.5% of kill-drops — on the order of one per
+15-20 kills at 2-3 drops each. Buildable, but slow. Either raise
+`component_drop_chance` on the enemy scenes, or accept it as pressure toward
+taking the engine off the wreck instead. Not changed here: that's balance, and
+this commit is a freeze.
+
+**Not frozen:** the ship builder's own BUILD button
+(`ShipBuilderPanel._on_craft_pressed` → `spend_items(build_costs)`). That's
+module construction, not component crafting, and it belongs with the material
+economy in Phase 0b — after Phase 1, so salvage can feed the builder before
+buying-with-materials stops.

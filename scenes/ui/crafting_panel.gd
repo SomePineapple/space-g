@@ -17,6 +17,10 @@ func _init() -> void:
 	toggle_action = "toggle_crafting"
 	# Wider than the default: recipe rows carry an ingredient list.
 	panel_width = 460.0
+	# Phase 0a freeze — see docs/frozen_systems.md. This is the middle of the
+	# four-layer abstraction pipeline (ore -> material -> component -> module);
+	# components now only come off wrecks, which is where they should come from.
+	frozen = true
 
 
 func _setup() -> void:
