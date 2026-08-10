@@ -189,18 +189,27 @@ func _ready() -> void:
 		GameState.apply(self)
 
 
-## Phase 5.2 "avoid soft-locking the player": grants one owned instance of
-## every module type/manufacturer combo on the starter loadout, in addition
-## to what's already physically installed, so removing a starter module in
-## the builder never leaves the player unable to re-place it (own-module
-## stock is separate from what's currently mounted). Only ever called once,
-## on a session's first region (see _ready()).
+## The parts you start a session holding. The starter hull is a bare Command
+## Core, so these are not spares — they are the whole ship, sitting in the hold
+## waiting to be bolted on, and the first thing a session asks you to do is walk
+## into the builder and assemble something.
+##
+## Deliberately granted as parts rather than as materials to build parts from:
+## there is no currency and no shop, so the honest way to hand the player their
+## opening kit is to hand them the objects (see docs/direction.md §1). Only ever
+## called once, on a session's first region (see _ready()).
+const STARTER_PART_TYPE_IDS: Array[String] = [
+	ModuleCatalog.HULL_SPAR_TYPE_ID,
+	ModuleCatalog.HULL_WEDGE_TYPE_ID,
+	ModuleCatalog.GUN_MK1_TYPE_ID,
+	ModuleCatalog.REACTOR_PAIR_TYPE_ID,
+	ModuleCatalog.THRUSTER_BLOCK_TYPE_ID,
+]
+
+
 func _seed_starter_owned_modules() -> void:
-	if ship_layout == null:
-		return
-	for placement in ship_layout.placements:
-		var key: String = Inventory.owned_module_key(placement.module_type_id, placement.manufacturer_id)
-		_inventory.add_owned_module(key)
+	for type_id in STARTER_PART_TYPE_IDS:
+		_inventory.add_owned_module(Inventory.owned_module_key(type_id))
 
 
 func apply_layout(new_layout: ShipLayout) -> void:

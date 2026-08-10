@@ -22,6 +22,23 @@ const SAVE_DIRECTORY: String = "user://ships"
 ## false to restore the button.
 const RESEARCH_FROZEN: bool = true
 
+## The build set the palette offers, in list order. Deliberately short and
+## deliberately chunky: a ship is assembled from named parts, not laid out one
+## hex at a time, and nothing here is a single hex. The Command Core is absent
+## because every layout already has exactly one and a second is rejected
+## anyway (see ShipLayout.get_place_rejection_reason).
+##
+## The rest of ModuleCatalog is still live — enemy layouts are built from it and
+## parts cut off those enemies still arrive in the hold. Those types get a
+## palette row when you are holding one; see _palette_type_ids().
+const BUILDABLE_TYPE_IDS: Array[String] = [
+	ModuleCatalog.HULL_SPAR_TYPE_ID,
+	ModuleCatalog.HULL_WEDGE_TYPE_ID,
+	ModuleCatalog.GUN_MK1_TYPE_ID,
+	ModuleCatalog.REACTOR_PAIR_TYPE_ID,
+	ModuleCatalog.THRUSTER_BLOCK_TYPE_ID,
+]
+
 ## Only weapon/missile hardpoints and the two energy modules currently have
 ## Manufacturer stat_modifiers wired up (see Ship._apply_manufacturer_modifiers/
 ## ShipLayout._manufacturer_stat_delta) — matches the "Weapons + Reactor/Battery"
@@ -86,6 +103,7 @@ func _on_opened() -> void:
 	working_layout = ship.ship_layout.duplicate(true)
 	_grid.layout = working_layout
 	_grid.selected_placement_id = ""
+	_sync_build_target()
 	_refresh()
 
 
@@ -317,10 +335,29 @@ func _connect_inventory() -> void:
 		return
 	inventory.materials_changed.connect(func(_totals): _refresh_module_states())
 	inventory.components_changed.connect(func(_totals): _refresh_module_states())
-	inventory.owned_modules_changed.connect(func(_totals): _refresh_module_states())
+	# Picking up a part of a type the palette wasn't showing adds a whole new
+	# row, so this can't be a state-only refresh (see _palette_type_ids).
+	inventory.owned_modules_changed.connect(func(_totals): _on_owned_modules_changed())
 	# A newly discovered manufacturer adds whole new rows (not just a state
 	# change on existing ones), so it needs a full rebuild.
 	inventory.manufacturer_discovered.connect(func(_id): _rebuild_module_list())
+
+
+## A full rebuild only when the set of types on offer actually changed —
+## otherwise every placement and removal would throw away and recreate every row
+## in the list just to update a count.
+func _on_owned_modules_changed() -> void:
+	var wanted: Array[String] = _palette_type_ids()
+	var shown: Array[String] = []
+	for key in _entry_keys:
+		var type_id: String = _split_key(key)[0]
+		if not shown.has(type_id):
+			shown.append(type_id)
+
+	if wanted == shown:
+		_refresh_module_states()
+	else:
+		_rebuild_module_list()
 
 
 func _module_type_takes_manufacturers(module_type: ModuleType) -> bool:
@@ -340,11 +377,32 @@ func _split_key(key: String) -> Array:
 	return [parts[0], parts[1] if parts.size() > 1 else ""]
 
 
+## Which types the palette offers, in list order: the bundled build set, plus
+## any type the player is actually holding a part of.
+##
+## The second half is load-bearing, not a convenience. A Railgun cut off a
+## corporate wreck is a legacy type that is deliberately not buildable — without
+## a row for it, a recovered part would sit in the hold with nowhere to be
+## placed from, which is exactly the loop Phase 1 exists to close.
+func _palette_type_ids() -> Array[String]:
+	var ids: Array[String] = BUILDABLE_TYPE_IDS.duplicate()
+	if inventory == null:
+		return ids
+	for key in inventory.get_all_owned_modules():
+		var type_id: String = _split_key(key)[0]
+		if not ids.has(type_id):
+			ids.append(type_id)
+	return ids
+
+
 func _rebuild_module_list() -> void:
 	var entries: Array = []
 	_entry_keys.clear()
 
-	for module_type in ModuleCatalog.get_all():
+	for type_id in _palette_type_ids():
+		var module_type: ModuleType = ModuleCatalog.get_by_id(type_id)
+		if module_type == null:
+			continue
 		entries.append(_make_entry(module_type, null))
 
 		# A manufacturer row only makes sense once the base type itself is
@@ -500,7 +558,14 @@ func _on_hover_exited() -> void:
 	_grid.clear_preview()
 
 
+## Tells the grid which module its attachment sockets should be measured
+## against, so the ring highlights where the current selection actually fits.
+func _sync_build_target() -> void:
+	_grid.set_build_target(_selected_type_id, _pending_rotation)
+
+
 func _update_preview() -> void:
+	_sync_build_target()
 	if _selected_type_id.is_empty() or not _has_hover:
 		_grid.clear_preview()
 		return
@@ -527,6 +592,7 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_selected_manufacturer_id = ""
 		_module_list.set_selected_key("")
 		_grid.clear_preview()
+		_sync_build_target()
 		_grid.selected_placement_id = existing.placement_id
 		var module_type: ModuleType = ModuleCatalog.get_by_id(existing.module_type_id)
 		_report("Selected: %s at (%d, %d)%s" % [module_type.display_name,

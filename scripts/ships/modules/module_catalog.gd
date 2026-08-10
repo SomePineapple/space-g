@@ -23,6 +23,23 @@ const LINE_3_CELLS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(
 ## straight line, for a bulkier-looking tier-3 mount.
 const TRIANGLE_3_CELLS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)]
 
+# --- The bundled build set ---------------------------------------------------
+# The only types the ship builder offers (see ShipBuilderPanel.BUILDABLE_TYPE_IDS
+# and _rebuild_module_list). A ship is assembled from a handful of named, chunky
+# parts rather than placed a hex at a time: nothing here is a single hex except
+# the Command Core, and every one of them can be cut off a wreck and bolted
+# straight onto your own hull.
+#
+# The older single-hex types below are deliberately still in this catalog. They
+# are what the enemy layouts and any part already in a player's hold reference by
+# id, and deleting them would break every one of those. They simply are not
+# offered for building any more.
+const HULL_SPAR_TYPE_ID: String = "hull_spar"
+const HULL_WEDGE_TYPE_ID: String = "hull_wedge"
+const GUN_MK1_TYPE_ID: String = "gun_mk1"
+const REACTOR_PAIR_TYPE_ID: String = "reactor_pair"
+const THRUSTER_BLOCK_TYPE_ID: String = "thruster_block"
+
 const HULL_TEXTURE: Texture2D = preload("res://art/ships/hull_v1.png")
 const MISSILE_HARDPOINT_TEXTURE: Texture2D = preload("res://art/ships/missile_silo_v1.png")
 const COCKPIT_TEXTURE: Texture2D = preload("res://art/ships/cockpit_v1.png")
@@ -58,6 +75,66 @@ static func get_all() -> Array[ModuleType]:
 		"", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20})
 	core_type.faction_hex_textures = FactionArtImporter.load_faction_textures("command_core")
 	types.append(core_type)
+
+	# --- The bundled build set ----------------------------------------------
+	# Five parts, none smaller than two hexes. Health and mass are roughly the
+	# sum of the single-hex parts each one replaces, so a ship built from these
+	# is comparable to the hex-at-a-time ships that came before rather than a
+	# straight upgrade.
+
+	# The structural spine: long, light, cheap. Reaches a weapon or a thruster
+	# out away from the hull, and is what gets severed when that reach turns out
+	# to have been a bad idea.
+	var hull_spar: ModuleType = _make(HULL_SPAR_TYPE_ID, "Hull Spar", Color(0.5, 0.55, 0.6), LINE_3_CELLS,
+		0.75, 150.0, 0.0, HULL_TEXTURE, "", 1, {MaterialCatalog.IRON: 12},
+		0.0, 0.0, null, true)
+	hull_spar.faction_hex_textures = FactionArtImporter.load_faction_textures("hull_mk1")
+	types.append(hull_spar)
+
+	# The armour block: compact rather than long, so it actually shields what
+	# sits behind it instead of presenting a three-hex-wide face.
+	var hull_wedge: ModuleType = _make(HULL_WEDGE_TYPE_ID, "Hull Wedge", Color(0.45, 0.3, 0.55), TRIANGLE_3_CELLS,
+		1.0, 220.0, 0.0, null, "", 1, {MaterialCatalog.IRON: 20},
+		0.0, 0.0, null, true)
+	hull_wedge.faction_hex_textures = FactionArtImporter.load_faction_textures("armour_module")
+	types.append(hull_wedge)
+
+	# Mount hex plus barrel hex. Uses the two-piece laser plate art (see
+	# faction_hex_textures_per_cell on the tiered lasers below) with the plain
+	# turret overlay — it is a starter gun in a bigger housing, not a tier II
+	# weapon.
+	var gun_mk1: ModuleType = _make(GUN_MK1_TYPE_ID, "Gun Mk1", Color(0.9, 0.35, 0.3), LINE_2_CELLS,
+		0.5, 40.0, 0.0, null, "weapon", 1,
+		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 6},
+		0.0, 0.0, null, true)
+	gun_mk1.faction_hex_textures = FactionArtImporter.load_faction_textures("laser_cannon_mk2")
+	gun_mk1.faction_hex_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
+		"laser_cannon_mk2", LINE_2_CELLS)
+	gun_mk1.faction_hex_overlay_textures = FactionArtImporter.load_faction_textures("turret_360")
+	types.append(gun_mk1)
+
+	# Carries a little capacity of its own as well as generation, so a ship with
+	# no battery still has somewhere to hold a shot's worth of energy.
+	var reactor_pair: ModuleType = _make(REACTOR_PAIR_TYPE_ID, "Reactor Pair", Color(1.0, 0.75, 0.2), LINE_2_CELLS,
+		0.7, 50.0, 0.0, null, "", 1,
+		{MaterialCatalog.IRON: 12, MaterialCatalog.COPPER: 14, MaterialCatalog.NICKEL: 6},
+		30.0, 40.0, null, true)
+	reactor_pair.faction_hex_textures = FactionArtImporter.load_faction_textures("reactor_mk1")
+	types.append(reactor_pair)
+
+	# The only source of thrust in the build set, so losing one is the
+	# difference between manoeuvring and drifting.
+	var thruster_block: ModuleType = _make(THRUSTER_BLOCK_TYPE_ID, "Thruster Block", Color(0.3, 0.7, 1.0), LINE_2_CELLS,
+		0.5, 45.0, 800.0, null, "", 1,
+		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 8},
+		0.0, 0.0, null, true)
+	thruster_block.faction_hex_textures = FactionArtImporter.load_faction_textures("thruster_mk1")
+	types.append(thruster_block)
+
+	# --- Legacy single-hex types --------------------------------------------
+	# No longer offered in the builder (see ShipBuilderPanel.BUILDABLE_TYPE_IDS)
+	# but still referenced by id from saved layouts and by any part already in a
+	# player's hold, so they stay in the catalog.
 
 	# Fragile enough to be crackable within a normal engagement (with splash
 	# from nearby hits, see Ship.module_splash_fraction), but not so fragile

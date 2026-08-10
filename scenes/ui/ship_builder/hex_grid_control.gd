@@ -1,14 +1,19 @@
 class_name HexGridControl
 extends Control
 
-## The ship builder's build field: the faint hex lattice, the ship under
-## construction, and the placement preview.
+## The ship builder's build field: the ship under construction, the cells it can
+## currently grow into, and the placement preview.
 ##
-## Styled to docs/design_handoff_ship_builder/README.md ("Hex grid field").
-## The lattice is deliberately not a rigid grid — per-hex stroke opacity fades
-## from the centre outwards and a vignette darkens the border, so it reads as
-## depth. The container's rounded frame is the parent PanelContainer's
-## stylebox; everything inside it is drawn here.
+## Styled to docs/design_handoff_ship_builder/README.md ("Hex grid field"), with
+## one deliberate departure from it: the field no longer draws a full hex
+## lattice. Only the empty cells directly against the hull are drawn, and those
+## brighten when the selected module can actually reach them. A wall of 400
+## identical cells said nothing about where a part could go; a thin ring of
+## sockets around the ship says exactly that, and it is also far less to draw
+## (docs/performance.md — this is a per-frame _draw while a preview pulses).
+##
+## The container's rounded frame is the parent PanelContainer's stylebox;
+## everything inside it is drawn here.
 
 signal hex_clicked(hex_coord: Vector2i)
 signal hex_hovered(hex_coord: Vector2i)
@@ -26,10 +31,12 @@ var faction_id: String = "corporate"
 var layout: ShipLayout
 var selected_placement_id: String = ""
 
-## Lattice stroke opacity at the centre of the field and at its edge.
-const LATTICE_OPACITY_CENTRE: float = 0.22
-const LATTICE_OPACITY_EDGE: float = 0.05
-const LATTICE_FILL: Color = Color(1, 1, 1, 0.012)
+## Attachment socket strokes: the dim state is "the hull could grow here", the
+## bright state is "the module you have selected fits over this cell".
+const SOCKET_OPACITY: float = 0.18
+const SOCKET_REACHABLE_OPACITY: float = 0.55
+const SOCKET_FILL: Color = Color(1, 1, 1, 0.012)
+const SOCKET_REACHABLE_FILL: Color = Color(0.1647, 0.3529, 0.4118, 0.18)
 
 ## Soft cyan wash behind the lattice, and the vignette over it.
 const FIELD_GLOW: Color = Color(0.1647, 0.3529, 0.4118, 0.16)  # rgba(42,90,105,0.16)
@@ -46,6 +53,19 @@ const DASH_GAP: float = 4.0
 const FIT_MARGIN: float = 0.04
 
 var _center: Vector2
+## Empty in-bounds cells directly against the hull, and the subset of those the
+## currently selected module could actually be placed over. Both are recomputed
+## by refresh()/set_build_target() rather than in _draw(): _draw runs every frame
+## while a preview pulses, and sweeping placement legality there would be pure
+## waste (docs/performance.md).
+var _socket_cells: Array[Vector2i] = []
+var _reachable_cells: Dictionary = {}
+## The module type the palette currently has selected, and the rotation it would
+## be placed at — what _reachable_cells is computed against. Empty means nothing
+## is selected, so every socket draws in its dim state.
+var _build_type_id: String = ""
+var _build_rotation: int = 0
+
 var _preview_cells: Array[Vector2i] = []
 var _preview_valid: bool = true
 var _preview_module_type_id: String = ""
@@ -110,7 +130,7 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	_draw_field_glow()
-	_draw_lattice()
+	_draw_sockets()
 	_draw_placements()
 	_draw_hardpoint_overlays()
 	_draw_vignette()
@@ -128,18 +148,77 @@ func _draw_vignette() -> void:
 	draw_texture_rect(_vignette_texture, Rect2(size * 0.5 - extent * 0.5, extent), false, VIGNETTE_COLOR)
 
 
-## Empty cells only — near-invisible fill with a stroke that fades towards the
-## edges of the field.
-func _draw_lattice() -> void:
-	var falloff_radius: float = maxf(size.length() * 0.5, 1.0)
-	for hex_coord in _all_coords_in_bounds():
-		var centre: Vector2 = _axial_to_pixel(hex_coord)
-		var corners: PackedVector2Array = _hex_corners(centre)
-		draw_colored_polygon(corners, LATTICE_FILL)
+## The ring of empty cells the hull can grow into. A socket the selected module
+## can actually be placed over is drawn brighter and filled — that difference is
+## the whole point of the ring, so "where can this part go" is answerable
+## without hovering every cell in turn.
+func _draw_sockets() -> void:
+	for hex_coord in _socket_cells:
+		var corners: PackedVector2Array = _hex_corners(_axial_to_pixel(hex_coord))
+		var reachable: bool = _reachable_cells.has(hex_coord)
+		draw_colored_polygon(corners, SOCKET_REACHABLE_FILL if reachable else SOCKET_FILL)
+		_stroke_polygon(corners, BuilderTheme.with_alpha(BuilderTheme.CYAN,
+			SOCKET_REACHABLE_OPACITY if reachable else SOCKET_OPACITY), 1.0)
 
-		var distance_fraction: float = clampf(centre.distance_to(_center) / falloff_radius, 0.0, 1.0)
-		var opacity: float = lerpf(LATTICE_OPACITY_CENTRE, LATTICE_OPACITY_EDGE, distance_fraction)
-		_stroke_polygon(corners, BuilderTheme.with_alpha(BuilderTheme.CYAN, opacity), 1.0)
+
+## Which module the sockets should be measured against. Called by
+## ShipBuilderPanel whenever the palette selection or the pending rotation
+## changes; an empty id means nothing is selected.
+func set_build_target(module_type_id: String, rotation_steps: int) -> void:
+	if module_type_id == _build_type_id and rotation_steps == _build_rotation:
+		return
+	_build_type_id = module_type_id
+	_build_rotation = rotation_steps
+	_recompute_sockets()
+	queue_redraw()
+
+
+func _recompute_sockets() -> void:
+	_socket_cells.clear()
+	_reachable_cells.clear()
+	if layout == null:
+		return
+
+	var seen: Dictionary = {}
+	for placement in layout.placements:
+		for cell in layout.get_occupied_cells(placement):
+			for neighbor in HexUtils.neighbors(cell):
+				if seen.has(neighbor) or layout.is_occupied(neighbor) or not is_in_bounds(neighbor):
+					continue
+				seen[neighbor] = true
+				_socket_cells.append(neighbor)
+
+	_recompute_reachable_cells()
+
+
+## A multi-hex module can legally anchor on a cell that isn't itself against the
+## hull, as long as one of its other cells is. So rather than sweeping the whole
+## field for legal anchors, this walks the socket ring and asks, for each cell,
+## "what anchor would put some part of this module here?" — footprint size times
+## ring size, instead of the whole 20x20 grid.
+func _recompute_reachable_cells() -> void:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(_build_type_id)
+	if module_type == null:
+		return
+
+	var tried_anchors: Dictionary = {}
+	for socket in _socket_cells:
+		for offset in module_type.footprint_cells:
+			var anchor: Vector2i = socket - HexUtils.rotate(offset, _build_rotation)
+			if tried_anchors.has(anchor):
+				continue
+			tried_anchors[anchor] = true
+
+			var cells: Array[Vector2i] = layout.get_candidate_cells(_build_type_id, anchor, _build_rotation)
+			var in_bounds: bool = true
+			for cell in cells:
+				if not is_in_bounds(cell):
+					in_bounds = false
+					break
+			if not in_bounds or not layout.can_place(_build_type_id, anchor, _build_rotation):
+				continue
+			for cell in cells:
+				_reachable_cells[cell] = true
 
 
 func _draw_placements() -> void:
@@ -322,6 +401,7 @@ func clear_preview() -> void:
 
 
 func refresh() -> void:
+	_recompute_sockets()
 	queue_redraw()
 
 
@@ -346,16 +426,6 @@ func is_in_bounds(hex_coord: Vector2i) -> bool:
 		return false
 	var q_min: int = -grid_width / 2 - _row_q_offset(hex_coord.y)
 	return hex_coord.x >= q_min and hex_coord.x < q_min + grid_width
-
-
-func _all_coords_in_bounds() -> Array[Vector2i]:
-	var coords: Array[Vector2i] = []
-	var r_min: int = -grid_height / 2
-	for r in range(r_min, r_min + grid_height):
-		var q_min: int = -grid_width / 2 - _row_q_offset(r)
-		for q in range(q_min, q_min + grid_width):
-			coords.append(Vector2i(q, r))
-	return coords
 
 
 ## Each axial row is horizontally offset by half a cell per row in pixel

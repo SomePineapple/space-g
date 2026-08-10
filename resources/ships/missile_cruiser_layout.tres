@@ -1,44 +1,63 @@
-[gd_resource type="Resource" script_class="ShipLayout" format=3 uid="uid://c1v6qk5dqp5jw"]
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
 
-[ext_resource type="Script" uid="uid://dvxmcqefbs8g8" path="res://scripts/ships/layout/ship_layout.gd" id="1_layout"]
-[ext_resource type="Script" uid="uid://b6qe4yx2c6t2d" path="res://scripts/ships/modules/module_placement.gd" id="2_placement"]
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_hfbjy"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_s1eey"]
 
-[sub_resource type="Resource" id="Resource_core"]
-script = ExtResource("2_placement")
-placement_id = "core"
+[sub_resource type="Resource" id="Resource_umoaq"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_34"
 module_type_id = "command_core"
 
-[sub_resource type="Resource" id="Resource_heavy_hull"]
-script = ExtResource("2_placement")
-placement_id = "heavy_hull_a"
-module_type_id = "heavy_hull"
+[sub_resource type="Resource" id="Resource_2nfpr"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_35"
+module_type_id = "hull_wedge"
+hex_coord = Vector2i(0, -2)
+
+[sub_resource type="Resource" id="Resource_q3vcu"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_36"
+module_type_id = "hull_spar"
+hex_coord = Vector2i(-3, 0)
+
+[sub_resource type="Resource" id="Resource_mde5u"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_37"
+module_type_id = "hull_spar"
 hex_coord = Vector2i(1, 0)
 
-[sub_resource type="Resource" id="Resource_engine"]
-script = ExtResource("2_placement")
-placement_id = "engine_a"
-module_type_id = "engine"
-hex_coord = Vector2i(-1, 0)
+[sub_resource type="Resource" id="Resource_kaydf"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_38"
+module_type_id = "missile_hardpoint_t3"
+hex_coord = Vector2i(-3, -1)
 
-[sub_resource type="Resource" id="Resource_missile_a"]
-script = ExtResource("2_placement")
-placement_id = "missile_a"
-module_type_id = "missile_hardpoint"
-hex_coord = Vector2i(0, -1)
+[sub_resource type="Resource" id="Resource_o82as"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_39"
+module_type_id = "missile_hardpoint_t2"
+hex_coord = Vector2i(2, -1)
 
-[sub_resource type="Resource" id="Resource_missile_b"]
-script = ExtResource("2_placement")
-placement_id = "missile_b"
-module_type_id = "missile_hardpoint"
+[sub_resource type="Resource" id="Resource_5tduy"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_40"
+module_type_id = "gun_mk1"
+hex_coord = Vector2i(-4, 1)
+rotation_steps = 4
+
+[sub_resource type="Resource" id="Resource_nyur5"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_41"
+module_type_id = "reactor_pair"
 hex_coord = Vector2i(0, 1)
 
-[sub_resource type="Resource" id="Resource_reactor"]
-script = ExtResource("2_placement")
-placement_id = "reactor_a"
-module_type_id = "reactor_mk1"
-hex_coord = Vector2i(-1, 1)
+[sub_resource type="Resource" id="Resource_qyfds"]
+script = ExtResource("1_hfbjy")
+placement_id = "p_17398_42"
+module_type_id = "thruster_block"
+hex_coord = Vector2i(-2, 1)
 
 [resource]
-script = ExtResource("1_layout")
-placements = Array[ExtResource("2_placement")]([SubResource("Resource_core"), SubResource("Resource_heavy_hull"), SubResource("Resource_engine"), SubResource("Resource_missile_a"), SubResource("Resource_missile_b"), SubResource("Resource_reactor")])
-core_placement_id = "core"
+script = ExtResource("2_s1eey")
+placements = Array[ExtResource("1_hfbjy")]([SubResource("Resource_umoaq"), SubResource("Resource_2nfpr"), SubResource("Resource_q3vcu"), SubResource("Resource_mde5u"), SubResource("Resource_kaydf"), SubResource("Resource_o82as"), SubResource("Resource_5tduy"), SubResource("Resource_nyur5"), SubResource("Resource_qyfds")])
+core_placement_id = "p_17398_34"
