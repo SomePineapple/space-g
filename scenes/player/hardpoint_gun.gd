@@ -20,9 +20,36 @@ extends Node2D
 @export var projectile_lifetime_variance: float = 0.2
 @export var barrel_color: Color = Color(0.5, 0.85, 1.0, 1.0)
 @export var energy_cost: float = 4.0
-## Left unassigned by default (no audio assets yet); assign a stream once
-## one exists and firing will play it automatically.
+## A single fixed shot sound. Left null on the plain gun, which picks from
+## fire_sounds instead; kept for a weapon that should always sound the same.
 @export var fire_sound: AudioStream = null
+
+## One of these is picked at random per shot, so a burst does not machine-gun the
+## same waveform. Guns fire in a staggered rotation now (see
+## HardpointBank.fire_primary), which means a ship with four cannons produces
+## four separate, audible shots per cycle rather than one stacked crack — with a
+## single sample that reads as a stutter.
+##
+## The pick uses the global randf rather than a named GameRng stream. Which
+## sample plays is presentation, not simulation: drawing it from a shared stream
+## would advance that stream a different number of times per machine and desync
+## every simulation roll downstream (docs/direction.md §2).
+@export var fire_sounds: Array[AudioStream] = [
+	preload("res://audio/laser1.mp3"),
+	preload("res://audio/laser2.mp3"),
+	preload("res://audio/laser3.mp3"),
+	preload("res://audio/laser4.mp3"),
+]
+
+## Shot volume, well below unity on purpose. Several guns on the player's hull
+## plus every pirate in the fight all firing into one mix gets loud fast, and the
+## shot sound is the most frequent event in the game — it has to sit under the
+## music rather than on top of it.
+@export var fire_volume_db: float = -16.0
+
+## Random semitone-ish spread on each shot, on top of the sample variation.
+## Cheap way to stop a sustained burst sounding mechanical.
+@export var fire_pitch_variation: float = 0.08
 
 ## Black Market Foundry only (see Manufacturer.malfunction_chance) — zero for
 ## every other manufacturer/no manufacturer, meaning "never." Set by Ship
@@ -220,12 +247,24 @@ func _execute_fire() -> Projectile:
 	WorldSpawn.attach_at(projectile, _muzzle.global_position, _muzzle.global_rotation)
 	projectile.launch(projectile_speed, _shooter)
 
-	if fire_sound != null:
-		_fire_sound_player.stream = fire_sound
-		_fire_sound_player.play()
-
+	_play_fire_sound()
 	_apply_recoil()
 	return projectile
+
+
+## fire_sound wins if one is set; otherwise a random pick from fire_sounds.
+## Silent when neither is configured, which is how the missile launcher stays
+## quiet on a path it shares with the guns.
+func _play_fire_sound() -> void:
+	var stream: AudioStream = fire_sound
+	if stream == null and not fire_sounds.is_empty():
+		stream = fire_sounds[randi() % fire_sounds.size()]
+	if stream == null:
+		return
+	_fire_sound_player.stream = stream
+	_fire_sound_player.volume_db = fire_volume_db
+	_fire_sound_player.pitch_scale = 1.0 + randf_range(-fire_pitch_variation, fire_pitch_variation)
+	_fire_sound_player.play()
 
 
 ## A small straight-line kick opposite the barrel's facing, not a spin — see

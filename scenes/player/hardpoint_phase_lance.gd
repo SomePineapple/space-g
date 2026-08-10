@@ -59,9 +59,7 @@ func _resolve_beam() -> void:
 
 	_spawn_beam_visual(from_point, to_point)
 
-	if fire_sound != null:
-		_fire_sound_player.stream = fire_sound
-		_fire_sound_player.play()
+	_play_fire_sound()
 
 	_apply_recoil()
 

@@ -301,7 +301,10 @@ func _apply_manufacturer_modifiers(node: Node, placement: ModulePlacement) -> vo
 ## hardpoint can push it through here rather than rebuilding the hardpoint —
 ## which is the hook the ship-wide upgrades (ShipUpgradeService) will need once
 ## their effects are authored.
-func apply_modifiers(node: Node, modifiers: Dictionary) -> void:
+## Static so the ship builder's part card can quote a weapon's real numbers by
+## applying the same rule to a throwaway probe, instead of keeping a second copy
+## of it that would drift (see BuilderPartCard._probe_hardpoint).
+static func apply_modifiers(node: Node, modifiers: Dictionary) -> void:
 	for property_name in modifiers:
 		if property_name in node:
 			node.set(property_name, node.get(property_name) + modifiers[property_name])

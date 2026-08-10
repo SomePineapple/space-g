@@ -36,6 +36,10 @@ func _init() -> void:
 	# like a gun, so there's no reaction kick into the ship.
 	recoil_force = 0.0
 	projectile_color = Color(1, 0.6, 0.15, 1)
+	# A silo is not a laser. Cleared rather than left inherited, because the
+	# launcher spawns its missile through HardpointGun's shared fire path, which
+	# would otherwise give it the gun's shot sound.
+	fire_sounds = []
 	projectile_damage = 40.0
 	energy_cost = 15.0
 

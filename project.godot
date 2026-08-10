@@ -22,6 +22,7 @@ GameState="*res://scripts/game_state.gd"
 PlayerContext="*res://scripts/player_context.gd"
 GameRng="*res://scripts/game_rng.gd"
 MarketService="*res://scripts/economy/market_service.gd"
+AmbientMusic="*res://scripts/world/ambient_music.gd"
 
 [display]
 

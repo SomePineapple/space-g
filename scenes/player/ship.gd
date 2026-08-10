@@ -144,6 +144,10 @@ var _angular_velocity: float = 0.0
 ## same as the main flame arrays above.
 var _thruster_particles_turn_left: Array[GPUParticles2D] = []
 var _thruster_particles_turn_right: Array[GPUParticles2D] = []
+## The engine loop, one voice per faction of thruster mounted (see EngineAudio).
+## Created in code rather than in ship.tscn because it has no authored state and
+## every ship — player and AI alike — wants exactly one.
+var _engine_audio: EngineAudio
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
@@ -453,6 +457,14 @@ func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector
 ## HullDamageModel.damage_cut, which also documents the returned dictionary.
 func take_slicer_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vector2) -> Dictionary:
 	return _hull_damage.damage_cut(band_fraction, impact_point, aim_direction)
+
+
+## Whether the ship is actually under boost — held throttle forward *and* the
+## boost key down. Public because the camera reads it to rumble while boosting
+## (see camera_shake.gd) and EngineAudio reads it through Ship to pitch its note
+## up; both would otherwise have to duplicate the two-part condition.
+func is_boosting() -> bool:
+	return _boost_active and _thrust_input > 0.0
 
 
 ## Credits one kill to the specific part that fired the fatal shot, recorded on
@@ -900,6 +912,11 @@ func _spawn_thrusters() -> void:
 	_thruster_particles_turn_left.clear()
 	_thruster_particles_turn_right.clear()
 
+	if _engine_audio == null:
+		_engine_audio = EngineAudio.new()
+		add_child(_engine_audio)
+	_engine_audio.configure(ship_layout, personality.faction_id)
+
 	for placement in ship_layout.get_thruster_placements():
 		var thruster: Node2D = engine_thruster_scene.instantiate()
 		add_child(thruster)
@@ -929,6 +946,12 @@ func _spawn_thrusters() -> void:
 func _update_engine_particles() -> void:
 	var thrusting_forward: bool = _thrust_input > 0.0
 	var boosting: bool = thrusting_forward and _boost_active
+
+	# Any throttle at all, forward or reverse: the engines are burning either
+	# way, even though only forward thrust lights the main flame.
+	if _engine_audio != null:
+		_engine_audio.set_thrusting(
+			not is_zero_approx(_thrust_input) and get_current_health() > 0.0, boosting)
 
 	# Attitude jets fire on the side that produces the torque, so the exhaust
 	# points opposite the way the nose swings: the engines sit behind the centre

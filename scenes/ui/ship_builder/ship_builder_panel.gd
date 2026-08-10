@@ -36,6 +36,7 @@ var _status_label: Label
 var _stat_strip: BuilderStatStrip
 var _grid: HexGridControl
 var _module_list: ModuleListView
+var _part_card: BuilderPartCard
 var _presets_card: BuilderPresetsCard
 var _save_name_edit: LineEdit
 var _cell_count_label: Label
@@ -155,6 +156,10 @@ func _build_top_hud(root: Control) -> void:
 	column.add_child(_stat_strip)
 
 
+## Gap between the build field's frame and the part card floating inside it.
+const FIELD_CARD_INSET: float = 14.0
+
+
 func _build_field(root: Control) -> void:
 	var frame := PanelContainer.new()
 	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -177,6 +182,21 @@ func _build_field(root: Control) -> void:
 	_grid.hex_hovered.connect(_on_hex_hovered)
 	_grid.hover_exited.connect(_on_hover_exited)
 	frame.add_child(_grid)
+
+	# Floated over the field's top-left corner rather than parented into it: the
+	# frame is a PanelContainer, which stretches every child to fill its content
+	# rect, so a card added there would cover the whole build area. Wrapped in a
+	# positioned container for the same reason _build_top_hud is — a container
+	# placed by `position` sizes itself to its contents, while a bare Control
+	# would need its rect setting by hand.
+	var card_holder := VBoxContainer.new()
+	card_holder.position = Vector2(
+		BuilderTheme.SCREEN_MARGIN + FIELD_CARD_INSET,
+		BuilderTheme.FIELD_TOP + FIELD_CARD_INSET)
+	root.add_child(card_holder)
+
+	_part_card = BuilderPartCard.new()
+	card_holder.add_child(_part_card)
 
 
 func _build_right_column(root: Control) -> void:
@@ -329,6 +349,8 @@ func _selected_type_id() -> String:
 func _clear_selection() -> void:
 	_selected_instance_id = ""
 	_module_list.set_selected_key("")
+	if _part_card != null:
+		_part_card.clear()
 	_grid.clear_preview()
 	_sync_build_target()
 	_grid.refresh()
@@ -348,7 +370,8 @@ func _on_module_selected(instance_id: String) -> void:
 		_report("Select a part from the hold, then click a socket on the hull.")
 		return
 
-	_report("Selected: %s (%s) — click a socket to bolt it on." % [part.display_name(), part.serial])
+	_part_card.show_instance(part)
+	_report("Click a socket on the hull to bolt it on.")
 	_grid.refresh()
 	_update_preview()
 
@@ -402,7 +425,10 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_grid.clear_preview()
 		_sync_build_target()
 		_grid.selected_placement_id = existing.placement_id
-		_report("Mounted: %s" % _describe_instance(existing))
+		_part_card.show_instance(existing.instance, existing.module_type_id)
+		# Identity lives on the part card now; the status line stays on what to do
+		# next, which is the one thing the card does not say.
+		_report("R to rotate, or Remove Selected to take it off.")
 		_grid.refresh()
 		return
 
@@ -433,25 +459,6 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 	_pending_rotation = 0
 	_clear_selection()
 	_refresh()
-
-
-## The identity readout for one mounted part: what it is, its serial, how beaten
-## up it is, and what it was cut off.
-func _describe_instance(placement: ModulePlacement) -> String:
-	var instance: ModuleInstance = placement.instance
-	if instance == null:
-		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-		return module_type.display_name if module_type != null else placement.module_type_id
-
-	var fields: PackedStringArray = PackedStringArray([
-		instance.display_name(),
-		instance.serial,
-		"%d%% condition" % roundi(instance.condition_fraction * 100.0),
-	])
-	if instance.kill_count > 0:
-		fields.append("%d kills" % instance.kill_count)
-	fields.append(instance.origin_description if instance.is_salvaged() else "fabricated")
-	return " · ".join(fields)
 
 
 func _on_rotate_pressed() -> void:
