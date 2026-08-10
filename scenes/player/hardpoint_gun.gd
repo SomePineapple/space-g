@@ -118,8 +118,12 @@ func set_cell_size(cell_size: float, tier_scale: float = 1.0) -> void:
 ## rectangle. Null (no art for this faction/tier yet, e.g. Railgun, Phase
 ## Lance, or a faction with no turret sprite) falls back to the Barrel
 ## polygon unchanged.
-func set_turret_texture(texture: Texture2D) -> void:
+## `tint` is the same multiply HullPaint applies to the module's base plate, so a
+## worn or foreign gun's turret shades with the rest of the part instead of
+## sitting on it at full brightness.
+func set_turret_texture(texture: Texture2D, tint: Color = Color.WHITE) -> void:
 	_turret.texture = texture
+	_turret.modulate = tint
 	_barrel.visible = texture == null
 	_update_turret_transform()
 

@@ -187,7 +187,11 @@ func _build_row(key: String) -> Control:
 	panel.add_child(line)
 
 	var icon := ModuleHexIcon.new()
-	icon.configure(entry["module_type"], faction_id)
+	# Each row is one specific part, so it is drawn in the art of whoever built
+	# it — not the hull's. `faction_id` here is the *player's* faction, which
+	# made a pirate gun cut off a raider sit in the list wearing corporate
+	# plating and then change appearance the moment it was placed.
+	icon.configure(entry["module_type"], _art_faction_for(instance))
 	line.add_child(icon)
 
 	var text_column := VBoxContainer.new()
@@ -337,3 +341,9 @@ func _on_row_hover(key: String, hovered: bool) -> void:
 func _on_row_gui_input(event: InputEvent, key: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		module_selected.emit("" if key == _selected_key else key)
+
+
+## Delegates so the list can't drift from what the hull and the builder grid do
+## (see HullPaint.art_faction_for).
+func _art_faction_for(instance: ModuleInstance) -> String:
+	return HullPaint.art_faction_for(instance, faction_id)

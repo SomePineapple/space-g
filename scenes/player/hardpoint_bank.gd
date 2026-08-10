@@ -22,7 +22,7 @@ extends Node2D
 @export var missile_launcher_scene: PackedScene = preload("res://scenes/player/hardpoint_missile_launcher.tscn")
 @export var winch_scene: PackedScene = preload("res://scenes/player/hardpoint_winch.tscn")
 @export var tractor_beam_scene: PackedScene = preload("res://scenes/player/hardpoint_tractor_beam.tscn")
-@export var grinder_scene: PackedScene = preload("res://scenes/player/hardpoint_grinder.tscn")
+@export var slicer_scene: PackedScene = preload("res://scenes/player/hardpoint_slicer.tscn")
 
 var _ship: Ship
 var _layout: ShipLayout
@@ -64,7 +64,7 @@ func rebuild(ship: Ship, layout: ShipLayout, renderer: ShipLayoutRenderer) -> vo
 	for placement in layout.get_tractor_hardpoint_placements():
 		_mount_tractor_beam(placement)
 	for placement in layout.get_grinder_hardpoint_placements():
-		_mount_grinder(placement)
+		_mount_slicer(placement)
 
 
 ## The live spawned node for placement_id, across every hardpoint kind. Null for
@@ -147,7 +147,15 @@ func _mount_gun(placement: ModulePlacement) -> HardpointGun:
 	var scene: PackedScene = module_type.hardpoint_scene if module_type.hardpoint_scene != null else gun_scene
 	var gun: HardpointGun = _mount(scene, placement)
 	gun.set_cell_size(_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
-	gun.set_turret_texture(module_type.get_hex_overlay_texture(_ship.personality.faction_id))
+	# The turret art follows the part, not the hull. A pirate gun bolted onto a
+	# corporate ship kept drawing the corporate turret while its own base plate
+	# was already tinted pirate, so the two halves of one module disagreed about
+	# where it came from. Tinted to match the plate for the same reason.
+	var art_faction: String = HullPaint.art_faction_for(placement.instance, _ship.personality.faction_id)
+	var overlay: Texture2D = module_type.get_hex_overlay_texture(art_faction)
+	if overlay == null:
+		overlay = module_type.get_hex_overlay_texture(_ship.personality.faction_id)
+	gun.set_turret_texture(overlay, HullPaint.part_tint(placement, _ship.personality.faction_id))
 	gun.apply_tier(module_type.tier)
 	gun.apply_core_distance_bonus(_layout.distance_from_core(placement))
 	gun.setup(_ship)
@@ -189,12 +197,12 @@ func _mount_tractor_beam(placement: ModulePlacement) -> HardpointTractorBeam:
 ## Same fixed-facing convention as _mount_winch — the contact point (see
 ## HardpointGrinder) is a specific direction out of the anchor cell, not aimed
 ## at anything.
-func _mount_grinder(placement: ModulePlacement) -> HardpointGrinder:
-	var grinder: HardpointGrinder = _mount(grinder_scene, placement)
-	grinder.rotation = _fixed_facing(placement)
-	grinder.set_cell_size(_renderer.cell_size)
-	grinder.setup(_ship)
-	return grinder
+func _mount_slicer(placement: ModulePlacement) -> HardpointSlicer:
+	var slicer: HardpointSlicer = _mount(slicer_scene, placement)
+	slicer.rotation = _fixed_facing(placement)
+	slicer.set_cell_size(_renderer.cell_size)
+	slicer.setup(_ship)
+	return slicer
 
 
 func _fixed_facing(placement: ModulePlacement) -> float:

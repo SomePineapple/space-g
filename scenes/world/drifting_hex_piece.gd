@@ -24,6 +24,9 @@ var _textures: Array[Texture2D] = []
 var _rotation_steps: int = 0
 var _cell_size: float = 24.0
 var _velocity: Vector2 = Vector2.ZERO
+## See setup(): keeps the cells drawn where they sat on the hull while the node
+## itself is positioned at the piece's own centre.
+var _cell_offset: Vector2 = Vector2.ZERO
 var _spin: float = 0.0
 var _age: float = 0.0
 
@@ -32,8 +35,15 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 
+## `cell_offset` is subtracted from every cell's drawn position, so a piece can
+## be spawned at its own centroid and still render its cells in their original
+## hull arrangement. Without it a piece's origin is the *ship's* centre, which
+## puts global_position up to a whole hull away from where the piece visibly is —
+## and global_position is what the winch measures against, what it reels toward,
+## and what it spins around.
 func setup(cells: Array[Vector2i], colors: Array[Color], textures: Array[Texture2D], rotation_steps: int,
-		cell_size: float, drift_velocity: Vector2, spin: float) -> void:
+		cell_size: float, drift_velocity: Vector2, spin: float,
+		cell_offset: Vector2 = Vector2.ZERO) -> void:
 	_cells = cells
 	_colors = colors
 	_textures = textures
@@ -41,7 +51,21 @@ func setup(cells: Array[Vector2i], colors: Array[Color], textures: Array[Texture
 	_cell_size = cell_size
 	_velocity = drift_velocity
 	_spin = spin
+	_cell_offset = cell_offset
 	queue_redraw()
+
+
+## How far this piece physically extends from its own origin, so a winch aiming
+## at it can use the size it looks rather than a fixed guess (see
+## HardpointWinch._effective_radius). A two-hex part is ~80 units across; the
+## winch's 20-unit attach radius alone made catching one a matter of threading a
+## hole smaller than the thing you are aiming at.
+func get_winch_radius() -> float:
+	var farthest: float = 0.0
+	for cell in _cells:
+		farthest = maxf(farthest,
+			(HexUtils.axial_to_pixel(cell, _cell_size) - _cell_offset).length())
+	return farthest + _cell_size
 
 
 ## Whether this piece should keep moving and ageing this frame. Overridden by
@@ -66,7 +90,8 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	for i in _cells.size():
-		var corners: PackedVector2Array = HexUtils.hex_corners(HexUtils.axial_to_pixel(_cells[i], _cell_size), _cell_size)
+		var corners: PackedVector2Array = HexUtils.hex_corners(
+			HexUtils.axial_to_pixel(_cells[i], _cell_size) - _cell_offset, _cell_size)
 		var texture: Texture2D = _textures[i] if i < _textures.size() else null
 		if texture != null:
 			draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners_for_rotation(_rotation_steps), texture)

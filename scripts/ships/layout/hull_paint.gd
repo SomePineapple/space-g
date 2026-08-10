@@ -45,6 +45,17 @@ const WORN_SHADE: float = 0.55
 const HEALTHY_CONDITION: float = 0.85
 
 
+## Whose art a part is drawn in: its own maker's if it was cut off someone
+## else's ship, otherwise the hull's. Every surface that draws a part — the hull,
+## the builder grid, the parts list, a gun's turret overlay — has to ask this the
+## same way, or the same part changes appearance depending on where you look at
+## it.
+static func art_faction_for(instance: ModuleInstance, hull_faction_id: String) -> String:
+	if instance != null and instance.is_salvaged() and not instance.origin_faction_id.is_empty():
+		return instance.origin_faction_id
+	return hull_faction_id
+
+
 ## Whether two parts look like they were meant to go together: same provenance,
 ## and neither one beaten up. Anything else is a joint someone improvised.
 ##

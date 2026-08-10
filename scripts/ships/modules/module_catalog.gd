@@ -338,22 +338,31 @@ static func get_all() -> Array[ModuleType]:
 	# should require deliberate activation. Lime-green is the fallback tint
 	# for factions with no grinder art — distinct from every warm-toned module
 	# (Weapon/Missile/Reactor/Storage) and from Radar's pure green.
-	var grinder_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Mining Grinder", Color(0.65, 0.85, 0.15), SINGLE_CELL,
-		0.5, 30.0, 0.0, null, "grinder", 1,
+	# Hull Slicer (see HardpointSlicer) — the tool the salvage loop runs on. Two
+	# hexes, fixed-facing: the cut travels straight out from the mount, so
+	# lining one up on a specific connector is a manoeuvre rather than a mouse
+	# gesture. Replaces the single-hex Mining Grinder in the same system slot
+	# (hardpoint_category stays "grinder"; see Ship.is_slicer_active).
+	#
+	# Cold white in the fallback tint, matching the beam — this is industrial
+	# equipment and should not read as a weapon at any point.
+	var slicer_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Hull Slicer", Color(0.85, 0.93, 1.0), LINE_2_CELLS,
+		0.6, 45.0, 0.0, null, "grinder", 1,
 		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 6},
-		0.0, 0.0, preload("res://scenes/player/hardpoint_grinder.tscn"))
-	grinder_type.faction_hex_textures = FactionArtImporter.load_faction_textures("mining_grinder")
-	types.append(grinder_type)
+		0.0, 0.0, preload("res://scenes/player/hardpoint_slicer.tscn"), true)
+	slicer_type.faction_hex_textures = FactionArtImporter.load_faction_textures("mining_grinder")
+	types.append(slicer_type)
 
-	# Winch hardpoint (casts a physical rope — see HardpointWinch/WinchRope/
-	# HardpointBank._mount_winch) is disabled for now, per explicit user
-	# request — a good work-in-progress, not abandoned, just not offered as
-	# buildable in the meantime. Left commented rather than deleted: all the
-	# supporting code/scenes/input action are still in place to pick back up.
-	# types.append(_make(WINCH_HARDPOINT_TYPE_ID, "Winch", Color(0.6, 0.55, 0.4), SINGLE_CELL,
-	# 	0.3, 20.0, 0.0, null, "winch", 1,
-	# 	{MaterialCatalog.IRON: 12, MaterialCatalog.COPPER: 6},
-	# 	0.0, 0.0, preload("res://scenes/player/hardpoint_winch.tscn")))
+	# Salvage Winch (see HardpointWinch/WinchRope) — the other half of the loop:
+	# the Slicer frees a part, this drags it home. Re-enabled and rebuilt as a
+	# two-hex part; it was commented out when the builder was cut back to the
+	# five bundled pieces, which is what made severed parts unrecoverable.
+	var winch_type: ModuleType = _make(WINCH_HARDPOINT_TYPE_ID, "Salvage Winch", Color(0.6, 0.55, 0.4), LINE_2_CELLS,
+		0.45, 40.0, 0.0, null, "winch", 1,
+		{MaterialCatalog.IRON: 12, MaterialCatalog.COPPER: 6},
+		0.0, 0.0, preload("res://scenes/player/hardpoint_winch.tscn"), true)
+	winch_type.faction_hex_textures = FactionArtImporter.load_faction_textures("extractor_beam")
+	types.append(winch_type)
 
 	_cached_types = types
 	for type in types:

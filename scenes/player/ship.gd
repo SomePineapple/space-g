@@ -242,6 +242,12 @@ const STARTER_PART_TYPE_IDS: Array[String] = [
 	ModuleCatalog.GUN_MK1_TYPE_ID,
 	ModuleCatalog.REACTOR_PAIR_TYPE_ID,
 	ModuleCatalog.THRUSTER_BLOCK_TYPE_ID,
+	# The salvage loop's two halves. Both are starting equipment rather than
+	# something to find: cutting a part off an enemy and dragging it home is the
+	# game's core verb, and it can't be the reward for a loop it is required to
+	# run.
+	ModuleCatalog.GRINDER_HARDPOINT_TYPE_ID,
+	ModuleCatalog.WINCH_HARDPOINT_TYPE_ID,
 ]
 
 
@@ -433,6 +439,20 @@ func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector
 	_hull_damage.damage_beam(amount, entry_point, aim_direction, max_travel_distance)
 
 
+## Fired by HardpointSlicer. Deliberately unlike take_beam_damage on two counts:
+## the overall Health pool is NOT touched, and only the single part under the
+## contact point is affected — no splash, and nothing behind it.
+##
+## The Slicer is a dismantling tool, not a weapon. It should never be able to
+## kill a ship, only take it apart, so recovering a part means cutting it free
+## rather than grinding a hull down until it dies.
+##
+## Anything that loses its connection to the core as a result is severed intact
+## rather than rolled for (see HullDamageModel's `clean_cut`).
+func take_slicer_cut(amount: float, impact_point: Vector2) -> void:
+	_hull_damage.damage_cut(amount, impact_point)
+
+
 ## Entry point for a hardpoint to damage its own mount — see
 ## HardpointGun.malfunction_chance.
 func damage_own_module(placement_id: String, amount: float) -> void:
@@ -538,7 +558,12 @@ func _try_spend_thrust_energy(delta: float) -> bool:
 ## is_module_destroyed) rather than being pushed a one-shot command, so a
 ## grinder that mounts or repairs mid-toggle picks up the current state
 ## immediately instead of needing a fresh key press.
-func is_grinder_active() -> bool:
+## The system slot is still internally named GRINDER (and its action is still
+## `toggle_grinder`): the Slicer replaced the Mining Grinder in the same socket,
+## and renaming the enum, the input action and ShipLayout's lookup would touch
+## the input map and saved layouts for no behavioural gain. Worth tidying, but
+## not while the tool itself is changing.
+func is_slicer_active() -> bool:
 	return is_system_enabled(ShipSystems.GRINDER)
 
 

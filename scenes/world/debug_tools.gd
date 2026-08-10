@@ -5,6 +5,9 @@ extends Node
 ## costs/upgrades can be tried out without grinding salvage first.
 @export var debug_material_amount: int = 1000
 
+const TEST_DUMMY_SCENE: PackedScene = preload("res://scenes/enemies/test_dummy.tscn")
+const DUMMY_SPAWN_DISTANCE: float = 400.0
+
 ## Parts handed out by debug_add_salvaged_parts, as
 ## [module_type_id, origin_faction_id, condition_fraction, origin_description].
 ##
@@ -35,6 +38,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_add_resources_to_player()
 	elif event.is_action_pressed("debug_add_salvaged_parts"):
 		_add_salvaged_parts_to_player()
+	elif event.is_action_pressed("debug_spawn_test_dummy"):
+		_spawn_test_dummy()
 
 
 func _add_resources_to_player() -> void:
@@ -63,3 +68,24 @@ func _add_salvaged_parts_to_player() -> void:
 		instance.stamp_origin(entry[1], entry[3])
 		inventory.add_captured_instance(instance)
 	print("[debug] granted %d salvaged parts" % SALVAGED_PARTS.size())
+
+
+## Drops an inert pirate in front of the player so the Slicer can be tried
+## without also being shot at. It is a real enemy ship — same scene, same
+## HullDamageModel, same wreckage path — with a personality that never detects,
+## never fires and never turns (see personality_test_dummy.tres), so what you
+## learn about cutting it is true of a live one.
+##
+## Its layout is built to be taken apart: a gun on the end of a long spar, a
+## thruster on a shorter one, and a reactor tucked against the core that cannot
+## be severed at all because it has no connector to cut.
+func _spawn_test_dummy() -> void:
+	var ship: Ship = PlayerContext.get_ship()
+	if ship == null:
+		return
+
+	var dummy: Ship = TEST_DUMMY_SCENE.instantiate()
+	# Far enough ahead to have to fly at it, well inside the Slicer's 10-hex
+	# reach once you arrive.
+	WorldSpawn.attach_at(dummy, ship.global_position + ship.transform.x * DUMMY_SPAWN_DISTANCE)
+	print("[debug] spawned an inert pirate %.0f units ahead" % DUMMY_SPAWN_DISTANCE)

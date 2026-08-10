@@ -14,6 +14,12 @@ extends Node
 ## along at the exact same velocity as the ship that lost it.
 @export var detach_kick_speed: float = 60.0
 @export var detach_spin_range: float = 2.0
+## The same two for a part deliberately cut free rather than blown off. Low
+## enough that the piece essentially coasts along with the hull it left — it
+## still inherits that ship's full velocity, so cutting a part off something
+## moving fast still leaves you chasing it, which is the interesting case.
+@export var clean_cut_kick_speed: float = 10.0
+@export var clean_cut_spin_range: float = 0.3
 
 @export var ship_debris_scene: PackedScene = preload("res://scenes/world/ship_debris.tscn")
 @export var captured_tech_part_scene: PackedScene = preload("res://scenes/world/captured_tech_part.tscn")
@@ -37,14 +43,20 @@ func configure(ship: Ship, layout: ShipLayout, renderer: ShipLayoutRenderer, fac
 ## ago, handed over by HullDamageModel._detach_module. A clean enough severance
 ## (see _roll_capturable) turns it into a recoverable CapturedTechPart still
 ## holding that object; anything else is inert debris and the part is gone.
-func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType, instance: ModuleInstance) -> void:
+## `clean_cut` marks a part that was deliberately severed by a Slicer rather than
+## shaken loose by an explosion. Those always survive: the capture roll exists to
+## make blowing a ship apart an unreliable way to get its parts, and taxing a
+## precise cut with the same dice would mean doing everything right and getting
+## nothing — which reads as a bug rather than as risk.
+func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType,
+		instance: ModuleInstance, clean_cut: bool = false) -> void:
 	var condition_fraction: float = instance.condition_fraction if instance != null else 0.0
-	if instance != null and _roll_capturable(module_type, condition_fraction):
-		var part: CapturedTechPart = _spawn_piece(captured_tech_part_scene, placement, module_type)
+	if instance != null and (clean_cut or _roll_capturable(module_type, condition_fraction)):
+		var part: CapturedTechPart = _spawn_piece(captured_tech_part_scene, placement, module_type, clean_cut)
 		instance.stamp_origin(_faction_id, _origin_description())
 		part.set_instance(instance)
 	else:
-		_spawn_piece(ship_debris_scene, placement, module_type)
+		_spawn_piece(ship_debris_scene, placement, module_type, clean_cut)
 
 
 ## Provenance recorded on a part the first time it is cut free — what it came
@@ -99,7 +111,8 @@ func _roll_capturable(module_type: ModuleType, condition_fraction: float) -> boo
 ## Spawns either flavor of severed hex piece. Both are DriftingHexPiece, and the
 ## placement and launch maths are identical between them, so only the scene
 ## differs here.
-func _spawn_piece(piece_scene: PackedScene, placement: ModulePlacement, module_type: ModuleType) -> DriftingHexPiece:
+func _spawn_piece(piece_scene: PackedScene, placement: ModulePlacement, module_type: ModuleType,
+		clean_cut: bool = false) -> DriftingHexPiece:
 	var data: Dictionary = _visual_data(placement, module_type)
 
 	var piece: DriftingHexPiece = piece_scene.instantiate()
@@ -108,12 +121,27 @@ func _spawn_piece(piece_scene: PackedScene, placement: ModulePlacement, module_t
 	# drifting away under their own velocity.
 	WorldSpawn.attach_transformed(piece, _renderer.global_transform)
 
-	var kick_direction: Vector2 = piece.global_transform.basis_xform(data["centroid"])
-	kick_direction = kick_direction.normalized() if kick_direction.length() > 0.001 else Vector2.RIGHT.rotated(piece.global_rotation)
+	var centroid_world: Vector2 = piece.global_transform.basis_xform(data["centroid"])
+	# Move the node itself onto the piece's own centre and slide the drawn cells
+	# back by the same amount, so it looks identical but its global_position is
+	# now actually where it appears. Everything that treats a piece as a point —
+	# the winch's catch test, the reel, its own spin — was working off the ship's
+	# centre before, which for anything out on a limb is a long way from the part.
+	piece.global_position += centroid_world
+	var kick_direction: Vector2 = centroid_world.normalized() if centroid_world.length() > 0.001 \
+		else Vector2.RIGHT.rotated(piece.global_rotation)
+
+	# A part that was cut free did not explode: it keeps the momentum of the hull
+	# it came off and little else. A part shaken loose by a detonation gets the
+	# full kick. Same code path, different energy — so a deliberate cut leaves
+	# something you can line the winch up on rather than chase.
+	var kick: float = clean_cut_kick_speed if clean_cut else detach_kick_speed
+	var spin: float = clean_cut_spin_range if clean_cut else detach_spin_range
 
 	piece.setup(data["cells"], data["colors"], data["textures"], data["rotation_steps"], _renderer.cell_size,
-		_ship.velocity + kick_direction * detach_kick_speed,
-		GameRng.stream("wreckage").randf_range(-detach_spin_range, detach_spin_range))
+		_ship.velocity + kick_direction * kick,
+		GameRng.stream("wreckage").randf_range(-spin, spin),
+		data["centroid"])
 	return piece
 
 

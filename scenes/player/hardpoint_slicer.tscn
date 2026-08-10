@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/player/hardpoint_slicer.gd" id="1_slicer"]
+
+[node name="HardpointSlicer" type="Node2D"]
+script = ExtResource("1_slicer")
+
+[node name="Muzzle" type="Marker2D" parent="."]

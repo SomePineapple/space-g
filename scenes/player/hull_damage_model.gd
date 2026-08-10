@@ -31,7 +31,14 @@ signal hull_lost
 ## (needed to break a specific module) is hard against a moving, rotating
 ## target; without this, focused fire on a wing feels like it does nothing until
 ## one lucky hit lines up exactly right.
-@export var splash_fraction: float = 0.35
+##
+## Deliberately tiny. At the 0.35 this ran at, a hit anywhere near a module took
+## a third of its condition off too, so damage spread across a hull far faster
+## than anything was actually being aimed at and modules died without ever being
+## hit. It is kept non-zero only so that repeated fire in one area still nudges
+## its surroundings; hitting a specific module is now genuinely a matter of
+## hitting it.
+@export var splash_fraction: float = 0.03
 
 ## Seconds the ship must go without taking any damage before holed-out modules
 ## start regrowing. Prevents repair from meaningfully undoing damage mid-fight —
@@ -54,6 +61,9 @@ var _wreckage: WreckageSpawner
 var _layout: ShipLayout
 var _renderer: ShipLayoutRenderer
 var _health_multiplier: float = 1.0
+## True only for the duration of a Slicer's damage_beam() call, so any part that
+## comes loose during it is recovered whole rather than rolled for.
+var _clean_cut_active: bool = false
 
 ## Condition is no longer stored here at all: it lives on the ModuleInstance
 ## mounted at each placement (see ModuleInstance.condition_fraction), so a
@@ -222,9 +232,43 @@ func damage_at(amount: float, impact_point: Vector2) -> void:
 ## aim_direction — including the Command Core, which splash damage deliberately
 ## never reaches. That's the point of this weapon: a well-aligned shot can punch
 ## through armor into whatever sits directly behind it.
-func damage_beam(amount: float, entry_point: Vector2, aim_direction: Vector2, max_travel_distance: float) -> void:
+## A Slicer's cut: exactly one part, the one under the beam's contact point. No
+## splash onto neighbours and no travel through the hull behind it.
+##
+## Deliberately NOT damage_beam(). Routing the Slicer through the piercing beam
+## meant a cut carried on through the ship along the aim direction and destroyed
+## whatever happened to line up behind the cell being cut — parts at the far side
+## of a hull dying without ever being touched. A cutting tool acts where it makes
+## contact and nowhere else; piercing is the Phase Lance's trick, not this one.
+##
+## Anything that loses its path to the core as a result is severed intact rather
+## than rolled for, same as before.
+func damage_cut(amount: float, impact_point: Vector2) -> void:
+	if _layout == null:
+		return
+
+	var placement: ModulePlacement = _layout.get_placement_at(_to_hex(_ship.to_local(impact_point)))
+	if placement == null:
+		return
+
+	_clean_cut_active = true
+	_apply(placement, amount)
+	_clean_cut_active = false
+
+
+## `clean_cut` marks this beam as a deliberate severing pass (HardpointSlicer)
+## rather than a weapon hit. It changes nothing about the damage — only what
+## happens to whatever falls off as a result: see _detach_module. Held as state
+## for the duration of the call because the detachment it causes happens several
+## frames' worth of call stack down (_apply -> _on_module_destroyed ->
+## _check_for_detachment -> _detach_module) and threading a parameter through all
+## of that would put a slicer-shaped argument on four unrelated functions.
+func damage_beam(amount: float, entry_point: Vector2, aim_direction: Vector2,
+		max_travel_distance: float, clean_cut: bool = false) -> void:
 	if _layout == null or aim_direction.length() < 0.001:
 		return
+
+	_clean_cut_active = clean_cut
 
 	var origin: Vector2 = _ship.to_local(entry_point).rotated(-_renderer.rotation)
 	var direction: Vector2 = aim_direction.rotated(-_ship.global_rotation - _renderer.rotation).normalized()
@@ -243,6 +287,8 @@ func damage_beam(amount: float, entry_point: Vector2, aim_direction: Vector2, ma
 			already_hit[placement.placement_id] = true
 			_apply(placement, amount)
 		traveled += step
+
+	_clean_cut_active = false
 
 
 ## Entry point for a hardpoint to damage its own mount (e.g. a Black Market
@@ -357,7 +403,7 @@ func _detach_module(placement: ModulePlacement) -> void:
 	# clearing the reference is what stops the same instance existing twice.
 	var instance: ModuleInstance = placement.instance
 	placement.instance = null
-	_wreckage.spawn_severed_piece(placement, module_type, instance)
+	_wreckage.spawn_severed_piece(placement, module_type, instance, _clean_cut_active)
 
 
 # --- Repair ------------------------------------------------------------------

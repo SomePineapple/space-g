@@ -390,7 +390,12 @@ func _draw_hardpoint_overlays() -> void:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type == null:
 			continue
-		var overlay_texture: Texture2D = module_type.get_hex_overlay_texture(faction_id)
+		# Same rule as the mounted gun (see HardpointBank._mount_gun): the turret
+		# is drawn in its own maker's art and tinted with its plate.
+		var art_faction: String = HullPaint.art_faction_for(placement.instance, faction_id)
+		var overlay_texture: Texture2D = module_type.get_hex_overlay_texture(art_faction)
+		if overlay_texture == null:
+			overlay_texture = module_type.get_hex_overlay_texture(faction_id)
 		if overlay_texture == null:
 			continue
 
@@ -414,7 +419,7 @@ func _draw_hardpoint_overlays() -> void:
 		for local_corner in local_corners:
 			corners.append(center + local_corner.rotated(angle))
 		var uvs := PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
-		draw_colored_polygon(corners, Color.WHITE, uvs, overlay_texture)
+		draw_colored_polygon(corners, HullPaint.part_tint(placement, faction_id), uvs, overlay_texture)
 
 
 ## The candidate cell(s) under the cursor: the module's own art at reduced
