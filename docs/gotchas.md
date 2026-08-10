@@ -18,6 +18,18 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   silently reverts that property to its default with no load error anywhere.
   Never write `#` comments into a `.tscn`.
 - GDScript has no C-style ternary — use `a if cond else b`.
+- **A new `class_name` isn't visible to a headless run until the project is
+  rescanned.** Global classes are resolved from
+  `.godot/global_script_class_cache.cfg`, which only the editor rebuilds, so a
+  freshly created script fails with `Parse Error: Identifier "Foo" not declared
+  in the current scope` at every call site while the file itself looks fine. Run
+  `Godot --headless --editor --quit` once after adding the file, then run
+  normally.
+- **`String.hash()` barely changes for strings that differ only in a trailing
+  digit.** Ids like `mi_4271_7` / `mi_4271_8` hash to neighbouring values, so
+  slicing raw bits off the hash to derive per-object variation produces values
+  differing in the third decimal. Run it through an avalanche mix first (see
+  `HullPaint._signed_unit`).
 - **A packed-array constructor is not a constant expression.** `const X:
   PackedStringArray = PackedStringArray([...])` fails to parse with "Assigned
   value for constant isn't a constant expression", and the failure cascades:

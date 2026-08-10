@@ -95,3 +95,11 @@ var _next_id_ordinal: int = 0
 func next_id(prefix: String) -> String:
 	_next_id_ordinal += 1
 	return "%s_%d_%d" % [prefix, session_seed & 0xFFFF, _next_id_ordinal]
+
+
+## The ordinal the most recent next_id() used. Lets a caller derive something
+## else that has to be distinct per generated object — a part's call-sign, say —
+## from the same counter that already guarantees the id is unique, instead of
+## rolling separately and colliding (see ModuleInstance.create).
+func last_id_ordinal() -> int:
+	return _next_id_ordinal

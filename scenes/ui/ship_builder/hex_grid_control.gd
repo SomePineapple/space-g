@@ -31,15 +31,34 @@ var faction_id: String = "corporate"
 var layout: ShipLayout
 var selected_placement_id: String = ""
 
+## The workbench frame: every cell in the field, drawn barely-there, so parts
+## read as mounted onto a structure rather than floating. Below the sockets in
+## both weight and meaning — this one says "the chassis extends here", not "you
+## can attach here".
+##
+## Kept dim on purpose: at the alpha this started at, the empty field read at
+## roughly the same weight as the ship on it and competed with the thing being
+## edited. The lattice only needs to be present enough to say the workbench
+## continues past the hull.
+const FRAME_COLOR: Color = Color(0.11, 0.145, 0.188, 0.3)
+
 ## Attachment socket strokes: the dim state is "the hull could grow here", the
-## bright state is "the module you have selected fits over this cell".
+## bright state is "clicking here places the selected part".
 const SOCKET_OPACITY: float = 0.18
 const SOCKET_REACHABLE_OPACITY: float = 0.55
 const SOCKET_FILL: Color = Color(1, 1, 1, 0.012)
 const SOCKET_REACHABLE_FILL: Color = Color(0.1647, 0.3529, 0.4118, 0.18)
 
-## The join between two parts of the assembled ship.
+## Joins between parts, matching the in-game hull (see ShipLayoutRenderer and
+## HullPaint): a fine line where two parts belong together, weld dashes and
+## bolts where they don't. The point here is being able to see which joints are
+## improvised *before* you commit the layout.
 const SEAM_COLOR: Color = Color(0.05, 0.06, 0.08, 0.6)
+const SEAM_WIDTH: float = 1.0
+const WELD_COLOR: Color = Color(0.72, 0.42, 0.21, 0.8)
+const WELD_WIDTH: float = 1.8
+const WELD_BOLT_COLOR: Color = Color(0.54, 0.32, 0.15, 0.9)
+const WELD_BOLT_WIDTH: float = 1.0
 
 ## Soft cyan wash behind the lattice, and the vignette over it.
 const FIELD_GLOW: Color = Color(0.1647, 0.3529, 0.4118, 0.16)  # rgba(42,90,105,0.16)
@@ -68,6 +87,9 @@ var _reachable_cells: Dictionary = {}
 ## is selected, so every socket draws in its dim state.
 var _build_type_id: String = ""
 var _build_rotation: int = 0
+## The frame lattice, built once per size change — it only depends on the grid
+## dimensions and the fitted cell size, never on the layout.
+var _frame_points := PackedVector2Array()
 
 var _preview_cells: Array[Vector2i] = []
 var _preview_valid: bool = true
@@ -94,6 +116,7 @@ func _ready() -> void:
 func _on_resized() -> void:
 	_center = size * 0.5
 	fit_to_size()
+	_frame_points.clear()
 	queue_redraw()
 
 
@@ -133,6 +156,7 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	_draw_field_glow()
+	_draw_frame()
 	_draw_sockets()
 	_draw_placements()
 	_draw_hardpoint_overlays()
@@ -149,6 +173,29 @@ func _draw_field_glow() -> void:
 func _draw_vignette() -> void:
 	var extent: Vector2 = Vector2(size.x * 1.2, size.y * 1.4)
 	draw_texture_rect(_vignette_texture, Rect2(size * 0.5 - extent * 0.5, extent), false, VIGNETTE_COLOR)
+
+
+## The workbench lattice under everything. Emitted as a single draw_multiline()
+## rather than a stroked polygon per cell: the old full-field lattice cost seven
+## canvas commands for each of ~400 cells, which is the exact batching problem
+## docs/performance.md is about. Only three of each cell's six edges are pushed,
+## since the other three belong to its neighbours — every edge lands in the list
+## exactly once.
+func _draw_frame() -> void:
+	if _frame_points.is_empty():
+		_build_frame_points()
+	draw_multiline(_frame_points, FRAME_COLOR, 1.0)
+
+
+func _build_frame_points() -> void:
+	var r_min: int = -grid_height / 2
+	for r in range(r_min, r_min + grid_height):
+		var q_min: int = -grid_width / 2 - _row_q_offset(r)
+		for q in range(q_min, q_min + grid_width):
+			var corners: PackedVector2Array = _hex_corners(_axial_to_pixel(Vector2i(q, r)))
+			for edge in 3:
+				_frame_points.append(corners[edge])
+				_frame_points.append(corners[edge + 1])
 
 
 ## The ring of empty cells the hull can grow into. A socket the selected module
@@ -194,23 +241,27 @@ func _recompute_sockets() -> void:
 	_recompute_reachable_cells()
 
 
+## Which cells you can actually *click* to place the selected part — its legal
+## anchor cells, not every cell it would end up covering. Clicking is anchored
+## (see ShipBuilderPanel._on_hex_clicked), so lighting up covered cells was
+## actively misleading: with a three-hex part it lit a band three cells deep,
+## most of which reject the placement when clicked.
+##
 ## A multi-hex module can legally anchor on a cell that isn't itself against the
 ## hull, as long as one of its other cells is. So rather than sweeping the whole
-## field for legal anchors, this walks the socket ring and asks, for each cell,
-## "what anchor would put some part of this module here?" — footprint size times
-## ring size, instead of the whole 20x20 grid.
+## field, this walks the socket ring and asks, for each cell, "what anchor would
+## put some part of this module here?" — footprint size times ring size, instead
+## of the whole 20x20 grid.
 func _recompute_reachable_cells() -> void:
 	var module_type: ModuleType = ModuleCatalog.get_by_id(_build_type_id)
 	if module_type == null:
 		return
 
-	var tried_anchors: Dictionary = {}
 	for socket in _socket_cells:
 		for offset in module_type.footprint_cells:
 			var anchor: Vector2i = socket - HexUtils.rotate(offset, _build_rotation)
-			if tried_anchors.has(anchor):
+			if _reachable_cells.has(anchor):
 				continue
-			tried_anchors[anchor] = true
 
 			var cells: Array[Vector2i] = layout.get_candidate_cells(_build_type_id, anchor, _build_rotation)
 			var in_bounds: bool = true
@@ -218,10 +269,8 @@ func _recompute_reachable_cells() -> void:
 				if not is_in_bounds(cell):
 					in_bounds = false
 					break
-			if not in_bounds or not layout.can_place(_build_type_id, anchor, _build_rotation):
-				continue
-			for cell in cells:
-				_reachable_cells[cell] = true
+			if in_bounds and layout.can_place(_build_type_id, anchor, _build_rotation):
+				_reachable_cells[anchor] = true
 
 
 func _draw_placements() -> void:
@@ -230,44 +279,78 @@ func _draw_placements() -> void:
 	# one part aren't drawn, edges between two parts are, so the builder shows
 	# the ship as the pile of separate objects it is rather than a hex field.
 	var seam_points := PackedVector2Array()
+	var weld_points := PackedVector2Array()
+	var weld_bolt_points := PackedVector2Array()
+	var shadow_offset: Vector2 = HullPaint.part_shadow_offset(cell_size)
 
 	for hex_coord in occupant_by_cell:
 		var occupant: Array = occupant_by_cell[hex_coord]
 		var placement: ModulePlacement = occupant[0]
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-		var corners: PackedVector2Array = _hex_corners(_axial_to_pixel(hex_coord))
 
+		# Same nudge the in-game hull applies (see HullPaint), so the ship you
+		# are assembling is the ship you will fly rather than an idealised
+		# schematic of it.
+		var corners: PackedVector2Array = HullPaint.jittered_corners(
+			_hex_corners(_axial_to_pixel(hex_coord)),
+			_center + HullPaint.part_centroid(layout, placement, cell_size),
+			HullPaint.part_offset(placement.instance, cell_size),
+			HullPaint.part_rotation(placement.instance))
+
+		draw_colored_polygon(_shifted(corners, shadow_offset), HullPaint.SHADOW_COLOR)
 		_draw_module_glow(corners, placement)
 
+		var tint: Color = HullPaint.part_tint(placement, faction_id)
 		var hex_texture: Texture2D = module_type.get_hex_texture_for_cell(faction_id, occupant[1]) if module_type != null else null
 		if hex_texture != null:
 			var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
-			draw_colored_polygon(corners, Color.WHITE, uvs, hex_texture)
+			draw_colored_polygon(corners, tint, uvs, hex_texture)
 		else:
-			draw_colored_polygon(corners, module_type.color if module_type != null else BuilderTheme.INPUT_DARK)
+			draw_colored_polygon(corners,
+				(module_type.color * tint) if module_type != null else BuilderTheme.INPUT_DARK)
 
-		_collect_seam_edges(hex_coord, corners, placement.placement_id, occupant_by_cell, seam_points)
+		_collect_joint_edges(hex_coord, corners, placement, occupant_by_cell,
+			seam_points, weld_points, weld_bolt_points)
 
 		if placement.placement_id == selected_placement_id:
 			_stroke_polygon(corners, BuilderTheme.CYAN_BRIGHT, 2.0)
 
 	if not seam_points.is_empty():
-		draw_multiline(seam_points, SEAM_COLOR, 1.0)
+		draw_multiline(seam_points, SEAM_COLOR, SEAM_WIDTH)
+	if not weld_points.is_empty():
+		draw_multiline(weld_points, WELD_COLOR, WELD_WIDTH)
+	if not weld_bolt_points.is_empty():
+		draw_multiline(weld_bolt_points, WELD_BOLT_COLOR, WELD_BOLT_WIDTH)
 
 
-## Each shared edge is found once from each side; the `<` comparison keeps a
-## single copy so the seam isn't drawn twice over.
-func _collect_seam_edges(cell: Vector2i, corners: PackedVector2Array, placement_id: String,
-		occupant_by_cell: Dictionary, seam_points: PackedVector2Array) -> void:
+func _shifted(corners: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
+	var moved := PackedVector2Array()
+	moved.resize(corners.size())
+	for i in corners.size():
+		moved[i] = corners[i] + offset
+	return moved
+
+
+## Each shared edge is found once from each side; the `>=` skip keeps a single
+## copy so the joint isn't drawn twice over.
+func _collect_joint_edges(cell: Vector2i, corners: PackedVector2Array, placement: ModulePlacement,
+		occupant_by_cell: Dictionary, seam_points: PackedVector2Array,
+		weld_points: PackedVector2Array, weld_bolt_points: PackedVector2Array) -> void:
 	for edge in HexUtils.EDGE_DIRECTIONS.size():
-		var neighbour: Variant = occupant_by_cell.get(cell + HexUtils.EDGE_DIRECTIONS[edge])
-		if neighbour == null:
+		var occupant: Variant = occupant_by_cell.get(cell + HexUtils.EDGE_DIRECTIONS[edge])
+		if occupant == null:
 			continue
-		var neighbour_id: String = neighbour[0].placement_id
-		if neighbour_id == placement_id or placement_id >= neighbour_id:
+		var neighbour: ModulePlacement = occupant[0]
+		if placement.placement_id >= neighbour.placement_id:
 			continue
-		seam_points.append(corners[edge])
-		seam_points.append(corners[(edge + 1) % corners.size()])
+
+		var from: Vector2 = corners[edge]
+		var to: Vector2 = corners[(edge + 1) % corners.size()]
+		if HullPaint.is_clean_joint(placement, neighbour):
+			seam_points.append(from)
+			seam_points.append(to)
+		else:
+			HullPaint.append_weld(from, to, weld_points, weld_bolt_points)
 
 
 ## The handoff's per-tile drop shadow: a dark halo for ordinary modules, a

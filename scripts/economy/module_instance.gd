@@ -21,12 +21,20 @@ extends Resource
 ## Call-signs a part can be issued. Deliberately short, plain and a bit
 ## industrial — a part is a named object you can argue about ("put the Vane on
 ## the left"), not a magic item with a title.
+## Call-signs a part can be issued, handed out in order rather than drawn at
+## random — see create(). Two parts sharing a name is the one thing a name is
+## supposed to prevent, and independent draws from a pool this size collide
+## almost immediately (five starter parts already collide about a third of the
+## time).
+##
 ## Typed Array rather than PackedStringArray: a PackedStringArray() call is not
 ## a constant expression, so it cannot initialise a const (see docs/gotchas.md).
 const NICKNAMES: Array[String] = [
 	"Tern", "Vane", "Ash", "Grit", "Cinder", "Harrow", "Mote", "Kestrel",
 	"Slate", "Brace", "Ember", "Drift", "Halyard", "Quill", "Ridge", "Salt",
 	"Tally", "Vesper", "Wick", "Yoke", "Anvil", "Bramble", "Cobalt", "Dray",
+	"Flint", "Gable", "Hoist", "Iron", "Jetty", "Kiln", "Lathe", "Marrow",
+	"Nettle", "Oakum", "Pitch", "Rasp", "Sable", "Tinder", "Umber", "Wren",
 ]
 
 @export var instance_id: String = ""
@@ -79,9 +87,14 @@ static func create(module_type_id_value: String, manufacturer_id_value: String =
 	instance.module_type_id = module_type_id_value
 	instance.manufacturer_id = manufacturer_id_value
 
-	var stream: RandomNumberGenerator = GameRng.stream("parts")
-	instance.nickname = NICKNAMES[stream.randi() % NICKNAMES.size()]
-	instance.serial = "%s-%04d" % [_serial_prefix(module_type_id_value), stream.randi() % 10000]
+	# The call-sign comes off the same monotonic counter that made the id unique,
+	# so no two parts share a name until the pool wraps. Deriving it from a
+	# registry of taken names would be the other way to guarantee that, and
+	# docs/direction.md §2 rules that out — a global part registry is exactly the
+	# shape not to build. The serial stays a roll, as the tiebreaker after a wrap.
+	instance.nickname = NICKNAMES[GameRng.last_id_ordinal() % NICKNAMES.size()]
+	instance.serial = "%s-%04d" % [
+		_serial_prefix(module_type_id_value), GameRng.stream("parts").randi() % 10000]
 	return instance
 
 
