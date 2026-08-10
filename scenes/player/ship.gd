@@ -36,9 +36,23 @@ signal destroyed
 @export var max_speed: float = 400.0
 @export var reverse_max_speed: float = 140.0
 @export var boost_multiplier: float = 1.8
-## Turn rate at `handling_reference_mass`. Actual rate is scaled by
+## Top turn rate at `handling_reference_mass`. Actual rate is scaled by
 ## _mass_handling_factor() — see there for why this is no longer a flat rate.
+## Reaching it is not instant; see angular_acceleration.
 @export var rotation_speed: float = 3.5
+## How fast the ship builds up to `rotation_speed`, in rad/s^2. Rotation used to
+## be applied straight from input, so a hull snapped to full turn rate and back
+## to zero in a single frame however heavy it was — the one part of flight with
+## no momentum at all. This is the angular counterpart of thrust_force.
+@export var angular_acceleration: float = 14.0
+## How fast an unattended spin bleeds off, as a fraction of the current top turn
+## rate per second — the angular counterpart of `drag`, and read the same way.
+##
+## Deliberately much higher than linear `drag`. Linear coasting is the point of
+## flying in space and takes ~1.7s to stop; rotation at that timing overshoots
+## every time you line up a shot, because aim is a position you stop *at* rather
+## than a direction you drift along.
+@export var angular_drag: float = 2.6
 ## The hull mass `rotation_speed` is quoted at. Set to the starter ship's real
 ## total (measured, not guessed) so the default loadout turns at exactly the
 ## rate it always did and only ships that deviate from it feel the change.
@@ -123,6 +137,13 @@ var _thruster_particles_normal: Array[GPUParticles2D] = []
 ## so a destroyed/detached engine's particles can be silenced individually
 ## even while other engines (or leftover momentum) keep the ship moving.
 var _thruster_placement_ids: Array[String] = []
+## Current spin, in rad/s. Owned here rather than by the physics server: this is
+## a CharacterBody2D, so `rotation` is ours to integrate (see _apply_turn).
+var _angular_velocity: float = 0.0
+## Attitude-jet emitters, one pair per thruster. Index-parallel to _thrusters,
+## same as the main flame arrays above.
+var _thruster_particles_turn_left: Array[GPUParticles2D] = []
+var _thruster_particles_turn_right: Array[GPUParticles2D] = []
 var _aim_target: Vector2 = Vector2.ZERO
 var _has_aim_target: bool = false
 var _locked_target: Node2D = null
@@ -709,7 +730,7 @@ func _physics_process(delta: float) -> void:
 	# its reactor spends what it just made and then eats into the reserve.
 	_systems.process(delta)
 	_hull_damage.process(delta)
-	rotation += _turn_input * rotation_speed * _mass_handling_factor() * delta
+	_apply_turn(delta)
 
 	if _thrust_input != 0.0 and _try_spend_thrust_energy(delta):
 		var thrust: float = thrust_force if _thrust_input > 0.0 else reverse_thrust_force
@@ -718,6 +739,16 @@ func _physics_process(delta: float) -> void:
 			thrust *= boost_multiplier
 			current_max_speed *= boost_multiplier
 		var acceleration: float = thrust / mass
+
+		# Drag is not suspended just because an engine is lit — only because it
+		# is pushing the way the ship is already going. Retro-thrust used to
+		# replace the coasting drag rather than add to it, and reverse thrust is
+		# far weaker than that drag (0.2 of forward), so holding the brake
+		# stopped the ship roughly three times *slower* than releasing the
+		# throttle. Braking must never be worse than doing nothing.
+		if _thrust_input * velocity.dot(transform.x) < 0.0:
+			velocity = velocity.move_toward(Vector2.ZERO, drag * max_speed * delta)
+
 		velocity += transform.x * _thrust_input * acceleration * delta
 
 		if _thrust_input > 0.0:
@@ -740,6 +771,40 @@ func _physics_process(delta: float) -> void:
 	_update_engine_particles()
 	if _hardpoints.has_aimable_hardpoints():
 		_hardpoints.update_aim(get_aim_target())
+
+
+## Spins the ship up toward its top turn rate while there is turn input, and
+## lets the spin bleed off when there isn't, rather than snapping to either.
+##
+## Both the acceleration and the drag are scaled by the same mass factor as the
+## top rate, so a heavy hull is slow to start turning, slow to stop, and never
+## turns as fast — three consequences of one number, which is what makes hull
+## mass legible in the hand instead of only on the stat strip.
+##
+## The bleed is applied even while turning, against the *opposite* direction
+## only, so reversing a turn is quicker than starting one from rest. Without
+## that, flicking left-to-right feels like the ship is fighting itself.
+func _apply_turn(delta: float) -> void:
+	var handling: float = _mass_handling_factor()
+	var top_rate: float = rotation_speed * handling
+	# Squared, not linear. Scaling the acceleration and the top rate by the same
+	# factor cancels out — time-to-top-rate is rate/acceleration — so mass moved
+	# the ceiling but every hull still reached its own ceiling in the same 0.25s,
+	# which is the opposite of feeling heavy. The extra power is what makes a big
+	# hull slow to answer the stick as well as slow at the end of it.
+	var authority: float = handling * handling
+	var bleed: float = angular_drag * rotation_speed * authority * delta
+
+	if is_zero_approx(_turn_input):
+		_angular_velocity = move_toward(_angular_velocity, 0.0, bleed)
+	else:
+		if not is_zero_approx(_angular_velocity) \
+				and signf(_angular_velocity) != signf(_turn_input):
+			_angular_velocity = move_toward(_angular_velocity, 0.0, bleed)
+		_angular_velocity += _turn_input * angular_acceleration * authority * delta
+		_angular_velocity = clampf(_angular_velocity, -top_rate, top_rate)
+
+	rotation += _angular_velocity * delta
 
 
 ## How much this hull's mass slows its turn rate. Turning used to be a flat
@@ -788,6 +853,8 @@ func _spawn_thrusters() -> void:
 	_thruster_particles_boost.clear()
 	_thruster_particles_boost_soft.clear()
 	_thruster_particles_normal.clear()
+	_thruster_particles_turn_left.clear()
+	_thruster_particles_turn_right.clear()
 
 	for placement in ship_layout.get_thruster_placements():
 		var thruster: Node2D = engine_thruster_scene.instantiate()
@@ -811,11 +878,23 @@ func _spawn_thrusters() -> void:
 		_thruster_particles_boost.append(thruster.get_node("Particles"))
 		_thruster_particles_boost_soft.append(thruster.get_node("ParticlesSoft"))
 		_thruster_particles_normal.append(thruster.get_node("ParticlesNormal"))
+		_thruster_particles_turn_left.append(thruster.get_node("ParticlesTurnLeft"))
+		_thruster_particles_turn_right.append(thruster.get_node("ParticlesTurnRight"))
 
 
 func _update_engine_particles() -> void:
 	var thrusting_forward: bool = _thrust_input > 0.0
 	var boosting: bool = thrusting_forward and _boost_active
+
+	# Attitude jets fire on the side that produces the torque, so the exhaust
+	# points opposite the way the nose swings: the engines sit behind the centre
+	# of mass, so pushing the tail one way rotates the nose the other. They also
+	# fire while the spin is being *killed* — coasting to a stop is now something
+	# the ship does over time, and it should be visible that it is doing it.
+	var braking: bool = is_zero_approx(_turn_input) and not is_zero_approx(_angular_velocity)
+	var turn_direction: float = -signf(_angular_velocity) if braking else signf(_turn_input)
+	var turning_left: bool = turn_direction < 0.0
+	var turning_right: bool = turn_direction > 0.0
 
 	for i in _thrusters.size():
 		# A destroyed/detached engine shouldn't keep showing its own flame,
@@ -826,6 +905,8 @@ func _update_engine_particles() -> void:
 		_set_emitting(_thruster_particles_boost[i], boosting and alive)
 		_set_emitting(_thruster_particles_boost_soft[i], boosting and alive)
 		_set_emitting(_thruster_particles_normal[i], thrusting_forward and not boosting and alive)
+		_set_emitting(_thruster_particles_turn_left[i], turning_left and alive)
+		_set_emitting(_thruster_particles_turn_right[i], turning_right and alive)
 
 
 ## GPUParticles2D.set_emitting deliberately never early-outs, so assigning it

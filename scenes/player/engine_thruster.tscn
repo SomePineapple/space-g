@@ -68,6 +68,40 @@ scale_min = 0.35
 scale_max = 0.6
 color_ramp = SubResource("GradientTexture1D_normal")
 
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_turn"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Gradient_turn"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.9098039, 0.9647059, 1, 0.9, 0.49803922, 0.78431374, 1, 0.55, 0.22745098, 0.5529412, 1, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_turn"]
+gradient = SubResource("Gradient_turn")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_turn_left"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(0, -1, 0)
+spread = 14.0
+initial_velocity_min = 45.0
+initial_velocity_max = 70.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.25
+scale_max = 0.45
+color_ramp = SubResource("GradientTexture1D_turn")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_turn_right"]
+emission_shape = 1
+emission_sphere_radius = 0.3
+direction = Vector3(0, 1, 0)
+spread = 14.0
+initial_velocity_min = 45.0
+initial_velocity_max = 70.0
+gravity = Vector3(0, 0, 0)
+scale_min = 0.25
+scale_max = 0.45
+color_ramp = SubResource("GradientTexture1D_turn")
+
 [node name="EngineThruster" type="Node2D"]
 
 [node name="Particles" type="GPUParticles2D" parent="."]
@@ -97,3 +131,19 @@ texture = ExtResource("1_glow")
 lifetime = 0.45
 preprocess = 0.5
 process_material = SubResource("ParticleProcessMaterial_normal")
+
+[node name="ParticlesTurnLeft" type="GPUParticles2D" parent="."]
+material = SubResource("CanvasItemMaterial_turn")
+emitting = false
+amount = 12
+texture = ExtResource("1_glow")
+lifetime = 0.22
+process_material = SubResource("ParticleProcessMaterial_turn_left")
+
+[node name="ParticlesTurnRight" type="GPUParticles2D" parent="."]
+material = SubResource("CanvasItemMaterial_turn")
+emitting = false
+amount = 12
+texture = ExtResource("1_glow")
+lifetime = 0.22
+process_material = SubResource("ParticleProcessMaterial_turn_right")
