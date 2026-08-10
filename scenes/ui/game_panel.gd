@@ -37,6 +37,11 @@ const HEADER_FONT_SIZE: int = 18
 @export var home_base_range: float = 300.0
 ## Width of the panel body; a couple of screens are wider than the default.
 @export var panel_width: float = 420.0
+## Phase 0 freeze switch — see docs/frozen_systems.md. A frozen panel ignores its
+## toggle action and refuses to open, so the screen behind it is unreachable
+## while its implementation stays in the repo untouched. Set in the subclass's
+## _init(); flipping it back is the whole of un-freezing.
+@export var frozen: bool = false
 
 ## The local player's ship and its inventory, kept current via PlayerContext.
 var ship: Ship
@@ -67,7 +72,7 @@ func _rebind_ship(new_ship: Node) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if toggle_action.is_empty() or not event.is_action_pressed(toggle_action):
+	if frozen or toggle_action.is_empty() or not event.is_action_pressed(toggle_action):
 		return
 	if visible:
 		close()
@@ -78,6 +83,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Returns false when the home-base gate refused — the caller can report that
 ## if it wants to; nothing does today, matching the previous silent behaviour.
 func open() -> bool:
+	if frozen:
+		return false
 	if requires_home_base and not is_near_home_base():
 		return false
 	visible = true

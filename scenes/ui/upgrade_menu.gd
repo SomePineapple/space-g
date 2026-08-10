@@ -46,6 +46,9 @@ var _selected_node_id: String = ""
 func _init() -> void:
 	toggle_action = "toggle_upgrades"
 	requires_home_base = true
+	# Phase 0a freeze — see docs/frozen_systems.md. 89 nodes, no stat effects:
+	# the screen spends resources and changes nothing in the 5-10 second loop.
+	frozen = true
 	# Full-screen takeover with its own background: it has to sit above the
 	# gameplay HUD and the station prompt, which share CanvasLayer 1.
 	layer = 10

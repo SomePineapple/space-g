@@ -208,7 +208,6 @@ static func get_all() -> Array[ModuleType]:
 		{MaterialCatalog.IRON: 25, MaterialCatalog.COPPER: 10, MaterialCatalog.TITANIUM: 8},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_railgun.tscn"))
 	railgun_type.is_capturable_tech = true
-	railgun_type.requires_research = true
 	types.append(railgun_type)
 
 	# Ancient Civilisation: alien energy weapon. Lighter and more fragile
@@ -218,7 +217,6 @@ static func get_all() -> Array[ModuleType]:
 		{MaterialCatalog.COPPER: 20, MaterialCatalog.TITANIUM: 18},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_phase_lance.tscn"))
 	phase_lance_type.is_capturable_tech = true
-	phase_lance_type.requires_research = true
 	types.append(phase_lance_type)
 
 	# Tractor beam hardpoint (see HardpointTractorBeam/HardpointBank._mount_tractor_beam).

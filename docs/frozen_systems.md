@@ -27,14 +27,51 @@ list. `Inventory.research()`, `can_research()`, `get_researched_ids()`,
 `set_researched()` and the `GameState` round-trip are all untouched and still
 work if the flag is flipped.
 
-**Known consequence:** `railgun_hardpoint` and `phase_lance_hardpoint`
-(`ModuleCatalog` sets `requires_research = true` on both) now have no unlock
-path at all and cannot be built. They stay dead content until the salvage path
-can mount a captured part directly. Their rows still appear in the builder,
-locked, and the craft-rejection message says so.
+**Knock-on change:** `railgun_hardpoint` and `phase_lance_hardpoint` were the
+only two types with `requires_research = true`, so freezing research would have
+left them permanently unbuildable. Both flags were cleared rather than leave
+dead content sitting in the builder — they're ordinary buildable types for now.
+That's temporary: they become salvage-only once the recovered part can be
+mounted directly, at which point the whole locked-type mechanism is decided
+again from scratch.
+
+`ModuleType.requires_research` now has no type using it. It's left in place
+because `RESEARCH_FROZEN` is meant to be reversible; the craft path still checks
+it and reports the freeze if anything ever sets it again.
 
 **Not affected:** the REPAIR button, which converts a captured part into a
 placeable instance. It's a separate action on the same data and is due to be
 rewritten in Phase 1 rather than frozen — it's the path that currently launders
 part identity (`Inventory.repair_module` → `add_owned_module`), so it's a fix,
 not a removal.
+
+---
+
+## Module upgrade tree — frozen Phase 0a
+
+**Flag:** `UpgradeMenu.frozen` (via the new `GamePanel.frozen`)
+
+**What it did:** a full-screen radial tree of 89 unlockable nodes across seven
+ship systems, each costing materials/components through
+`ShipUpgradeService.try_unlock`, recorded ship-wide by id in `GameState`.
+
+**Why frozen:** not one node has a stat effect. Unlocking spends resources and
+changes nothing a player can feel — it fails the scope test ("does it change
+what the player does in the 5-10 second loop?") outright, and it is the largest
+single piece of build that ran ahead of validation.
+
+**What's disabled:** the `toggle_upgrades` action ("U") no longer opens the
+screen, and "U: Upgrades" is gone from `StationPrompt.PROMPT_TEXT`.
+`UpgradeMenu`, `UpgradeTreeView`, `ShipUpgradeCatalog`, `ShipUpgradeService`,
+`resources/upgrades/upgrade_data.json` and the `GameState` round-trip are all
+untouched.
+
+**Mechanism note:** freezing this needed a switch on `GamePanel` rather than in
+`UpgradeMenu` alone, because the next freezes (crafting, trade, cargo) are the
+same shape. `GamePanel.frozen` makes `_unhandled_input` ignore the toggle and
+`open()` return false. That's an added switch, not a restructure — no panel
+behaviour changed for any unfrozen screen.
+
+**Watch for:** nothing calls `GamePanel.open()` from outside the panels
+themselves today, so refusing to open has no other caller to surprise. If that
+changes, `open()` returning false is the signal.
