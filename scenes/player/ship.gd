@@ -165,6 +165,14 @@ func _ready() -> void:
 	# just to throw it away was a wasted full rebuild on every warp arrival.
 	var will_restore: bool = is_in_group("player_ship") and GameState.has_snapshot()
 	if not will_restore:
+		# Every ship owns its own layout. The exported .tres is a single shared
+		# resource across every instance of the scene that exports it, and each
+		# module's condition now lives on the ModuleInstance inside that layout
+		# — without this copy, damaging one pirate would damage every pirate of
+		# the same type. (The restore path is already handed a fresh duplicate
+		# by GameState.apply, as is the ship builder's.)
+		if ship_layout != null:
+			ship_layout = ship_layout.duplicate(true)
 		_apply_ship_layout()
 
 	_health.destroyed.connect(_on_destroyed)
@@ -214,14 +222,18 @@ func _apply_ship_layout() -> void:
 	_refresh_layout_stats()
 	_spawn_thrusters()
 	_hardpoints.rebuild(self, ship_layout, _hull_renderer)
+	# After the bank exists, so modules that came in already destroyed get their
+	# hardpoint visuals hidden again.
+	_hull_damage.sync_hardpoint_visuals()
 	layout_applied.emit()
 
 
 ## The aggregate stats every layout change re-derives. Kept separate from
 ## _apply_ship_layout() so a future caller can move these numbers without
-## disturbing health or module condition — a full apply silently heals the ship
-## and resets every module's condition, which is right for "I rebuilt my ship at
-## the workbench" and wrong for anything narrower.
+## disturbing the ship's Health pool — a full apply still refills that, which is
+## right for "I rebuilt my ship at the workbench" and wrong for anything
+## narrower. Module condition is no longer among the things an apply resets: it
+## belongs to the mounted parts and comes in with them (see ModuleInstance).
 func _refresh_layout_stats() -> void:
 	mass = ship_layout.total_mass()
 	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
@@ -582,15 +594,22 @@ func try_add_component(component_id: String, amount: int) -> bool:
 	return _inventory.try_add_component(component_id, amount)
 
 
-## Called by WinchBeam/HardpointTractorBeam once it finishes reeling in a
-## CapturedTechPart. A non-empty manufacturer_id also discovers that
-## manufacturer (see Inventory.discover_manufacturer) — separate from the
-## per-module research unlock, since knowing "Atlas Heavy exists" is a
-## different fact from "I can build a Weapon Hardpoint I."
-func capture_tech_part(module_type_id: String, manufacturer_id: String = "") -> void:
-	_inventory.add_captured_tech(module_type_id)
-	if not manufacturer_id.is_empty():
-		_inventory.discover_manufacturer(manufacturer_id)
+## Called by HardpointWinch/HardpointTractorBeam once it finishes reeling in a
+## CapturedTechPart: the recovered module goes straight into the hold as the
+## same object that was mounted on the wreck — same instance_id, same wear, same
+## origin — ready to be placed. There is deliberately no per-type count and no
+## repair step in between; that pair of conversions is what used to launder a
+## specific part into an anonymous type (docs/direction.md §4).
+##
+## A non-empty manufacturer_id also discovers that manufacturer (see
+## Inventory.discover_manufacturer) — knowing "Atlas Heavy exists" is a separate
+## fact from holding one of their guns.
+func capture_tech_part(instance: ModuleInstance) -> void:
+	if instance == null:
+		return
+	_inventory.add_captured_instance(instance)
+	if not instance.manufacturer_id.is_empty():
+		_inventory.discover_manufacturer(instance.manufacturer_id)
 
 
 # --- Flight ------------------------------------------------------------------

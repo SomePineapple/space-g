@@ -164,7 +164,7 @@ func _pull_target(delta: float) -> void:
 		part.begin_reel_in()
 		part.global_position = part.global_position.move_toward(_muzzle.global_position, tech_part_pull_speed * delta)
 		if part.global_position.distance_to(_muzzle.global_position) <= tech_part_collect_radius:
-			_shooter.capture_tech_part(part.module_type_id, part.manufacturer_id)
+			_shooter.capture_tech_part(part.release_instance())
 			part.collect()
 			_active_target = null
 			_beam.hide_beam()

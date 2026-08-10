@@ -5,15 +5,17 @@ extends DriftingHexPiece
 ## WreckageSpawner._roll_capturable). Drifts exactly like ordinary ShipDebris (both share
 ## DriftingHexPiece), but persists far longer and can be reeled in by
 ## HardpointWinch/HardpointTractorBeam instead of just fading away — see
-## begin_reel_in(). Stores which module/faction/manufacturer it came from for
-## the research and manufacturer-discovery systems to consume on pickup.
+## begin_reel_in().
+##
+## It doesn't describe a module, it *carries* one: the very ModuleInstance that
+## was mounted on the hull, with its wear and origin already on it. Whoever
+## reels it in asks for that object through release_instance() rather than
+## reading fields off this node and rebuilding something equivalent, which is
+## both the scene-ownership rule and what keeps the part non-fungible.
 
 signal captured
 
-var module_type_id: String = ""
-var faction_id: String = ""
-## Empty means "generic/no manufacturer" — see Manufacturer/ManufacturerCatalog.
-var manufacturer_id: String = ""
+var _instance: ModuleInstance = null
 
 var _being_reeled_in: bool = false
 
@@ -30,14 +32,21 @@ func _ready() -> void:
 	add_to_group("capturable_tech")
 
 
-## Provenance, set by Ship right after setup(). Kept separate from setup()
-## rather than widening it: GDScript requires an override to match its base
-## class's signature exactly, and every other DriftingHexPiece has no source
-## module to record.
-func set_source(source_module_type_id: String, source_faction_id: String, source_manufacturer_id: String = "") -> void:
-	module_type_id = source_module_type_id
-	faction_id = source_faction_id
-	manufacturer_id = source_manufacturer_id
+## The part this piece is, set by WreckageSpawner right after setup(). Kept
+## separate from setup() rather than widening it: GDScript requires an override
+## to match its base class's signature exactly, and every other
+## DriftingHexPiece has no module to carry.
+func set_instance(module_instance: ModuleInstance) -> void:
+	_instance = module_instance
+
+
+## Hands the carried module over to whatever reeled this piece in, exactly
+## once — null if it has already been taken. Callers get the object itself, not
+## a description of it.
+func release_instance() -> ModuleInstance:
+	var released: ModuleInstance = _instance
+	_instance = null
+	return released
 
 
 ## Called by a winch or tractor beam once it locks on. Stops the part drifting

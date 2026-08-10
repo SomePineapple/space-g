@@ -75,6 +75,20 @@ func _setup() -> void:
 	_refresh()
 
 
+## Opening loads the ship's *live* layout rather than the stored template.
+## Mounted ModuleInstances — and with them every module's accumulated damage and
+## origin — are part of that layout now, so editing a stale copy and committing
+## it on close would wipe the ship's record of every fight it has been in, every
+## time the player opened this screen.
+func _on_opened() -> void:
+	if ship == null or ship.ship_layout == null:
+		return
+	working_layout = ship.ship_layout.duplicate(true)
+	_grid.layout = working_layout
+	_grid.selected_placement_id = ""
+	_refresh()
+
+
 ## Closing the builder is what commits the working layout to the live ship.
 func _on_closed() -> void:
 	_apply_toship()
@@ -193,7 +207,9 @@ func _build_right_column(root: Control) -> void:
 	_module_list.module_selected.connect(_on_module_selected)
 	_module_list.craft_pressed.connect(_on_craft_pressed)
 	_module_list.research_pressed.connect(_on_research_pressed)
-	_module_list.repair_pressed.connect(_on_repair_pressed)
+	# repair_pressed is deliberately left unconnected: a recovered part is
+	# placeable as it is (see Inventory.add_captured_instance), so there is
+	# nothing to repair it into. Its button never gets text and so never shows.
 	column.add_child(_module_list)
 
 	column.add_child(_build_save_card())
@@ -299,7 +315,6 @@ func _make_action_button(text: String, tint: Color, text_color: Color, hover_col
 func _connect_inventory() -> void:
 	if inventory == null:
 		return
-	inventory.captured_tech_changed.connect(func(_totals): _refresh_module_states())
 	inventory.materials_changed.connect(func(_totals): _refresh_module_states())
 	inventory.components_changed.connect(func(_totals): _refresh_module_states())
 	inventory.owned_modules_changed.connect(func(_totals): _refresh_module_states())
@@ -362,8 +377,7 @@ func _make_entry(module_type: ModuleType, manufacturer: Manufacturer) -> Diction
 
 
 ## Pushes each row's current lock/owned/affordable state into the list — call
-## whenever captured-tech counts, owned-module counts, or material/component
-## totals change.
+## whenever owned-module counts or material/component totals change.
 func _refresh_module_states() -> void:
 	var states: Dictionary = {}
 	for key in _entry_keys:
@@ -382,22 +396,19 @@ func _refresh_module_states() -> void:
 			"repair_text": "", "can_repair": false,
 		}
 
-		# Research permanently unlocks a locked type; Repair converts one
-		# damaged/captured part into a placeable owned instance. They are
-		# orthogonal, and neither applies to a manufacturer-flavoured row —
-		# those only ever appear once the base type is already known.
-		# An empty research_text hides the row's Research button outright (see
-		# ModuleListView._apply_state), which is how RESEARCH_FROZEN takes effect.
+		# Research permanently unlocks a locked type for *manufacturing*; it
+		# never applies to a manufacturer-flavoured row, since those only appear
+		# once the base type is already known. An empty research_text hides the
+		# row's Research button outright (see ModuleListView._apply_state),
+		# which is how RESEARCH_FROZEN takes effect.
+		#
+		# repair_text is left empty permanently: a part cut off a wreck goes
+		# straight into owned stock as itself, so "damaged parts" are no longer
+		# a separate stock that has to be converted into placeable ones.
 		if is_generic_row and locked and inventory != null and not RESEARCH_FROZEN:
-			state["research_text"] = "RESEARCH (%d captured)" % inventory.get_captured_tech_count(module_type.id)
+			state["research_text"] = "RESEARCH (%d held)" % inventory.get_owned_module_count(
+				_palette_key(module_type.id, ""))
 			state["can_research"] = inventory.can_research(module_type.id)
-
-		if is_generic_row and module_type.is_capturable_tech and inventory != null:
-			var captured: int = inventory.get_captured_tech_count(module_type.id)
-			if captured > 0:
-				state["repair_text"] = "REPAIR (%d damaged) · %s" % [
-					captured, _format_costs(inventory.get_repair_cost(module_type.id))]
-				state["can_repair"] = inventory.can_repair(module_type.id)
 
 		states[key] = state
 	_module_list.update_states(states)
@@ -474,17 +485,6 @@ func _on_research_pressed(module_type_id: String) -> void:
 	_refresh_module_states()
 
 
-func _on_repair_pressed(module_type_id: String) -> void:
-	if inventory == null:
-		return
-
-	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
-	if inventory.repair_module(module_type_id):
-		_report("Repaired %s. Added to owned inventory." % module_type.display_name)
-	else:
-		_report("Cannot repair %s: need a damaged part and %s." % [
-			module_type.display_name, _format_costs(inventory.get_repair_cost(module_type_id))])
-	_refresh_module_states()
 
 
 # --- Grid interaction -------------------------------------------------------
@@ -529,7 +529,8 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_grid.clear_preview()
 		_grid.selected_placement_id = existing.placement_id
 		var module_type: ModuleType = ModuleCatalog.get_by_id(existing.module_type_id)
-		_report("Selected: %s at (%d, %d)" % [module_type.display_name, hex_coord.x, hex_coord.y])
+		_report("Selected: %s at (%d, %d)%s" % [module_type.display_name,
+			hex_coord.x, hex_coord.y, _describe_instance(existing.instance)])
 		_grid.refresh()
 		return
 
@@ -560,6 +561,23 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 	_pending_rotation = 0
 	_refresh()
 	_grid.clear_preview()
+
+
+## The identity readout for one mounted part: its serial, how beaten up it is,
+## and what it was cut off. The status line is the only per-instance inspection
+## surface the screen has — the module list to the right is per *type*, so it
+## can only ever show how many of something is held, never which one.
+func _describe_instance(instance: ModuleInstance) -> String:
+	if instance == null:
+		return ""
+	var parts: PackedStringArray = PackedStringArray([
+		instance.instance_id,
+		"%d%% condition" % roundi(instance.condition_fraction * 100.0),
+	])
+	if instance.kill_count > 0:
+		parts.append("%d kills" % instance.kill_count)
+	parts.append(instance.origin_description if instance.is_salvaged() else "fabricated")
+	return " · %s" % " · ".join(parts)
 
 
 func _on_rotate_pressed() -> void:

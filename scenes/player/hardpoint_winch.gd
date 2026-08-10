@@ -277,7 +277,7 @@ func _reel_in_physics_target(delta: float) -> void:
 
 
 func _complete_capture() -> void:
-	_shooter.capture_tech_part(_attached_target.module_type_id)
+	_shooter.capture_tech_part(_attached_target.release_instance())
 	_attached_target.collect()
 	_attached_target = null
 	_state = State.RETRACTING

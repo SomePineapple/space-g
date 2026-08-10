@@ -13,9 +13,9 @@ Phase 5 needs this list to decide what comes back.
 
 **Flag:** `ShipBuilderPanel.RESEARCH_FROZEN`
 
-**What it did:** spent one captured tech part (`Inventory._captured_tech_totals`)
-to permanently unlock a `ModuleType` with `requires_research = true`, making that
-type craftable from `build_costs` thereafter.
+**What it did:** spent one captured tech part to permanently unlock a
+`ModuleType` with `requires_research = true`, making that type craftable from
+`build_costs` thereafter.
 
 **Why frozen:** it inverts the design thesis. A specific gun cut off a specific
 corvette is consumed to make that gun an anonymous manufacturable type — the
@@ -24,8 +24,14 @@ replacement is mounting the recovered part itself.
 
 **What's disabled:** the per-row RESEARCH button in the ship builder's module
 list. `Inventory.research()`, `can_research()`, `get_researched_ids()`,
-`set_researched()` and the `GameState` round-trip are all untouched and still
-work if the flag is flipped.
+`set_researched()` and the `GameState` round-trip all still work if the flag is
+flipped.
+
+**Amended in Phase 1.3:** `_captured_tech_totals` — the per-type count these
+read — no longer exists; a recovered part is now a specific `ModuleInstance` in
+the owned-module pool. `can_research()`/`research()` were repointed at that pool
+(spend one held part of the type) so the frozen path still compiles and behaves
+the same. Nothing about the freeze changed, only where it looks for a part.
 
 **Knock-on change:** `railgun_hardpoint` and `phase_lance_hardpoint` were the
 only two types with `requires_research = true`, so freezing research would have
@@ -39,11 +45,14 @@ again from scratch.
 because `RESEARCH_FROZEN` is meant to be reversible; the craft path still checks
 it and reports the freeze if anything ever sets it again.
 
-**Not affected:** the REPAIR button, which converts a captured part into a
-placeable instance. It's a separate action on the same data and is due to be
-rewritten in Phase 1 rather than frozen — it's the path that currently launders
-part identity (`Inventory.repair_module` → `add_owned_module`), so it's a fix,
-not a removal.
+**Not affected:** the REPAIR button, which converted a captured part into a
+placeable instance. It was a separate action on the same data, and Phase 1.3
+removed it rather than freezing it — it was the path that laundered part
+identity (`Inventory.repair_module` → `add_owned_module` built a brand-new
+instance), so it was a fix, not a removal. A recovered part is now directly
+placeable, damage and all, and `repair_module()`/`can_repair()`/
+`get_repair_cost()` are gone. `ModuleListView`'s repair button remains in the
+widget, permanently textless and therefore hidden.
 
 ---
 

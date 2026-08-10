@@ -28,7 +28,6 @@ var _component_totals: Dictionary = {}
 ## so an owned-but-unplaced module keeps its identity across a warp the same
 ## way a placed one already does via _ship_layout below.
 var _owned_module_pool: Dictionary = {}
-var _captured_tech_totals: Dictionary = {}
 var _researched_ids: Array = []
 var _known_manufacturer_ids: Array = []
 var _ship_layout: Resource
@@ -113,7 +112,6 @@ func capture(ship: Node) -> void:
 	_material_totals = inventory.get_all_materials().duplicate()
 	_component_totals = inventory.get_all_components().duplicate()
 	_owned_module_pool = inventory.get_all_owned_module_instances().duplicate()
-	_captured_tech_totals = inventory.get_all_captured_tech().duplicate()
 	_researched_ids = inventory.get_researched_ids()
 	_known_manufacturer_ids = inventory.get_known_manufacturer_ids()
 	_ship_layout = ship.ship_layout.duplicate(true)
@@ -139,9 +137,6 @@ func apply(ship: Node) -> void:
 	for component_id in _component_totals:
 		inventory.add_component(component_id, _component_totals[component_id])
 	inventory.restore_owned_module_pool(_owned_module_pool.duplicate())
-	for module_type_id in _captured_tech_totals:
-		for i in _captured_tech_totals[module_type_id]:
-			inventory.add_captured_tech(module_type_id)
 	for module_type_id in _researched_ids:
 		inventory.set_researched(module_type_id)
 	for manufacturer_id in _known_manufacturer_ids:

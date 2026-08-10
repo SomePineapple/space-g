@@ -55,10 +55,16 @@ var _layout: ShipLayout
 var _renderer: ShipLayoutRenderer
 var _health_multiplier: float = 1.0
 
-## placement_id -> current condition. Rebuilt fresh whenever a layout is applied
-## — never stored on the ShipLayout resource itself, since that resource is
-## shared (not duplicated) across every instance of the same enemy scene.
-var _conditions: Dictionary = {}
+## Condition is no longer stored here at all: it lives on the ModuleInstance
+## mounted at each placement (see ModuleInstance.condition_fraction), so a
+## module's damage belongs to the part rather than to the hull's bookkeeping and
+## survives a refit. This model still owns everything below, which is genuinely
+## about *this hull*: what is severed from it, what is regrowing into it, and
+## which collision shapes it contributes.
+##
+## That only works because each ship owns its own copy of its ShipLayout — the
+## .tres is shared across every instance of a scene that exports it, so Ship
+## deep-duplicates it before applying (see Ship._ready).
 
 ## placement_id -> true. A module ends up here when it's still intact but has
 ## lost its connection back to the core (see _check_for_detachment) — distinct
@@ -88,31 +94,76 @@ func configure(ship: Ship, bank: HardpointBank, wreckage: WreckageSpawner) -> vo
 	_wreckage = wreckage
 
 
-## Full reset for a freshly applied layout: every module back to full condition,
-## nothing destroyed/severed/regrowing, collision shapes respawned.
+## Rebinds this model to a freshly applied layout: severance and regrowth
+## bookkeeping starts clean and collision shapes are respawned, but module
+## condition is deliberately *not* reset — it belongs to the mounted parts and
+## comes in with them. A module that was holed out before the refit is still a
+## hole afterwards, and picks its regrowth back up where it left off.
 func rebuild(layout: ShipLayout, renderer: ShipLayoutRenderer, health_multiplier: float) -> void:
 	_layout = layout
 	_renderer = renderer
 	_health_multiplier = health_multiplier
 
-	_conditions.clear()
 	_detached.clear()
 	_regrowing.clear()
-	for placement in layout.placements:
-		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-		if module_type != null:
-			_conditions[placement.placement_id] = module_type.health_contribution * health_multiplier
 
 	for shape in _shapes:
 		shape.queue_free()
 	_shapes.clear()
 	_shapes_by_placement.clear()
+
 	for placement in layout.placements:
-		_spawn_collision_shape_for(placement)
+		# A layout authored in the editor has no instances until something needs
+		# one; every mounted module needs one now, since that's where its
+		# condition is kept.
+		placement.ensure_instance()
+		if _condition_of(placement) > 0.0:
+			_spawn_collision_shape_for(placement)
+		else:
+			_regrowing[placement.placement_id] = true
+			_renderer.set_module_destroyed(placement.placement_id)
+
+
+## Hardpoint visuals are rebuilt *after* this model is (see
+## Ship._apply_ship_layout), so a weapon module that arrived already holed out
+## has to have its gun hidden once the bank exists — otherwise a refit puts the
+## turret art back on top of a hex that renders as a hole.
+func sync_hardpoint_visuals() -> void:
+	if _layout == null:
+		return
+	for placement in _layout.placements:
+		if is_destroyed(placement.placement_id):
+			_bank.set_visual_visible(placement.placement_id, false)
 
 
 func get_condition(placement_id: String) -> float:
-	return _conditions.get(placement_id, 0.0)
+	if _layout == null:
+		return 0.0
+	var placement: ModulePlacement = _layout.get_placement_by_id(placement_id)
+	return _condition_of(placement) if placement != null else 0.0
+
+
+## Absolute condition points for a placement, derived from the fraction its
+## mounted part carries. A placement with no instance has already handed its
+## part over to the wreckage (see _detach_module) and counts as gone.
+func _condition_of(placement: ModulePlacement) -> float:
+	if placement.instance == null:
+		return 0.0
+	return placement.instance.condition_fraction * _max_condition_of(placement)
+
+
+func _max_condition_of(placement: ModulePlacement) -> float:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	return module_type.health_contribution * _health_multiplier if module_type != null else 0.0
+
+
+## The one place absolute condition points are converted back to the part's own
+## fraction. Silently does nothing for a placement whose part has left.
+func _set_condition(placement: ModulePlacement, value: float) -> void:
+	if placement.instance == null:
+		return
+	var max_condition: float = _max_condition_of(placement)
+	placement.instance.condition_fraction = clampf(value / max_condition, 0.0, 1.0) if max_condition > 0.0 else 0.0
 
 
 ## True if the module is either destroyed outright (condition at zero), still
@@ -137,10 +188,7 @@ func process(delta: float) -> void:
 
 func get_max_condition(placement_id: String) -> float:
 	var placement: ModulePlacement = _layout.get_placement_by_id(placement_id)
-	if placement == null:
-		return 0.0
-	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
-	return module_type.health_contribution * _health_multiplier if module_type != null else 0.0
+	return _max_condition_of(placement) if placement != null else 0.0
 
 
 # --- Damage resolution -------------------------------------------------------
@@ -213,8 +261,8 @@ func _to_hex(ship_local_point: Vector2) -> Vector2i:
 func _apply(placement: ModulePlacement, amount: float) -> void:
 	if is_destroyed(placement.placement_id):
 		return
-	var remaining: float = maxf(get_condition(placement.placement_id) - amount, 0.0)
-	_conditions[placement.placement_id] = remaining
+	var remaining: float = maxf(_condition_of(placement) - amount, 0.0)
+	_set_condition(placement, remaining)
 	if remaining <= 0.0:
 		_on_module_destroyed(placement)
 
@@ -302,9 +350,14 @@ func _detach_module(placement: ModulePlacement) -> void:
 	_free_collision_shapes_for(placement.placement_id)
 	_bank.set_visual_visible(placement.placement_id, false)
 
-	var max_condition: float = module_type.health_contribution * _health_multiplier
-	var condition_fraction: float = (get_condition(placement.placement_id) / max_condition) if max_condition > 0.0 else 0.0
-	_wreckage.spawn_severed_piece(placement, module_type, condition_fraction)
+	# The part is physically off the hull now, so this placement stops owning
+	# it: the wreckage either turns it into a recoverable CapturedTechPart or
+	# lets it go with the debris. Handing over the object rather than a copy is
+	# the point — recovering it recovers *this* module, wear and all — and
+	# clearing the reference is what stops the same instance existing twice.
+	var instance: ModuleInstance = placement.instance
+	placement.instance = null
+	_wreckage.spawn_severed_piece(placement, module_type, instance)
 
 
 # --- Repair ------------------------------------------------------------------
@@ -328,9 +381,9 @@ func _regenerate_modules(delta: float) -> void:
 		if module_type == null:
 			continue
 
-		var max_condition: float = module_type.health_contribution * _health_multiplier
+		var max_condition: float = _max_condition_of(placement)
 		if not _regrowing.has(placement.placement_id):
-			if get_condition(placement.placement_id) > 0.0:
+			if _condition_of(placement) > 0.0:
 				# Chip damage: still working, so it heals in place and must not
 				# enter _regrowing, which would switch it off and respawn a
 				# collision shape it never lost. (Topping these up used to be the
@@ -358,12 +411,12 @@ func _has_healthy_neighbor(placement: ModulePlacement) -> bool:
 ## — from one that only took chip damage and never stopped working.
 func _advance_repair(placement: ModulePlacement, module_type: ModuleType, max_condition: float, delta: float, was_regrowing: bool) -> void:
 	var passive_cap: float = max_condition * passive_repair_cap_fraction
-	var current_condition: float = get_condition(placement.placement_id)
+	var current_condition: float = _condition_of(placement)
 	if current_condition >= passive_cap:
 		return
 
 	var new_condition: float = minf(current_condition + repair_rate * delta, passive_cap)
-	_conditions[placement.placement_id] = new_condition
+	_set_condition(placement, new_condition)
 	hull_healed.emit(new_condition - current_condition)
 
 	if was_regrowing and new_condition >= passive_cap:
@@ -387,12 +440,12 @@ func repair_fully() -> void:
 		if module_type == null:
 			continue
 
-		var max_condition: float = module_type.health_contribution * _health_multiplier
-		if get_condition(placement.placement_id) >= max_condition:
+		var max_condition: float = _max_condition_of(placement)
+		if _condition_of(placement) >= max_condition:
 			continue
 
 		var was_regrowing: bool = _regrowing.has(placement.placement_id)
-		_conditions[placement.placement_id] = max_condition
+		_set_condition(placement, max_condition)
 		if was_regrowing:
 			_regrowing.erase(placement.placement_id)
 			_on_module_repaired(placement, module_type)

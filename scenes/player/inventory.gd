@@ -2,7 +2,6 @@ class_name Inventory
 extends Node
 
 signal materials_changed(totals: Dictionary)
-signal captured_tech_changed(totals: Dictionary)
 signal research_unlocked(module_type_id: String)
 signal manufacturer_discovered(manufacturer_id: String)
 signal credits_changed(amount: int)
@@ -24,18 +23,19 @@ var _material_totals: Dictionary = {}
 var _component_totals: Dictionary = {}
 ## key (see owned_module_key) -> Array[ModuleInstance]. A pool of individually
 ## tracked instances rather than a bare count, so a specific module keeps its
-## identity through being built, placed, removed and re-placed.
-## take_owned_module()/return_owned_module() move a real instance in and out of
-## this pool; add_owned_module() is the only thing that creates a brand new one.
+## identity through being built, placed, removed, cut off a wreck and re-placed.
+## take_owned_module()/return_owned_module()/add_captured_instance() move a real
+## instance in and out of this pool; add_owned_module() is the only thing that
+## creates a brand new one.
+##
+## This is now the only place a module the player holds can be — there is no
+## separate count-keyed store for salvaged parts. A count is exactly the thing
+## that cannot tell two railguns apart (docs/direction.md §1).
 var _owned_module_pool: Dictionary = {}
 ## Total cargo capacity, recomputed by Ship whenever its layout changes (see
 ## Ship._refresh_layout_stats) — kept here rather than derived on the
 ## fly so try_add_material() has a cheap, always-current limit to check.
 var _cargo_capacity: float = 0.0
-## module_type_id -> count. Distinct from _material_totals: these are
-## specific captured tech parts (see Ship.capture_tech_part), spent one at a
-## time to research/unlock a locked ModuleType (see research()).
-var _captured_tech_totals: Dictionary = {}
 ## Set of module_type_id (module_type_id -> true) that have been researched
 ## and are now buildable despite ModuleType.requires_research. Session-only,
 ## like the rest of this prototype's economy state.
@@ -295,14 +295,27 @@ func add_owned_module(key: String, amount: int = 1) -> void:
 	owned_modules_changed.emit(get_all_owned_modules())
 
 
-## Returns an already-existing instance to the pool, upgrade state intact —
-## the ship builder's Remove action uses this instead of add_owned_module()
-## so upgrades purchased on that specific instance aren't lost.
+## Returns an already-existing instance to the pool, its condition and origin
+## intact — the ship builder's Remove action uses this instead of
+## add_owned_module() so nothing tracked against that specific module is lost.
 func return_owned_module(key: String, instance: ModuleInstance) -> void:
 	if not _owned_module_pool.has(key):
 		_owned_module_pool[key] = []
 	_owned_module_pool[key].append(instance)
 	owned_modules_changed.emit(get_all_owned_modules())
+
+
+## A part cut off a wreck and reeled in (see Ship.capture_tech_part) enters the
+## same owned-but-unplaced pool a fabricated one does, as the very same object:
+## the damage it took before it came free and the hull it came off arrive with
+## it, and it is directly placeable.
+##
+## It deliberately does not matter here whether the part's type is researched.
+## Taking a Railgun intact off a corvette is the whole way to own a Railgun.
+func add_captured_instance(instance: ModuleInstance) -> void:
+	if instance == null:
+		return
+	return_owned_module(owned_module_key(instance.module_type_id, instance.manufacturer_id), instance)
 
 
 func get_owned_module_count(key: String) -> int:
@@ -341,39 +354,33 @@ func take_owned_module(key: String) -> ModuleInstance:
 	return instance
 
 
-func add_captured_tech(module_type_id: String) -> void:
-	_captured_tech_totals[module_type_id] = get_captured_tech_count(module_type_id) + 1
-	captured_tech_changed.emit(_captured_tech_totals)
-
-
-func get_captured_tech_count(module_type_id: String) -> int:
-	return _captured_tech_totals.get(module_type_id, 0)
-
-
-func get_all_captured_tech() -> Dictionary:
-	return _captured_tech_totals
-
-
 ## True if module_type_id doesn't need research at all, or already has it.
 func is_researched(module_type_id: String) -> bool:
 	return _researched_ids.get(module_type_id, false)
 
 
-## Whether research() would currently succeed — used to enable/disable the
-## ship builder's Research button.
+## Whether research() would currently succeed — used to enable/disable the ship
+## builder's Research button, which is frozen (see
+## ShipBuilderPanel.RESEARCH_FROZEN), so nothing reaches this in a normal
+## session.
+##
+## Repointed at the owned-module pool because the per-type captured count it
+## used to read no longer exists — a recovered part is now a specific object in
+## the hold like any other. The frozen behaviour is otherwise unchanged: spend a
+## part of this type to unlock manufacturing it.
 func can_research(module_type_id: String) -> bool:
-	return not is_researched(module_type_id) and get_captured_tech_count(module_type_id) > 0
+	return not is_researched(module_type_id) \
+		and get_owned_module_count(owned_module_key(module_type_id)) > 0
 
 
-## Spends one captured part of module_type_id to permanently unlock it for
-## building. Returns false without effect if already researched or no part
-## is available to spend.
+## Spends one owned part of module_type_id to permanently unlock it for
+## building. Returns false without effect if already researched or no part is
+## available to spend. Frozen — see can_research().
 func research(module_type_id: String) -> bool:
 	if not can_research(module_type_id):
 		return false
-	_captured_tech_totals[module_type_id] = get_captured_tech_count(module_type_id) - 1
+	take_owned_module(owned_module_key(module_type_id))
 	_researched_ids[module_type_id] = true
-	captured_tech_changed.emit(_captured_tech_totals)
 	research_unlocked.emit(module_type_id)
 	return true
 
@@ -382,46 +389,8 @@ func get_researched_ids() -> Array:
 	return _researched_ids.keys()
 
 
-## Phase 5.3 "damaged modules require repair before use": a captured tech
-## part (see Ship.capture_tech_part — a severed module recovered from
-## combat) is never directly placeable, unlike a Build-crafted instance —
-## repairing it is what converts one into a normal owned module instance
-## (see owned_module_key/add_owned_module). Cost is half a fresh build
-## (rounded up), reusing ModuleType.build_costs rather than a whole separate
-## repair-cost data table — a damaged part should be cheaper to restore than
-## building one from scratch, not free.
-func get_repair_cost(module_type_id: String) -> Dictionary:
-	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
-	if module_type == null:
-		return {}
-	var cost: Dictionary = {}
-	for id in module_type.build_costs:
-		cost[id] = ceili(module_type.build_costs[id] / 2.0)
-	return cost
-
-
-## Whether repair_module() would currently succeed — a captured part to
-## spend and enough materials/components to cover get_repair_cost().
-func can_repair(module_type_id: String) -> bool:
-	return get_captured_tech_count(module_type_id) > 0 and has_items(get_repair_cost(module_type_id))
-
-
-## Spends one captured part of module_type_id plus its repair cost to
-## produce one placeable owned module instance (always generic — a captured
-## part carries no manufacturer_id in this Dictionary, see capture_tech_part).
-## Returns false without effect if can_repair() would be false.
-func repair_module(module_type_id: String) -> bool:
-	if not can_repair(module_type_id):
-		return false
-	spend_items(get_repair_cost(module_type_id))
-	_captured_tech_totals[module_type_id] = get_captured_tech_count(module_type_id) - 1
-	captured_tech_changed.emit(_captured_tech_totals)
-	add_owned_module(owned_module_key(module_type_id))
-	return true
-
-
 ## Bulk-restore for GameState after a scene change — bypasses research()'s
-## captured-tech requirement since the tech was already spent when this was
+## owned-part requirement since the part was already spent when this was
 ## originally researched.
 func set_researched(module_type_id: String) -> void:
 	_researched_ids[module_type_id] = true

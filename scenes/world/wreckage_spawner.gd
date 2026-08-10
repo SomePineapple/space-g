@@ -32,15 +32,33 @@ func configure(ship: Ship, layout: ShipLayout, renderer: ShipLayoutRenderer, fac
 	_faction_id = faction_id
 
 
-## The severed placement leaves as one drifting piece. condition_fraction is
-## how much of its own max condition the module still had at the instant it
-## detached — see _roll_capturable.
-func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType, condition_fraction: float) -> void:
-	if _roll_capturable(module_type, condition_fraction):
+## The severed placement leaves as one drifting piece, taking its mounted part
+## with it: `instance` is the actual ModuleInstance that was on the hull a frame
+## ago, handed over by HullDamageModel._detach_module. A clean enough severance
+## (see _roll_capturable) turns it into a recoverable CapturedTechPart still
+## holding that object; anything else is inert debris and the part is gone.
+func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType, instance: ModuleInstance) -> void:
+	var condition_fraction: float = instance.condition_fraction if instance != null else 0.0
+	if instance != null and _roll_capturable(module_type, condition_fraction):
 		var part: CapturedTechPart = _spawn_piece(captured_tech_part_scene, placement, module_type)
-		part.set_source(module_type.id, _faction_id, placement.manufacturer_id)
+		instance.stamp_origin(_faction_id, _origin_description())
+		part.set_instance(instance)
 	else:
 		_spawn_piece(ship_debris_scene, placement, module_type)
+
+
+## Provenance recorded on a part the first time it is cut free — what it came
+## off and roughly where. The scene name stands in for a region name; there is
+## no runtime region identity to ask, and reaching across the tree for the
+## RegionSpawner's RegionType would couple wreckage to world generation.
+func _origin_description() -> String:
+	var hull_name: String = _ship.personality.display_name
+	if hull_name.is_empty():
+		hull_name = "an unmarked hull"
+	var scene: Node = _ship.get_tree().current_scene if _ship.get_tree() != null else null
+	if scene == null:
+		return "Cut from %s" % hull_name
+	return "Cut from %s in %s" % [hull_name, scene.name]
 
 
 ## Sparks trace the exact hex edge(s) where a severed wing tears away from the
