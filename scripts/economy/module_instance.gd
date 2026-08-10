@@ -18,10 +18,29 @@ extends Resource
 ## and stored by id in GameState (see ShipUpgradeService); what remains is
 ## identity, provenance and condition.
 
+## Call-signs a part can be issued. Deliberately short, plain and a bit
+## industrial — a part is a named object you can argue about ("put the Vane on
+## the left"), not a magic item with a title.
+## Typed Array rather than PackedStringArray: a PackedStringArray() call is not
+## a constant expression, so it cannot initialise a const (see docs/gotchas.md).
+const NICKNAMES: Array[String] = [
+	"Tern", "Vane", "Ash", "Grit", "Cinder", "Harrow", "Mote", "Kestrel",
+	"Slate", "Brace", "Ember", "Drift", "Halyard", "Quill", "Ridge", "Salt",
+	"Tally", "Vesper", "Wick", "Yoke", "Anvil", "Bramble", "Cobalt", "Dray",
+]
+
 @export var instance_id: String = ""
 @export var module_type_id: String = ""
 ## Empty means "generic/no manufacturer" — matches ModulePlacement.manufacturer_id.
 @export var manufacturer_id: String = ""
+
+## What this part is called and how it's stamped — the two things that make one
+## railgun tellable from another at a glance. The nickname is what a crew would
+## actually say; the serial is what disambiguates two parts that drew the same
+## call-sign. Both are cosmetic labels: instance_id is still the identity every
+## system keys on.
+@export var nickname: String = ""
+@export var serial: String = ""
 
 ## Wear, as a fraction of full condition. Stored as a fraction rather than
 ## absolute condition points so it stays meaningful when the part moves to a
@@ -48,6 +67,38 @@ extends Resource
 ## Projectile knows its shooter Ship, not the hardpoint that launched it), and
 ## building that attribution is its own change.
 @export var kill_count: int = 0
+
+
+## The one place a part comes into existence. Every field that identifies it is
+## drawn from GameRng, so two machines building the same part in the same order
+## produce the same object — wall-clock values or instance ids would not
+## (docs/multiplayer.md).
+static func create(module_type_id_value: String, manufacturer_id_value: String = "") -> ModuleInstance:
+	var instance := ModuleInstance.new()
+	instance.instance_id = GameRng.next_id("mi")
+	instance.module_type_id = module_type_id_value
+	instance.manufacturer_id = manufacturer_id_value
+
+	var stream: RandomNumberGenerator = GameRng.stream("parts")
+	instance.nickname = NICKNAMES[stream.randi() % NICKNAMES.size()]
+	instance.serial = "%s-%04d" % [_serial_prefix(module_type_id_value), stream.randi() % 10000]
+	return instance
+
+
+## Two letters off the module type id — "hull_spar" becomes HS, "gun_mk1" GM.
+## Purely a label, so a collision between two types is cosmetic, not a bug.
+static func _serial_prefix(type_id: String) -> String:
+	var words: PackedStringArray = type_id.split("_", false)
+	if words.size() >= 2:
+		return (words[0].substr(0, 1) + words[1].substr(0, 1)).to_upper()
+	return type_id.substr(0, 2).to_upper()
+
+
+## What the builder calls this part: the type it is, plus which one it is.
+func display_name() -> String:
+	var type_name: String = ModuleCatalog.get_by_id(module_type_id).display_name \
+		if ModuleCatalog.get_by_id(module_type_id) != null else module_type_id
+	return "%s \"%s\"" % [type_name, nickname] if not nickname.is_empty() else type_name
 
 
 ## Records the hull this part was cut off, if it doesn't already know. First

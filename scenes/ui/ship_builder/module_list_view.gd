@@ -1,20 +1,20 @@
 class_name ModuleListView
 extends PanelContainer
 
-## The ship builder's "MODULES" card: filter tabs, category-grouped module
-## rows, and the expansion strip under the selected row.
+## The ship builder's "PARTS" card: filter tabs, category-grouped rows, and the
+## expansion strip under the selected row.
+##
+## One row is one *part*, not one module type. Nothing stacks and nothing shows
+## a count — two Hull Spars are two rows, because they are two objects with
+## different serials, different wear and different histories, and which one you
+## bolt on is a real choice. Rows are grouped by category and sorted by type
+## within it, so all the spars still sit together.
 ##
 ## Owns presentation only. It never reads Inventory or ModuleCatalog itself —
-## ShipBuilderPanel supplies the rows via set_entries() and their live
-## owned/locked/affordable state via update_states(), so the same list can
-## show manufacturer-flavoured variants without this file knowing what a
-## manufacturer is.
+## ShipBuilderPanel supplies the hold via set_parts().
 
-## Empty key means the selection was toggled off.
-signal module_selected(key: String)
-signal craft_pressed(key: String)
-signal research_pressed(module_type_id: String)
-signal repair_pressed(module_type_id: String)
+## Empty id means the selection was toggled off.
+signal module_selected(instance_id: String)
 
 const ROW_SEPARATION: int = 7
 const GROUP_SEPARATION: int = 14
@@ -23,11 +23,10 @@ const ROW_PADDING_V: float = 9.0
 
 var faction_id: String = "corporate"
 
-## key -> {"module_type": ModuleType, "display_name": String, "category": String}
+## instance_id -> {"instance": ModuleInstance, "module_type": ModuleType,
+## "category": String}
 var _entries: Dictionary = {}
-## key -> state Dictionary, as passed to update_states().
-var _states: Dictionary = {}
-## key -> {"root","panel","icon","name","craft","strip","cost","owned","research","repair"}
+## instance_id -> {"root","panel","icon","name","strip","detail","origin"}
 var _rows: Dictionary = {}
 var _tab_buttons: Dictionary = {}
 
@@ -58,7 +57,7 @@ func _build_chrome() -> void:
 	header_column.add_theme_constant_override("separation", 10)
 	header.add_child(header_column)
 
-	var title: Label = BuilderTheme.mono_label("MODULES", 13, BuilderTheme.TEXT_BRIGHT)
+	var title: Label = BuilderTheme.mono_label("PARTS", 13, BuilderTheme.TEXT_BRIGHT)
 	header_column.add_child(title)
 
 	var tabs := HFlowContainer.new()
@@ -102,42 +101,46 @@ func _build_chrome() -> void:
 
 # --- Data -------------------------------------------------------------------
 
-## entries: Array of {"key", "module_type", "display_name"}. Rebuilds every
-## row, so only call it when the set of modules itself changes.
-func set_entries(entries: Array) -> void:
+## parts: Array[ModuleInstance] — the whole hold. Rebuilds every row, since with
+## no counts to update there is no cheaper partial refresh to make.
+func set_parts(parts: Array) -> void:
 	_entries.clear()
 	_rows.clear()
 	for child in _list.get_children():
 		child.queue_free()
 
 	var by_category: Dictionary = {}
-	for entry in entries:
-		var module_type: ModuleType = entry["module_type"]
+	for part: ModuleInstance in parts:
+		var module_type: ModuleType = ModuleCatalog.get_by_id(part.module_type_id)
+		if module_type == null:
+			continue
 		var category: String = ModulePresentation.category(module_type)
-		_entries[entry["key"]] = {
+		_entries[part.instance_id] = {
+			"instance": part,
 			"module_type": module_type,
-			"display_name": entry["display_name"],
 			"category": category,
 		}
-		by_category.get_or_add(category, []).append(entry["key"])
+		by_category.get_or_add(category, []).append(part.instance_id)
 
 	for category in ModulePresentation.CATEGORY_ORDER:
 		if not by_category.has(category):
 			continue
-		_list.add_child(_build_group(category, by_category[category]))
+		var ids: Array = by_category[category]
+		ids.sort_custom(_compare_parts)
+		_list.add_child(_build_group(category, ids))
 
 	_apply_filter()
 
 
-## states: key -> {"owned": int, "locked": bool, "can_afford": bool,
-## "cost_text": String, "research_text": String, "can_research": bool,
-## "repair_text": String, "can_repair": bool}. Research/repair text being
-## empty hides that button.
-func update_states(states: Dictionary) -> void:
-	_states = states
-	for key in _rows:
-		_apply_state(key)
-	_apply_filter()
+## Sorted by part type first so every Hull Spar sits with every other Hull Spar,
+## then by serial so the order is stable and a given part stays where the player
+## last saw it.
+func _compare_parts(a_id: String, b_id: String) -> bool:
+	var a: Dictionary = _entries[a_id]
+	var b: Dictionary = _entries[b_id]
+	if a["module_type"].display_name != b["module_type"].display_name:
+		return a["module_type"].display_name < b["module_type"].display_name
+	return a["instance"].serial < b["instance"].serial
 
 
 func set_selected_key(key: String) -> void:
@@ -167,6 +170,7 @@ func _build_group(category: String, keys: Array) -> VBoxContainer:
 
 func _build_row(key: String) -> Control:
 	var entry: Dictionary = _entries[key]
+	var instance: ModuleInstance = entry["instance"]
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 2)
@@ -183,24 +187,26 @@ func _build_row(key: String) -> Control:
 	panel.add_child(line)
 
 	var icon := ModuleHexIcon.new()
-	icon.configure(entry["module_type"], faction_id, 0)
+	icon.configure(entry["module_type"], faction_id)
 	line.add_child(icon)
 
-	var name_label: Label = BuilderTheme.sans_label(entry["display_name"], 13, BuilderTheme.TEXT_BODY)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var text_column := VBoxContainer.new()
+	text_column.add_theme_constant_override("separation", 1)
+	text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(text_column)
+
+	var name_label: Label = BuilderTheme.sans_label(instance.display_name(), 13, BuilderTheme.TEXT_BODY)
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	line.add_child(name_label)
+	text_column.add_child(name_label)
 
-	var craft := Button.new()
-	craft.text = "CRAFT"
-	craft.focus_mode = Control.FOCUS_NONE
-	craft.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	craft.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	BuilderTheme.style_button(craft, BuilderTheme.CYAN, BuilderTheme.CYAN_BRIGHT,
-		BuilderTheme.TEXT_BRIGHT, 11, 12.0, 6.0)
-	craft.pressed.connect(_on_craft_pressed.bind(key))
-	line.add_child(craft)
+	# Serial and condition sit on the collapsed row, not in the expansion strip:
+	# they are how the player tells two otherwise identical parts apart, so
+	# needing to click each one to find out would defeat the point.
+	var detail_label: Label = BuilderTheme.mono_label(_detail_text(instance), 10, BuilderTheme.TEXT_MUTED_DIM)
+	detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_column.add_child(detail_label)
 
 	var strip := PanelContainer.new()
 	strip.visible = false
@@ -211,41 +217,27 @@ func _build_row(key: String) -> Control:
 	strip_column.add_theme_constant_override("separation", 3)
 	strip.add_child(strip_column)
 
-	var cost_label: Label = BuilderTheme.mono_label("COST · ", 11, BuilderTheme.TEXT_MUTED_DIM)
-	cost_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	strip_column.add_child(cost_label)
-
-	var owned_label: Label = BuilderTheme.mono_label("OWNED · 0", 11, BuilderTheme.TEXT_MUTED_DIM)
-	strip_column.add_child(owned_label)
-
-	# Research and Repair have no place in the visual reference; they live in
-	# the expansion strip so the collapsed list stays as designed.
-	var research := _make_strip_button(BuilderTheme.CYAN)
-	research.pressed.connect(_on_research_pressed.bind(key))
-	strip_column.add_child(research)
-
-	var repair := _make_strip_button(BuilderTheme.AMBER)
-	repair.pressed.connect(_on_repair_pressed.bind(key))
-	strip_column.add_child(repair)
+	var origin_label: Label = BuilderTheme.mono_label(_origin_text(instance), 11, BuilderTheme.TEXT_MUTED_DIM)
+	origin_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	strip_column.add_child(origin_label)
 
 	_rows[key] = {
-		"root": root, "panel": panel, "icon": icon, "name": name_label, "craft": craft,
-		"strip": strip, "cost": cost_label, "owned": owned_label,
-		"research": research, "repair": repair, "hovered": false,
+		"root": root, "panel": panel, "icon": icon, "name": name_label,
+		"strip": strip, "detail": detail_label, "origin": origin_label, "hovered": false,
 	}
 	_apply_selection(key)
 	return root
 
 
-func _make_strip_button(tint: Color) -> Button:
-	var button := Button.new()
-	button.visible = false
-	button.focus_mode = Control.FOCUS_NONE
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	BuilderTheme.style_button(button, tint, BuilderTheme.CYAN_BRIGHT, BuilderTheme.TEXT_BRIGHT,
-		11, 10.0, 6.0)
-	return button
+func _detail_text(instance: ModuleInstance) -> String:
+	var text: String = "%s · %d%%" % [instance.serial, roundi(instance.condition_fraction * 100.0)]
+	if instance.kill_count > 0:
+		text += " · %d kills" % instance.kill_count
+	return text
+
+
+func _origin_text(instance: ModuleInstance) -> String:
+	return instance.origin_description if instance.is_salvaged() else "Fabricated — no combat history"
 
 
 func _strip_style() -> StyleBoxFlat:
@@ -260,29 +252,6 @@ func _strip_style() -> StyleBoxFlat:
 
 
 # --- State ------------------------------------------------------------------
-
-func _apply_state(key: String) -> void:
-	var row: Dictionary = _rows[key]
-	var state: Dictionary = _states.get(key, {})
-	var owned: int = state.get("owned", 0)
-	var locked: bool = state.get("locked", false)
-
-	row["icon"].configure(_entries[key]["module_type"], faction_id, owned)
-	row["name"].text = ("%s [LOCKED]" % _entries[key]["display_name"]) if locked else _entries[key]["display_name"]
-	row["craft"].disabled = locked or not state.get("can_afford", false)
-	row["cost"].text = "COST · %s" % state.get("cost_text", "—")
-	row["owned"].text = "OWNED · %d" % owned
-
-	var research_text: String = state.get("research_text", "")
-	row["research"].visible = not research_text.is_empty()
-	row["research"].text = research_text
-	row["research"].disabled = not state.get("can_research", false)
-
-	var repair_text: String = state.get("repair_text", "")
-	row["repair"].visible = not repair_text.is_empty()
-	row["repair"].text = repair_text
-	row["repair"].disabled = not state.get("can_repair", false)
-
 
 func _apply_selection(key: String) -> void:
 	var row: Dictionary = _rows[key]
@@ -329,8 +298,6 @@ func _apply_filter() -> void:
 func _passes_filter(key: String) -> bool:
 	if _active_tab == ModulePresentation.TAB_ALL:
 		return true
-	if _active_tab == ModulePresentation.TAB_OWNED:
-		return _states.get(key, {}).get("owned", 0) > 0
 	return _entries[key]["category"] == _active_tab
 
 
@@ -370,15 +337,3 @@ func _on_row_hover(key: String, hovered: bool) -> void:
 func _on_row_gui_input(event: InputEvent, key: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		module_selected.emit("" if key == _selected_key else key)
-
-
-func _on_craft_pressed(key: String) -> void:
-	craft_pressed.emit(key)
-
-
-func _on_research_pressed(key: String) -> void:
-	research_pressed.emit(_entries[key]["module_type"].id)
-
-
-func _on_repair_pressed(key: String) -> void:
-	repair_pressed.emit(_entries[key]["module_type"].id)

@@ -18,6 +18,13 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   silently reverts that property to its default with no load error anywhere.
   Never write `#` comments into a `.tscn`.
 - GDScript has no C-style ternary — use `a if cond else b`.
+- **A packed-array constructor is not a constant expression.** `const X:
+  PackedStringArray = PackedStringArray([...])` fails to parse with "Assigned
+  value for constant isn't a constant expression", and the failure cascades:
+  every script that depends on the file reports "Compile Error: Failed to
+  compile depended scripts", so the real cause can be several files away from
+  where you notice it. Use a typed `Array` instead — `const X: Array[String] =
+  [...]` — which *is* constant-foldable.
 - **`Ship._hull_renderer.rotation` carries a real, measured `+90°` fixed
   offset** between the hex grid's authored axes and the ship's true
   movement-forward (`+X`) — not zero, despite no rotation ever being authored

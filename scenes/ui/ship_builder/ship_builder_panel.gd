@@ -14,51 +14,22 @@ const GRID_ROWS: int = 20
 
 const SAVE_DIRECTORY: String = "user://ships"
 
-## Phase 0a freeze — see docs/frozen_systems.md. Inventory.research() spends a
-## captured part to unlock *manufacturing* that part's type, which is the exact
-## inversion of the design thesis: a specific gun cut off a specific corvette
-## becomes an anonymous buildable type. The implementation stays in Inventory
-## (nothing is deleted); this constant hides the only entry point to it. Flip to
-## false to restore the button.
-const RESEARCH_FROZEN: bool = true
-
-## The build set the palette offers, in list order. Deliberately short and
-## deliberately chunky: a ship is assembled from named parts, not laid out one
-## hex at a time, and nothing here is a single hex. The Command Core is absent
-## because every layout already has exactly one and a second is rejected
-## anyway (see ShipLayout.get_place_rejection_reason).
-##
-## The rest of ModuleCatalog is still live — enemy layouts are built from it and
-## parts cut off those enemies still arrive in the hold. Those types get a
-## palette row when you are holding one; see _palette_type_ids().
-const BUILDABLE_TYPE_IDS: Array[String] = [
-	ModuleCatalog.HULL_SPAR_TYPE_ID,
-	ModuleCatalog.HULL_WEDGE_TYPE_ID,
-	ModuleCatalog.GUN_MK1_TYPE_ID,
-	ModuleCatalog.REACTOR_PAIR_TYPE_ID,
-	ModuleCatalog.THRUSTER_BLOCK_TYPE_ID,
-]
-
-## Only weapon/missile hardpoints and the two energy modules currently have
-## Manufacturer stat_modifiers wired up (see Ship._apply_manufacturer_modifiers/
-## ShipLayout._manufacturer_stat_delta) — matches the "Weapons + Reactor/Battery"
-## scope decision, not every module type.
-const MANUFACTURER_ELIGIBLE_TYPE_IDS: Array[String] = ["reactor_mk1", "battery_mk1"]
+## There is no manufacturing on this screen. The list is the hold: every row is
+## a part the player physically has, and building is putting those parts onto
+## the hull. Parts come from combat, not from a button — see docs/direction.md
+## §1. Inventory.research()/ModuleType.build_costs still exist and are simply
+## unreached; nothing is deleted.
 
 var template_layout: ShipLayout
 var working_layout: ShipLayout
 
-var _selected_type_id: String = ""
-## Empty means "generic/no manufacturer" — see Manufacturer/ManufacturerCatalog.
-var _selected_manufacturer_id: String = ""
+## The specific part being placed, taken out of the hold on placement. Empty
+## means nothing is selected. The type id is derived from it rather than stored
+## alongside, so the two can never disagree about what is being placed.
+var _selected_instance_id: String = ""
 var _pending_rotation: int = 0
 var _has_hover: bool = false
 var _last_hover_hex: Vector2i = Vector2i.ZERO
-
-## Composite keys ("module_type_id", or "module_type_id::manufacturer_id" for
-## a manufacturer-flavoured row) currently shown in the module list, in list
-## order — see Inventory.owned_module_key.
-var _entry_keys: Array[String] = []
 
 var _instruction_label: Label
 var _status_label: Label
@@ -223,11 +194,6 @@ func _build_right_column(root: Control) -> void:
 	if ship != null:
 		_module_list.faction_id = ship.personality.faction_id
 	_module_list.module_selected.connect(_on_module_selected)
-	_module_list.craft_pressed.connect(_on_craft_pressed)
-	_module_list.research_pressed.connect(_on_research_pressed)
-	# repair_pressed is deliberately left unconnected: a recovered part is
-	# placeable as it is (see Inventory.add_captured_instance), so there is
-	# nothing to repair it into. Its button never gets text and so never shows.
 	column.add_child(_module_list)
 
 	column.add_child(_build_save_card())
@@ -328,221 +294,63 @@ func _make_action_button(text: String, tint: Color, text_color: Color, hover_col
 	return button
 
 
-# --- Module list ------------------------------------------------------------
+# --- Parts list -------------------------------------------------------------
 
 func _connect_inventory() -> void:
 	if inventory == null:
 		return
-	inventory.materials_changed.connect(func(_totals): _refresh_module_states())
-	inventory.components_changed.connect(func(_totals): _refresh_module_states())
-	# Picking up a part of a type the palette wasn't showing adds a whole new
-	# row, so this can't be a state-only refresh (see _palette_type_ids).
-	inventory.owned_modules_changed.connect(func(_totals): _on_owned_modules_changed())
-	# A newly discovered manufacturer adds whole new rows (not just a state
-	# change on existing ones), so it needs a full rebuild.
-	inventory.manufacturer_discovered.connect(func(_id): _rebuild_module_list())
-
-
-## A full rebuild only when the set of types on offer actually changed —
-## otherwise every placement and removal would throw away and recreate every row
-## in the list just to update a count.
-func _on_owned_modules_changed() -> void:
-	var wanted: Array[String] = _palette_type_ids()
-	var shown: Array[String] = []
-	for key in _entry_keys:
-		var type_id: String = _split_key(key)[0]
-		if not shown.has(type_id):
-			shown.append(type_id)
-
-	if wanted == shown:
-		_refresh_module_states()
-	else:
-		_rebuild_module_list()
-
-
-func _module_type_takes_manufacturers(module_type: ModuleType) -> bool:
-	return module_type.hardpoint_category in ["weapon", "missile"] \
-		or module_type.id in MANUFACTURER_ELIGIBLE_TYPE_IDS
-
-
-## Composite key for a manufacturer-flavored row, distinct from the generic
-## row's plain module_type_id key. Delegates to Inventory so the same key
-## format is shared with owned-module tracking.
-func _palette_key(module_type_id: String, manufacturer_id: String) -> String:
-	return Inventory.owned_module_key(module_type_id, manufacturer_id)
-
-
-func _split_key(key: String) -> Array:
-	var parts: PackedStringArray = key.split("::")
-	return [parts[0], parts[1] if parts.size() > 1 else ""]
-
-
-## Which types the palette offers, in list order: the bundled build set, plus
-## any type the player is actually holding a part of.
-##
-## The second half is load-bearing, not a convenience. A Railgun cut off a
-## corporate wreck is a legacy type that is deliberately not buildable — without
-## a row for it, a recovered part would sit in the hold with nowhere to be
-## placed from, which is exactly the loop Phase 1 exists to close.
-func _palette_type_ids() -> Array[String]:
-	var ids: Array[String] = BUILDABLE_TYPE_IDS.duplicate()
-	if inventory == null:
-		return ids
-	for key in inventory.get_all_owned_modules():
-		var type_id: String = _split_key(key)[0]
-		if not ids.has(type_id):
-			ids.append(type_id)
-	return ids
+	# Every change to the hold changes which rows exist, because rows are parts
+	# rather than counts — there is no cheaper state-only refresh to fall back on.
+	inventory.owned_modules_changed.connect(func(_totals): _rebuild_module_list())
 
 
 func _rebuild_module_list() -> void:
-	var entries: Array = []
-	_entry_keys.clear()
-
-	for type_id in _palette_type_ids():
-		var module_type: ModuleType = ModuleCatalog.get_by_id(type_id)
-		if module_type == null:
-			continue
-		entries.append(_make_entry(module_type, null))
-
-		# A manufacturer row only makes sense once the base type itself is
-		# actually buildable — an "Atlas Railgun" row before Railgun itself is
-		# researched would be confusing (and un-placeable anyway).
-		var base_type_unlocked: bool = not module_type.requires_research \
-			or (inventory != null and inventory.is_researched(module_type.id))
-		if inventory == null or not base_type_unlocked or not _module_type_takes_manufacturers(module_type):
-			continue
-		for manufacturer_id in inventory.get_known_manufacturer_ids():
-			var manufacturer: Manufacturer = ManufacturerCatalog.get_by_id(manufacturer_id)
-			if manufacturer == null:
-				continue
-			entries.append(_make_entry(module_type, manufacturer))
-
-	_module_list.set_entries(entries)
-	_refresh_module_states()
+	var parts: Array = inventory.get_owned_instances() if inventory != null else []
+	_module_list.set_parts(parts)
+	# A part that was in the hold when the list was last built may have been
+	# placed since; don't leave the panel pointing at something it can't place.
+	if not _selected_instance_id.is_empty() and _selected_part() == null:
+		_clear_selection()
 
 
-func _make_entry(module_type: ModuleType, manufacturer: Manufacturer) -> Dictionary:
-	var manufacturer_id: String = manufacturer.id if manufacturer != null else ""
-	var key: String = _palette_key(module_type.id, manufacturer_id)
-	_entry_keys.append(key)
-	return {
-		"key": key,
-		"module_type": module_type,
-		"display_name": "%s (%s)" % [module_type.display_name, manufacturer.display_name] \
-			if manufacturer != null else module_type.display_name,
-	}
+## The part currently selected in the list, or null if none is (or if it has
+## left the hold since).
+func _selected_part() -> ModuleInstance:
+	if inventory == null or _selected_instance_id.is_empty():
+		return null
+	return inventory.get_owned_instance(_selected_instance_id)
 
 
-## Pushes each row's current lock/owned/affordable state into the list — call
-## whenever owned-module counts or material/component totals change.
-func _refresh_module_states() -> void:
-	var states: Dictionary = {}
-	for key in _entry_keys:
-		var split: Array = _split_key(key)
-		var module_type: ModuleType = ModuleCatalog.get_by_id(split[0])
-		var is_generic_row: bool = split[1] == ""
-
-		var locked: bool = module_type.requires_research \
-			and (inventory == null or not inventory.is_researched(module_type.id))
-		var state: Dictionary = {
-			"owned": inventory.get_owned_module_count(key) if inventory != null else 0,
-			"locked": locked,
-			"can_afford": inventory != null and inventory.has_items(module_type.build_costs),
-			"cost_text": _format_costs(module_type.build_costs),
-			"research_text": "", "can_research": false,
-			"repair_text": "", "can_repair": false,
-		}
-
-		# Research permanently unlocks a locked type for *manufacturing*; it
-		# never applies to a manufacturer-flavoured row, since those only appear
-		# once the base type is already known. An empty research_text hides the
-		# row's Research button outright (see ModuleListView._apply_state),
-		# which is how RESEARCH_FROZEN takes effect.
-		#
-		# repair_text is left empty permanently: a part cut off a wreck goes
-		# straight into owned stock as itself, so "damaged parts" are no longer
-		# a separate stock that has to be converted into placeable ones.
-		if is_generic_row and locked and inventory != null and not RESEARCH_FROZEN:
-			state["research_text"] = "RESEARCH (%d held)" % inventory.get_owned_module_count(
-				_palette_key(module_type.id, ""))
-			state["can_research"] = inventory.can_research(module_type.id)
-
-		states[key] = state
-	_module_list.update_states(states)
+func _selected_type_id() -> String:
+	var part: ModuleInstance = _selected_part()
+	return part.module_type_id if part != null else ""
 
 
-# --- Module actions ---------------------------------------------------------
+func _clear_selection() -> void:
+	_selected_instance_id = ""
+	_module_list.set_selected_key("")
+	_grid.clear_preview()
+	_sync_build_target()
+	_grid.refresh()
 
-func _on_module_selected(key: String) -> void:
-	_module_list.set_selected_key(key)
+
+# --- Part actions -----------------------------------------------------------
+
+func _on_module_selected(instance_id: String) -> void:
+	_module_list.set_selected_key(instance_id)
 	_grid.selected_placement_id = ""
 	_pending_rotation = 0
+	_selected_instance_id = instance_id
 
-	if key.is_empty():
-		_selected_type_id = ""
-		_selected_manufacturer_id = ""
-		_grid.clear_preview()
-		_report("Select a module type, then click an adjacent cell.")
-		_grid.refresh()
+	var part: ModuleInstance = _selected_part()
+	if part == null:
+		_clear_selection()
+		_report("Select a part from the hold, then click a socket on the hull.")
 		return
 
-	var split: Array = _split_key(key)
-	_selected_type_id = split[0]
-	_selected_manufacturer_id = split[1]
-
-	var module_type: ModuleType = ModuleCatalog.get_by_id(_selected_type_id)
-	if inventory != null and inventory.get_owned_module_count(key) <= 0:
-		_report("Selected: %s — you don't own one yet, CRAFT it first." % module_type.display_name)
-	else:
-		_report("Selected: %s — click an adjacent cell to place it." % module_type.display_name)
+	_report("Selected: %s (%s) — click a socket to bolt it on." % [part.display_name(), part.serial])
 	_grid.refresh()
 	_update_preview()
-
-
-## Spends ModuleType.build_costs (materials and/or crafted components — see
-## Inventory.has_items/spend_items) to craft one owned-but-unplaced instance.
-## Never places anything itself — placement is a separate, free action once
-## owned (see _on_hex_clicked).
-func _on_craft_pressed(key: String) -> void:
-	if inventory == null:
-		return
-
-	var split: Array = _split_key(key)
-	var module_type: ModuleType = ModuleCatalog.get_by_id(split[0])
-	if module_type.requires_research and not inventory.is_researched(module_type.id):
-		# With RESEARCH_FROZEN there is no unlock path left, so don't tell the
-		# player to use a button that no longer exists.
-		if RESEARCH_FROZEN:
-			_report("%s cannot be built — it can only be taken intact off a wreck." % module_type.display_name)
-		else:
-			_report("Cannot craft %s: research it first." % module_type.display_name)
-		_refresh_module_states()
-		return
-
-	if not inventory.spend_items(module_type.build_costs):
-		_report("Cannot craft %s: need %s." % [module_type.display_name, _format_costs(module_type.build_costs)])
-		return
-
-	inventory.add_owned_module(key)
-	_report("Crafted %s." % module_type.display_name)
-	_refresh_module_states()
-
-
-func _on_research_pressed(module_type_id: String) -> void:
-	if inventory == null or RESEARCH_FROZEN:
-		return
-
-	var module_type: ModuleType = ModuleCatalog.get_by_id(module_type_id)
-	if inventory.research(module_type_id):
-		_report("Researched %s. It can now be crafted." % module_type.display_name)
-		# Researching a type can add manufacturer rows beneath it.
-		_rebuild_module_list()
-		return
-	_report("Cannot research %s yet: capture one first." % module_type.display_name)
-	_refresh_module_states()
-
-
 
 
 # --- Grid interaction -------------------------------------------------------
@@ -561,89 +369,89 @@ func _on_hover_exited() -> void:
 ## Tells the grid which module its attachment sockets should be measured
 ## against, so the ring highlights where the current selection actually fits.
 func _sync_build_target() -> void:
-	_grid.set_build_target(_selected_type_id, _pending_rotation)
+	_grid.set_build_target(_selected_type_id(), _pending_rotation)
 
 
 func _update_preview() -> void:
 	_sync_build_target()
-	if _selected_type_id.is_empty() or not _has_hover:
+	var type_id: String = _selected_type_id()
+	if type_id.is_empty() or not _has_hover:
 		_grid.clear_preview()
 		return
 
 	var candidate_cells: Array[Vector2i] = working_layout.get_candidate_cells(
-		_selected_type_id, _last_hover_hex, _pending_rotation)
+		type_id, _last_hover_hex, _pending_rotation)
 	var reason: String = "" if _fits_in_bounds(candidate_cells) else "Out of bounds"
 	if reason == "":
-		reason = working_layout.get_place_rejection_reason(_selected_type_id, _last_hover_hex, _pending_rotation)
+		reason = working_layout.get_place_rejection_reason(type_id, _last_hover_hex, _pending_rotation)
 
-	_grid.set_preview(candidate_cells, reason == "", _selected_type_id, _pending_rotation)
+	_grid.set_preview(candidate_cells, reason == "", type_id, _pending_rotation)
 
-	var type_name: String = ModuleCatalog.get_by_id(_selected_type_id).display_name
+	var part_name: String = _selected_part().display_name()
 	if reason == "":
-		_report("Ready to place %s here." % type_name)
+		_report("Ready to bolt %s on here." % part_name)
 	else:
-		_report("Cannot place %s here: %s" % [type_name, reason])
+		_report("Cannot place %s here: %s" % [part_name, reason])
 
 
 func _on_hex_clicked(hex_coord: Vector2i) -> void:
 	var existing: ModulePlacement = working_layout.get_placement_at(hex_coord)
 	if existing != null:
-		_selected_type_id = ""
-		_selected_manufacturer_id = ""
+		_selected_instance_id = ""
 		_module_list.set_selected_key("")
 		_grid.clear_preview()
 		_sync_build_target()
 		_grid.selected_placement_id = existing.placement_id
-		var module_type: ModuleType = ModuleCatalog.get_by_id(existing.module_type_id)
-		_report("Selected: %s at (%d, %d)%s" % [module_type.display_name,
-			hex_coord.x, hex_coord.y, _describe_instance(existing.instance)])
+		_report("Mounted: %s" % _describe_instance(existing))
 		_grid.refresh()
 		return
 
-	if _selected_type_id.is_empty():
-		_report("Pick a module type from the list first.")
+	var part: ModuleInstance = _selected_part()
+	if part == null:
+		_report("Pick a part from the hold first.")
 		return
 
-	if not _fits_in_bounds(working_layout.get_candidate_cells(_selected_type_id, hex_coord, _pending_rotation)):
+	if not _fits_in_bounds(working_layout.get_candidate_cells(part.module_type_id, hex_coord, _pending_rotation)):
 		_report("Cannot place: Out of bounds")
 		return
 
-	var reason: String = working_layout.get_place_rejection_reason(_selected_type_id, hex_coord, _pending_rotation)
+	var reason: String = working_layout.get_place_rejection_reason(part.module_type_id, hex_coord, _pending_rotation)
 	if reason != "":
 		_report("Cannot place: %s" % reason)
 		return
 
-	var type_to_place: ModuleType = ModuleCatalog.get_by_id(_selected_type_id)
-	var owned_key: String = _palette_key(_selected_type_id, _selected_manufacturer_id)
-	if inventory != null and inventory.get_owned_module_count(owned_key) <= 0:
-		_report("Cannot place %s: you don't own one. Craft it first." % type_to_place.display_name)
+	var placed: ModulePlacement = working_layout.place(
+		part.module_type_id, hex_coord, _pending_rotation, part.manufacturer_id)
+	if placed == null:
+		_report("Cannot place %s here." % part.display_name())
 		return
 
-	var placed: ModulePlacement = working_layout.place(
-		_selected_type_id, hex_coord, _pending_rotation, _selected_manufacturer_id)
-	if inventory != null and placed != null:
-		placed.instance = inventory.take_owned_module(owned_key)
-	_report("Placed %s." % type_to_place.display_name)
+	# The placement takes the exact object out of the hold — same serial, same
+	# wear, same history — rather than a fresh one of its type.
+	placed.instance = inventory.take_owned_instance(part.instance_id)
+	_report("Bolted on %s (%s)." % [part.display_name(), part.serial])
 	_pending_rotation = 0
+	_clear_selection()
 	_refresh()
-	_grid.clear_preview()
 
 
-## The identity readout for one mounted part: its serial, how beaten up it is,
-## and what it was cut off. The status line is the only per-instance inspection
-## surface the screen has — the module list to the right is per *type*, so it
-## can only ever show how many of something is held, never which one.
-func _describe_instance(instance: ModuleInstance) -> String:
+## The identity readout for one mounted part: what it is, its serial, how beaten
+## up it is, and what it was cut off.
+func _describe_instance(placement: ModulePlacement) -> String:
+	var instance: ModuleInstance = placement.instance
 	if instance == null:
-		return ""
-	var parts: PackedStringArray = PackedStringArray([
-		instance.instance_id,
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		return module_type.display_name if module_type != null else placement.module_type_id
+
+	var fields: PackedStringArray = PackedStringArray([
+		instance.display_name(),
+		instance.serial,
 		"%d%% condition" % roundi(instance.condition_fraction * 100.0),
 	])
 	if instance.kill_count > 0:
-		parts.append("%d kills" % instance.kill_count)
-	parts.append(instance.origin_description if instance.is_salvaged() else "fabricated")
-	return " · %s" % " · ".join(parts)
+		fields.append("%d kills" % instance.kill_count)
+	fields.append(instance.origin_description if instance.is_salvaged() else "fabricated")
+	return " · ".join(fields)
 
 
 func _on_rotate_pressed() -> void:
@@ -651,12 +459,12 @@ func _on_rotate_pressed() -> void:
 		_rotate_selected_placement()
 		return
 
-	if not _selected_type_id.is_empty():
+	if not _selected_type_id().is_empty():
 		_pending_rotation = posmod(_pending_rotation + 1, 6)
 		_update_preview()
 		return
 
-	_report("Select a module type or a placed module first.")
+	_report("Select a part, or a module already on the hull, first.")
 
 
 func _rotate_selected_placement() -> void:
@@ -711,17 +519,17 @@ func _on_remove_pressed() -> void:
 	working_layout.remove(_grid.selected_placement_id)
 	_grid.selected_placement_id = ""
 
-	# Removal returns the built instance itself to owned stock, not raw
-	# materials/components — it was already a finished module, not something to
-	# be melted back down. It is the *same* instance, so anything tracked
-	# against it survives the round trip.
+	# Unbolting puts the part itself back in the hold, not raw materials — it was
+	# never melted down, it was just taken off. It is the *same* object, so its
+	# serial, wear and history survive the round trip.
 	if inventory != null:
-		var key: String = _palette_key(removed_placement.module_type_id, removed_placement.manufacturer_id)
-		inventory.return_owned_module(key, removed_placement.ensure_instance())
-		_report("Removed %s. Returned to inventory." % removed_type.display_name)
+		var instance: ModuleInstance = removed_placement.ensure_instance()
+		inventory.return_owned_module(
+			Inventory.owned_module_key(removed_placement.module_type_id, removed_placement.manufacturer_id),
+			instance)
+		_report("Unbolted %s (%s). Back in the hold." % [instance.display_name(), instance.serial])
 	else:
-		_report("Removed.")
-	_refresh_module_states()
+		_report("Removed %s." % removed_type.display_name)
 	_refresh()
 
 
@@ -761,18 +569,6 @@ func _refresh() -> void:
 	_cell_count_label.text = "%d/%d" % [_grid.used_cell_count(), _grid.total_cell_count()]
 
 
-## Costs can mix material_id and component_id keys (see Phase 5.2 module
-## construction costs, e.g. Hull) — resolve each id's display name from
-## whichever catalog actually owns it.
-func _format_costs(costs: Dictionary) -> String:
-	var parts: Array = []
-	for id in costs:
-		var item_name: String = ComponentCatalog.display_name(id) \
-			if ComponentCatalog.get_by_id(id) != null else MaterialCatalog.display_name(id)
-		parts.append("%d %s" % [costs[id], item_name])
-	return ", ".join(parts) if not parts.is_empty() else "free"
-
-
 ## All transient feedback goes to the top instruction line, which the handoff
 ## defines as the screen's dynamic text. The bottom line stays the docking
 ## hint.
@@ -810,11 +606,15 @@ func _load_current_name() -> void:
 		_report("Load failed.")
 		return
 
+	# KNOWN HOLE: a saved layout carries its own ModuleInstances, so loading one
+	# mounts parts that are not in the hold — with no crafting left, this is the
+	# only way to get parts without cutting them off something. Whether a preset
+	# is a blueprint (shape only, needs the parts) or a saved ship is an open
+	# design question; see docs/direction.md §6.
 	working_layout = loaded.duplicate(true)
 	_grid.layout = working_layout
 	_grid.selected_placement_id = ""
-	_selected_type_id = ""
-	_selected_manufacturer_id = ""
+	_selected_instance_id = ""
 	_module_list.set_selected_key("")
 	_report("Loaded '%s'." % _save_name_edit.text)
 	_refresh()

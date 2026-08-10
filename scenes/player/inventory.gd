@@ -287,11 +287,8 @@ func add_owned_module(key: String, amount: int = 1) -> void:
 		_owned_module_pool[key] = []
 	var parts: PackedStringArray = key.split("::")
 	for i in amount:
-		var instance := ModuleInstance.new()
-		instance.instance_id = GameRng.next_id("mi")
-		instance.module_type_id = parts[0]
-		instance.manufacturer_id = parts[1] if parts.size() > 1 else ""
-		_owned_module_pool[key].append(instance)
+		_owned_module_pool[key].append(
+			ModuleInstance.create(parts[0], parts[1] if parts.size() > 1 else ""))
 	owned_modules_changed.emit(get_all_owned_modules())
 
 
@@ -341,6 +338,40 @@ func get_all_owned_module_instances() -> Dictionary:
 func restore_owned_module_pool(pool: Dictionary) -> void:
 	_owned_module_pool = pool
 	owned_modules_changed.emit(get_all_owned_modules())
+
+
+## Every part in the hold, flattened out of the per-type buckets — what the ship
+## builder lists, one row per object. Order is stable for a given pool so the
+## list doesn't reshuffle itself between refreshes.
+func get_owned_instances() -> Array[ModuleInstance]:
+	var instances: Array[ModuleInstance] = []
+	for key in _owned_module_pool:
+		for instance in _owned_module_pool[key]:
+			instances.append(instance)
+	return instances
+
+
+func get_owned_instance(instance_id: String) -> ModuleInstance:
+	for instance in get_owned_instances():
+		if instance.instance_id == instance_id:
+			return instance
+	return null
+
+
+## Consumes and returns one *specific* part — the builder places the exact part
+## the player picked out of the hold, not an interchangeable one of its type.
+## Null if the hold doesn't have it (already placed, or gone with a wreck).
+func take_owned_instance(instance_id: String) -> ModuleInstance:
+	for key in _owned_module_pool:
+		var pool: Array = _owned_module_pool[key]
+		for i in pool.size():
+			if pool[i].instance_id != instance_id:
+				continue
+			var instance: ModuleInstance = pool[i]
+			pool.remove_at(i)
+			owned_modules_changed.emit(get_all_owned_modules())
+			return instance
+	return null
 
 
 ## Consumes and returns one owned instance of key — called when a module is

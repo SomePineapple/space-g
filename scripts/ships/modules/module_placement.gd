@@ -22,8 +22,5 @@ extends Resource
 ## pool without every call site null-checking first.
 func ensure_instance() -> ModuleInstance:
 	if instance == null:
-		instance = ModuleInstance.new()
-		instance.instance_id = GameRng.next_id("mi")
-		instance.module_type_id = module_type_id
-		instance.manufacturer_id = manufacturer_id
+		instance = ModuleInstance.create(module_type_id, manufacturer_id)
 	return instance

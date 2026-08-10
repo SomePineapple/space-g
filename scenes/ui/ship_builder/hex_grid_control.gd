@@ -38,6 +38,9 @@ const SOCKET_REACHABLE_OPACITY: float = 0.55
 const SOCKET_FILL: Color = Color(1, 1, 1, 0.012)
 const SOCKET_REACHABLE_FILL: Color = Color(0.1647, 0.3529, 0.4118, 0.18)
 
+## The join between two parts of the assembled ship.
+const SEAM_COLOR: Color = Color(0.05, 0.06, 0.08, 0.6)
+
 ## Soft cyan wash behind the lattice, and the vignette over it.
 const FIELD_GLOW: Color = Color(0.1647, 0.3529, 0.4118, 0.16)  # rgba(42,90,105,0.16)
 const VIGNETTE_START: float = 0.4
@@ -223,6 +226,11 @@ func _recompute_reachable_cells() -> void:
 
 func _draw_placements() -> void:
 	var occupant_by_cell: Dictionary = _build_occupant_lookup()
+	# Same seam rule as the in-game hull (see ShipLayoutRenderer): edges inside
+	# one part aren't drawn, edges between two parts are, so the builder shows
+	# the ship as the pile of separate objects it is rather than a hex field.
+	var seam_points := PackedVector2Array()
+
 	for hex_coord in occupant_by_cell:
 		var occupant: Array = occupant_by_cell[hex_coord]
 		var placement: ModulePlacement = occupant[0]
@@ -238,8 +246,28 @@ func _draw_placements() -> void:
 		else:
 			draw_colored_polygon(corners, module_type.color if module_type != null else BuilderTheme.INPUT_DARK)
 
+		_collect_seam_edges(hex_coord, corners, placement.placement_id, occupant_by_cell, seam_points)
+
 		if placement.placement_id == selected_placement_id:
 			_stroke_polygon(corners, BuilderTheme.CYAN_BRIGHT, 2.0)
+
+	if not seam_points.is_empty():
+		draw_multiline(seam_points, SEAM_COLOR, 1.0)
+
+
+## Each shared edge is found once from each side; the `<` comparison keeps a
+## single copy so the seam isn't drawn twice over.
+func _collect_seam_edges(cell: Vector2i, corners: PackedVector2Array, placement_id: String,
+		occupant_by_cell: Dictionary, seam_points: PackedVector2Array) -> void:
+	for edge in HexUtils.EDGE_DIRECTIONS.size():
+		var neighbour: Variant = occupant_by_cell.get(cell + HexUtils.EDGE_DIRECTIONS[edge])
+		if neighbour == null:
+			continue
+		var neighbour_id: String = neighbour[0].placement_id
+		if neighbour_id == placement_id or placement_id >= neighbour_id:
+			continue
+		seam_points.append(corners[edge])
+		seam_points.append(corners[(edge + 1) % corners.size()])
 
 
 ## The handoff's per-tile drop shadow: a dark halo for ordinary modules, a

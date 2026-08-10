@@ -21,12 +21,12 @@ const STORAGE: String = "Storage"
 ## category, in order").
 const CATEGORY_ORDER: Array[String] = [CORE, STRUCTURE, PROPULSION, WEAPONS, UTILITY, STORAGE]
 
-## Filter tabs above the list. "All"/"Owned" are not categories.
+## Filter tabs above the list. "All" is not a category. There is no "Owned" tab
+## any more: the list *is* the hold, so every row in it is owned by definition.
 const TAB_ALL: String = "All"
-const TAB_OWNED: String = "Owned"
-const FILTER_TABS: Array[String] = [TAB_ALL, STRUCTURE, WEAPONS, UTILITY, TAB_OWNED]
+const FILTER_TABS: Array[String] = [TAB_ALL, STRUCTURE, PROPULSION, WEAPONS, UTILITY]
 
-const STRUCTURE_TYPE_IDS: Array[String] = ["hull", "heavy_hull", "strut"]
+const STRUCTURE_TYPE_IDS: Array[String] = ["hull", "heavy_hull", "strut", "hull_spar", "hull_wedge"]
 
 ## Icon gradient (top, bottom) and glyph colour per category, taken from the
 ## handoff's per-module gradients — which follow the category, not the
@@ -65,6 +65,11 @@ const GLYPH_OVERRIDES: Dictionary = {
 	"missile_hardpoint": "M1",
 	"missile_hardpoint_t2": "M2",
 	"missile_hardpoint_t3": "M3",
+	"hull_spar": "HS",
+	"hull_wedge": "HW",
+	"gun_mk1": "G1",
+	"reactor_pair": "RP",
+	"thruster_block": "TH",
 	"weapon_hardpoint": "W1",
 	"weapon_hardpoint_t2": "W2",
 	"weapon_hardpoint_t3": "W3",

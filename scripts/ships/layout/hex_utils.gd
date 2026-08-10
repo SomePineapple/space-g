@@ -6,6 +6,16 @@ const HEX_DIRECTIONS: Array[Vector2i] = [
 	Vector2i(-1, 0), Vector2i(-1, 1), Vector2i(0, 1),
 ]
 
+## Which neighbour sits across each edge of a hex, indexed the same way
+## hex_corners() indexes its corners: edge i runs from corner i to corner i+1,
+## and its midpoint lies at 60*i degrees — the direction listed here. Renderers
+## use this to tell an edge between two different parts (a seam) from one inside
+## a single part (not drawn) or one facing open space (the silhouette).
+const EDGE_DIRECTIONS: Array[Vector2i] = [
+	Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 1),
+	Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, -1),
+]
+
 const SQRT3: float = 1.7320508
 
 
