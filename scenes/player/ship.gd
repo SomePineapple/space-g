@@ -455,6 +455,28 @@ func take_slicer_cut(band_fraction: float, impact_point: Vector2, aim_direction:
 	return _hull_damage.damage_cut(band_fraction, impact_point, aim_direction)
 
 
+## Credits one kill to the specific part that fired the fatal shot, recorded on
+## the mounted ModuleInstance rather than on the ship or the module type. That is
+## the point: the tally travels with the object, so a gun cut off a raider
+## arrives on your hull already carrying what it did while it was theirs, and
+## keeps counting.
+##
+## Enemy hardpoints go through exactly the same path — a pirate's cannon is
+## accumulating a record the whole time it is shooting at you, and that record is
+## what you take when you cut it free.
+##
+## Silently ignores a placement that no longer exists or has already handed its
+## part over to the wreckage: a gun can be shot off its mount while its last bolt
+## is still travelling.
+func record_hardpoint_kill(placement_id: String) -> void:
+	if ship_layout == null or placement_id.is_empty():
+		return
+	var placement: ModulePlacement = ship_layout.get_placement_by_id(placement_id)
+	if placement == null or placement.instance == null:
+		return
+	placement.instance.record_kill()
+
+
 ## Entry point for a hardpoint to damage its own mount — see
 ## HardpointGun.malfunction_chance.
 func damage_own_module(placement_id: String, amount: float) -> void:

@@ -28,6 +28,12 @@ extends Area2D
 
 var _halo_color_set: bool = false
 
+## Which ModulePlacement on the shooter fired this, so a kill can be credited
+## back to that specific gun (see Ship.record_hardpoint_kill). Carried on the
+## shot rather than looked up on impact because the gun may well be shot off its
+## mount during the second the bolt is in flight.
+var source_placement_id: String = ""
+
 var _velocity: Vector2 = Vector2.ZERO
 var _time_alive: float = 0.0
 var _shooter: Node = null
@@ -65,10 +71,24 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if body == _shooter:
 		return
+	# Sampled before and after the hit: Health.destroyed fires synchronously
+	# inside take_damage, but the victim's node survives until its deferred
+	# teardown, so its health is still readable here.
+	#
+	# Asked for by method rather than by `is Ship`, like the damage calls below.
+	# A static reference to Ship from this script closes a parse cycle — Ship ->
+	# HardpointBank -> HardpointGun -> (preload) projectile.tscn -> here — which
+	# breaks class resolution across every hardpoint script. Only Ship has either
+	# of these methods, so the duck-typing costs no precision.
+	var was_alive: bool = body.has_method("get_current_health") \
+		and body.get_current_health() > 0.0
 	if body.has_method("take_damage_at"):
 		body.take_damage_at(damage, global_position)
 	elif body.has_method("take_damage"):
 		body.take_damage(damage)
+	if was_alive and body.get_current_health() <= 0.0 \
+			and _shooter != null and _shooter.has_method("record_hardpoint_kill"):
+		_shooter.record_hardpoint_kill(source_placement_id)
 	_destroy()
 
 

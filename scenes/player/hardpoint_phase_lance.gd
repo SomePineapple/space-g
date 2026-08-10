@@ -75,7 +75,17 @@ func _resolve_beam() -> void:
 	if target.has_method("get_layout_extent"):
 		travel_distance = target.get_layout_extent() * 2.5
 
+	# Same kill attribution a fired bolt gets (see Projectile._on_body_entered) —
+	# the lance resolves its hit itself, so it has to credit its own mount.
+	# Duck-typed for the same reason documented there: a static Ship reference
+	# from this script closes a parse cycle (ShipLayout -> ModuleCatalog ->
+	# (preload) this scene -> Ship -> ShipLayout) that silently degrades every
+	# ShipLayout resource to a plain Resource.
+	var was_alive: bool = target.has_method("get_current_health") \
+		and target.get_current_health() > 0.0
 	target.take_beam_damage(projectile_damage, result.position, _pending_aim_direction, travel_distance)
+	if was_alive and target.get_current_health() <= 0.0 and _shooter != null:
+		_shooter.record_hardpoint_kill(source_placement_id)
 
 
 func _spawn_beam_visual(from_point: Vector2, to_point: Vector2) -> void:

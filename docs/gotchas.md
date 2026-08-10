@@ -105,6 +105,22 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   `get_viewport().get_texture().get_image().save_png(...)`, produces a file that
   can be read back directly. `--headless` uses a dummy rasteriser and renders
   nothing, so it cannot answer visual questions at all.
+- **A static `class_name` reference can close a parse cycle and silently
+  degrade `.tres` resources to plain `Resource`.** Adding `body is Ship` to
+  `projectile.gd` closed `Ship -> HardpointBank -> HardpointGun -> (preload)
+  projectile.tscn -> Ship`. The visible symptoms were nowhere near the cause:
+  `Could not resolve class "HardpointGun"` in unrelated hardpoint scripts, and
+  `Trying to assign value of type 'Resource' to a variable of type
+  'ship_layout.gd'` — because a script that fails to resolve stops registering
+  its `class_name`, so every `.tres` declaring it loads as a bare `Resource`,
+  and the failed `@export` initialiser aborts the rest of `@implicit_new`
+  (leaving later members null, which then error one frame later in
+  `_physics_process`). `preload` of a *scene* pulls in its script's types, so
+  the cycle can run through a `.tscn`. Fix: duck-type across the seam
+  (`body.has_method("take_damage")`) rather than naming the class — which is
+  why the damage calls in `projectile.gd` were already written that way.
+  Note the class cache can stay poisoned afterwards; rebuild with
+  `--headless --editor --quit`.
 - `editor_manage(op="monitors_get")` reports the **editor process's**
   Performance singleton, not the isolated running game's (can be 100x the
   real node count). For real gameplay numbers, call

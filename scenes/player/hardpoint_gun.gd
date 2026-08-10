@@ -207,6 +207,7 @@ func fire() -> Projectile:
 ## completes.
 func _execute_fire() -> Projectile:
 	var projectile: Projectile = projectile_scene.instantiate()
+	projectile.source_placement_id = source_placement_id
 	projectile.color = projectile_color
 	projectile.halo_color = projectile_halo_color
 	projectile.damage = projectile_damage
