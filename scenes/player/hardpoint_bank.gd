@@ -34,6 +34,21 @@ var _guns: Array[HardpointGun] = []
 var _launchers: Array[HardpointMissileLauncher] = []
 var _winches: Array[HardpointWinch] = []
 
+## Guns take turns rather than all firing on the same frame. _next_gun_index is
+## whose turn it is; _salvo_gate is the wait until the next gun in the rotation
+## may shoot. See fire_primary.
+var _next_gun_index: int = 0
+var _salvo_gate: float = 0.0
+
+## The gate is set to this fraction of the ideal spacing between shots, so the
+## guns' own cooldowns stay the only thing deciding rate of fire. At a full 1.0
+## the two limits are exactly equal and frame quantisation makes the gate win by
+## a hair on every shot: measured at a 0.30s cycle against the guns' own 0.267s,
+## an 11% loss of damage output, which is not a trade this feature is allowed to
+## make. The slack costs nothing — the gate still lets only one gun through per
+## frame, which is the part that matters.
+const SALVO_GATE_SLACK: float = 0.9
+
 ## placement_id -> mounted node, across every kind.
 var _by_placement: Dictionary = {}
 ## Every mounted node, for teardown on the next rebuild.
@@ -54,6 +69,8 @@ func rebuild(ship: Ship, layout: ShipLayout, renderer: ShipLayoutRenderer) -> vo
 	_guns.clear()
 	_launchers.clear()
 	_winches.clear()
+	_next_gun_index = 0
+	_salvo_gate = 0.0
 
 	for placement in layout.get_weapon_hardpoint_placements():
 		_guns.append(_mount_gun(placement))
@@ -85,10 +102,47 @@ func set_visual_visible(placement_id: String, should_be_visible: bool) -> void:
 		node.visible = should_be_visible
 
 
+func _process(delta: float) -> void:
+	_salvo_gate = maxf(_salvo_gate - delta, 0.0)
+
+
+## Fires at most one gun per call, cycling through them in turn, so a ship with
+## four cannons ripples rather than discharging all four on the same frame.
+##
+## Deliberately does not change anyone's rate of fire: each gun keeps its own
+## cooldown, and the gate between shots is that cooldown divided by the number
+## of live guns, so the rotation comes back around to each gun exactly when it
+## was going to be ready anyway. Four guns still put out four times one gun's
+## damage — they just spread it evenly across the interval instead of stacking
+## it into one spike and then a long silence.
+##
+## The gate (rather than seeding each gun with a phase offset) is what makes
+## this hold from a standing start: guns left idle all sit at zero cooldown, so
+## offsets decay to nothing and the first volley after any pause would go off in
+## lockstep again.
 func fire_primary() -> void:
+	if _salvo_gate > 0.0 or _guns.is_empty():
+		return
+	for offset in _guns.size():
+		var index: int = (_next_gun_index + offset) % _guns.size()
+		var gun: HardpointGun = _guns[index]
+		if _ship.is_module_destroyed(gun.source_placement_id) or not gun.is_ready_to_fire():
+			continue
+		gun.fire()
+		_next_gun_index = (index + 1) % _guns.size()
+		_salvo_gate = SALVO_GATE_SLACK / maxf(gun.fire_rate * _live_gun_count(), 0.001)
+		return
+
+
+## Guns whose module is still intact. Destroyed guns are excluded so losing one
+## tightens the remaining guns' rotation back up instead of leaving a silent
+## gap where it used to fire.
+func _live_gun_count() -> int:
+	var count: int = 0
 	for gun in _guns:
 		if not _ship.is_module_destroyed(gun.source_placement_id):
-			gun.fire()
+			count += 1
+	return maxi(count, 1)
 
 
 func fire_secondary() -> void:
@@ -156,6 +210,14 @@ func _mount_gun(placement: ModulePlacement) -> HardpointGun:
 	if overlay == null:
 		overlay = module_type.get_hex_overlay_texture(_ship.personality.faction_id)
 	gun.set_turret_texture(overlay, HullPaint.part_tint(placement, _ship.personality.faction_id))
+	# Not every weapon hardpoint is a plain gun (Railgun, Phase Lance carry their
+	# own scenes), so this is asked for rather than assumed.
+	if gun.has_method("set_laser_color"):
+		var hull_faction: String = _ship.personality.faction_id
+		gun.set_laser_color(
+			LaserPalette.base_color(placement.instance, hull_faction),
+			LaserPalette.bolt_color(placement.instance, hull_faction),
+			LaserPalette.halo_color(placement.instance, hull_faction))
 	gun.apply_tier(module_type.tier)
 	gun.apply_core_distance_bonus(_layout.distance_from_core(placement))
 	gun.setup(_ship)

@@ -174,9 +174,16 @@ func _advance_attached(delta: float) -> void:
 		_hold_rope_to_target()
 
 
+## Keeps the tracked tip on the target as well as drawing the rope there.
+##
+## _tip_position is otherwise only written while the rope is paying out, so an
+## attached rope's tracked tip stayed frozen at wherever it first caught. Any
+## retract then started from that stale point — the rope visibly flung itself
+## back out to the original attach distance before reeling in.
 func _hold_rope_to_target() -> void:
-	_rope.update_rope(_muzzle.global_position, _attached_target.global_position,
-		_muzzle.global_position.distance_to(_attached_target.global_position) + 1.0)
+	_tip_position = _attached_target.global_position
+	_paid_out_length = _muzzle.global_position.distance_to(_tip_position) + 1.0
+	_rope.update_rope(_muzzle.global_position, _tip_position, _paid_out_length)
 
 
 ## Only one kind of thing can ever be attached now, so this forwards straight to
@@ -200,13 +207,22 @@ func _reel_in_tech_part(delta: float) -> void:
 		_complete_capture()
 		return
 
-	_rope.update_rope(_muzzle.global_position, _attached_target.global_position, distance - travel + 1.0)
+	# Tracked as well as drawn, for the same reason as _hold_rope_to_target.
+	_tip_position = _attached_target.global_position
+	_paid_out_length = distance - travel + 1.0
+	_rope.update_rope(_muzzle.global_position, _tip_position, _paid_out_length)
 
 
 func _complete_capture() -> void:
 	_shooter.capture_tech_part(_attached_target.release_instance())
 	_attached_target.collect()
 	_attached_target = null
+	# The part arrived at the muzzle, so the rope is already home — there is no
+	# length left to wind in. Saying so explicitly means RETRACTING finishes on
+	# its next tick instead of playing a retract of whatever length the rope
+	# happened to be cast at.
+	_tip_position = _muzzle.global_position
+	_paid_out_length = 0.0
 	_state = State.RETRACTING
 
 

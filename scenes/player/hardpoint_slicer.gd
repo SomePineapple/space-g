@@ -38,20 +38,17 @@ extends Node2D
 ## enough to reach past a ship's outer plating to the spar behind it without
 ## having to fly into the wreckage you are creating.
 @export var beam_range: float = 420.0
-## Damage per second dealt to every part the beam crosses.
+## Seconds of held beam to cut through a part, once it is damaged enough to be
+## cuttable at all (below HullPaint.CUTTABLE_CONDITION).
 ##
-## Tuned against a real enemy part. Condition is stored per part, not per cell,
-## so the Hull Spar this is meant to cut is one 150-condition object however many
-## hexes it spans. Pirates run health_multiplier 1.0 (it is the *player* that
-## carries 3.0, on personality_user), so that 150 is the number in the field —
-## about 2.7s of held beam here.
+## A duration rather than a damage rate, so every part takes the same time. Under
+## a flat rate a 40-condition gun came free three times quicker than a
+## 150-condition spar, which made the tool's timing a property of whatever it was
+## pointed at instead of something the player could learn and plan around.
 ##
-## Long enough that holding the cut on one specific connector, on a moving
-## target, is a real commitment; short enough not to be a chore. Both bounds are
-## measured: 30 dps took 15s against a 3x hull, and 150 dps cut a real 1.0x
-## pirate spar in a single second, which made the topology decision irrelevant
-## because everything fell off immediately.
-@export var damage_per_second: float = 55.0
+## Ten seconds is a long commitment on purpose: it has to be held on one specific
+## connector, on a moving target, while that ship is still fighting back.
+@export var cut_duration: float = 10.0
 @export var energy_cost_per_second: float = 9.0
 ## Thick and near-white, deliberately unlike every weapon in the game — this is
 ## industrial cutting equipment, not ordnance, and it should never be mistaken
@@ -60,6 +57,18 @@ extends Node2D
 @export var beam_width: float = 6.0
 @export var pulse_speed: float = 14.0
 @export var pulse_strength: float = 0.25
+## How fast the beam extends and retracts, in world units per second. The beam
+## does not appear and vanish: it reaches out when switched on, draws back in
+## when switched off, and slides in and out as the cursor moves nearer and
+## further. Roughly a quarter-second to cover its full 10-hex reach.
+@export var extend_speed: float = 1600.0
+## What the beam is modulated toward as a cut progresses, from cold white at the
+## first touch to a hot working colour as the part comes apart — so how far
+## through a ten-second cut you are is legible on the beam itself, not only on
+## the target.
+@export var cut_progress_color: Color = Color(1.0, 0.62, 0.28)
+## What the beam is modulated by while touching a part too healthy to cut.
+const INTACT_BEAM_FADE: Color = Color(0.5, 0.55, 0.62, 0.45)
 
 ## Which ModulePlacement (on the shooter's ShipLayout) this hardpoint was
 ## spawned from — set by Ship right after instancing, same convention as
@@ -68,6 +77,22 @@ var source_placement_id: String = ""
 
 var _shooter: Ship
 var _beam: BeamVisual
+## What the last cut attempt did: "cut", "intact" or "miss" (see
+## Ship.take_slicer_cut), and how far through the band that part is. Together
+## these drive the beam's own feedback.
+var _last_result: String = "miss"
+var _last_progress: float = 0.0
+## How far the beam is currently reaching. Animated toward its target rather than
+## set outright, which is what makes it extend and retract instead of blinking.
+var _current_length: float = 0.0
+## The direction the beam last pointed, so a retracting beam keeps drawing along
+## its own line rather than snapping to wherever the cursor has since moved.
+var _last_direction: Vector2 = Vector2.RIGHT
+## Set on the frame a part comes apart, cleared once the beam is fully home. The
+## beam draws itself back in before it will cut anything else, so finishing a cut
+## is a visible completed action rather than the beam carrying straight on
+## through the hole into whatever was behind the part.
+var _finishing_cut: bool = false
 
 @onready var _muzzle: Marker2D = $Muzzle
 
@@ -119,16 +144,25 @@ func _beam_length() -> float:
 
 
 func _physics_process(delta: float) -> void:
+	# Every "stop" case retracts rather than killing the beam outright, so
+	# switching off, running out of power, losing the mount and having nothing in
+	# range all look like one piece of equipment drawing itself back in.
 	if _shooter == null or (not source_placement_id.is_empty() and _shooter.is_module_destroyed(source_placement_id)):
-		_stop_cutting()
+		_retract(delta)
+		return
+
+	# A finished cut retracts before anything else is considered, so it completes
+	# even with the beam still switched on and the cursor still on the target.
+	if _finishing_cut:
+		_retract(delta)
 		return
 
 	if not _shooter.is_slicer_active():
-		_stop_cutting()
+		_retract(delta)
 		return
 
 	if not _shooter.spend_energy(energy_cost_per_second * delta):
-		_stop_cutting()
+		_retract(delta)
 		return
 
 	_cut(delta)
@@ -137,7 +171,13 @@ func _physics_process(delta: float) -> void:
 func _cut(delta: float) -> void:
 	var from_point: Vector2 = _muzzle.global_position
 	var direction: Vector2 = _beam_direction()
-	var to_point: Vector2 = from_point + direction * _beam_length()
+	_last_direction = direction
+
+	# Grow toward the length the cursor is asking for. Because the raycast below
+	# only reaches as far as the beam has actually extended, a beam still on its
+	# way out cannot cut something it has not visibly reached yet.
+	_current_length = move_toward(_current_length, _beam_length(), extend_speed * delta)
+	var to_point: Vector2 = from_point + direction * _current_length
 
 	var space_state: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(from_point, to_point)
@@ -152,18 +192,64 @@ func _cut(delta: float) -> void:
 	# local space and its end in WORLD space, applying to_local() to the end
 	# itself. Converting the end first transforms it twice, which leaves the far
 	# tip wandering somewhere near the ship instead of tracking the cursor.
+	# Dimmed while the beam is landing on something it cannot open, so "nothing is
+	# happening" is visible on the tool as well as on the target (which carries
+	# the cut-ready marker — see HullPaint.CUT_READY_COLOR). Set as modulate
+	# rather than by reconfiguring the beam: configure() rebuilds its Line2D
+	# children, and doing that every frame is the per-frame resource construction
+	# docs/performance.md is about.
+	_apply_beam_tint()
 	_beam.draw_beam(_muzzle.position, to_point)
 
 	if result.is_empty():
+		_last_result = "miss"
+		_last_progress = 0.0
 		return
 	var target: Object = result.collider
 	if target == _shooter or not target.has_method("take_slicer_cut"):
+		_last_result = "miss"
+		_last_progress = 0.0
 		return
 
 	# Just the contact point. The cut lands on the one part the beam is touching
-	# and stops there — see Ship.take_slicer_cut.
-	target.take_slicer_cut(damage_per_second * delta, result.position)
+	# and stops there — see Ship.take_slicer_cut. The direction is passed so the
+	# hull can sample just inside the surface the ray stopped on.
+	# The share of the cut spent this frame is simply the share of cut_duration
+	# this frame represents.
+	var outcome: Dictionary = target.take_slicer_cut(
+		delta / maxf(cut_duration, 0.001), result.position, direction)
+	_last_result = outcome["result"]
+	_last_progress = outcome["progress"]
+	if _last_result == "severed":
+		_finishing_cut = true
 
 
-func _stop_cutting() -> void:
-	_beam.hide_beam()
+## Draws the beam back in rather than switching it off. Once it is fully home the
+## visual is hidden, which is also what stops it being drawn at a stale angle.
+func _retract(delta: float) -> void:
+	# A beam drawing back in from a completed cut keeps the hot colour it finished
+	# on all the way home, so the last thing seen is the cut succeeding. Every
+	# other retraction goes cold immediately.
+	if not _finishing_cut:
+		_last_result = "miss"
+		_last_progress = 0.0
+	_current_length = move_toward(_current_length, 0.0, extend_speed * delta)
+	if _current_length <= 0.01:
+		_finishing_cut = false
+		_last_result = "miss"
+		_last_progress = 0.0
+		_beam.hide_beam()
+		return
+	_apply_beam_tint()
+	_beam.draw_beam(_muzzle.position,
+		_muzzle.global_position + _last_direction * _current_length)
+
+
+## Colour is set through modulate rather than by reconfiguring the beam:
+## configure() rebuilds its Line2D children, and doing that every frame is the
+## per-frame resource construction docs/performance.md is about.
+func _apply_beam_tint() -> void:
+	if _last_result == "intact":
+		_beam.modulate = INTACT_BEAM_FADE
+		return
+	_beam.modulate = Color.WHITE.lerp(cut_progress_color, _last_progress)

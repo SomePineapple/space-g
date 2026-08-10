@@ -449,8 +449,10 @@ func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector
 ##
 ## Anything that loses its connection to the core as a result is severed intact
 ## rather than rolled for (see HullDamageModel's `clean_cut`).
-func take_slicer_cut(amount: float, impact_point: Vector2) -> void:
-	_hull_damage.damage_cut(amount, impact_point)
+## `band_fraction` is a share of the cuttable band, not raw damage — see
+## HullDamageModel.damage_cut, which also documents the returned dictionary.
+func take_slicer_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vector2) -> Dictionary:
+	return _hull_damage.damage_cut(band_fraction, impact_point, aim_direction)
 
 
 ## Entry point for a hardpoint to damage its own mount — see

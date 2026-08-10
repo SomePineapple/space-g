@@ -5,10 +5,19 @@
 [sub_resource type="CircleShape2D" id="CircleShape2D_dmo7y"]
 radius = 3.0
 
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_additive"]
+blend_mode = 1
+
 [node name="Projectile" type="Area2D" unique_id=1253589394]
 script = ExtResource("1_jveri")
 
+[node name="Halo" type="Polygon2D" parent="." unique_id=1923175294]
+material = SubResource("CanvasItemMaterial_additive")
+color = Color(1, 0.3, 0.3, 0.5)
+polygon = PackedVector2Array(17, 0, -14, -6.5, -14, 6.5)
+
 [node name="Visual" type="Polygon2D" parent="." unique_id=1923175295]
+material = SubResource("CanvasItemMaterial_additive")
 color = Color(1, 0.3, 0.3, 1)
 polygon = PackedVector2Array(10, 0, -8, -2.5, -8, 2.5)
 

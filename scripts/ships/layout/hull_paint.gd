@@ -44,6 +44,37 @@ const WORN_SHADE: float = 0.55
 ## condition. Not 1.0: a graze shouldn't make every joint around it look bodged.
 const HEALTHY_CONDITION: float = 0.85
 
+## Below this much condition a part has taken enough structural damage that a
+## Slicer can open it up and cut it free (see HullDamageModel.damage_cut). Above
+## it the beam does nothing at all.
+##
+## This is what stops salvage being a solved problem: a Slicer alone would take
+## any part off any hull, so weapons would have no role in it. Softening the
+## piece you want first, then cutting, is the loop.
+const CUTTABLE_CONDITION: float = 0.30
+
+## Colour and weight of the marker drawn around a part that has crossed that
+## line. Cold white to match the Slicer's own beam, so "the cutting tool works
+## here" is said in the cutting tool's colour rather than in a new one.
+const CUT_READY_COLOR: Color = Color(0.85, 0.96, 1.0, 0.9)
+const CUT_READY_WIDTH: float = 2.4
+## Dashes rather than a solid ring: a continuous outline is the selection
+## language this whole renderer has been kept away from (see append_weld).
+const CUT_READY_DASH_SPANS: Array[float] = [0.06, 0.30, 0.40, 0.60, 0.70, 0.94]
+
+
+static func is_cuttable(instance: ModuleInstance) -> bool:
+	return instance != null and instance.condition_fraction < CUTTABLE_CONDITION
+
+
+## Appends one edge of a cut-ready part's outline as dashes, ready for
+## draw_multiline().
+static func append_cut_marker(from: Vector2, to: Vector2, dashes: PackedVector2Array) -> void:
+	var span: Vector2 = to - from
+	for i in range(0, CUT_READY_DASH_SPANS.size(), 2):
+		dashes.append(from + span * CUT_READY_DASH_SPANS[i])
+		dashes.append(from + span * CUT_READY_DASH_SPANS[i + 1])
+
 
 ## Whose art a part is drawn in: its own maker's if it was cut off someone
 ## else's ship, otherwise the hull's. Every surface that draws a part — the hull,
@@ -151,6 +182,17 @@ static func part_rotation(instance: ModuleInstance) -> float:
 ## and String.hash() maps those to neighbouring values, so slicing its raw bits
 ## gave two consecutive parts offsets differing in the third decimal — a jitter
 ## nobody could see. Mixing first decorrelates them.
+## A stable choice from a list for a given part — same part, same pick, every
+## run. Public because more than appearance needs it now (see LaserPalette): the
+## point is that everything derives its per-part variation from the same
+## decorrelated mix rather than each caller rolling its own hash, which is what
+## produced near-identical values the first time (see _signed_unit).
+static func stable_index(instance: ModuleInstance, salt: int, count: int) -> int:
+	if instance == null or count <= 0:
+		return 0
+	return absi(int(_signed_unit(instance.instance_id.hash(), salt) * 32767.0)) % count
+
+
 static func _signed_unit(seed_value: int, salt: int) -> float:
 	var mixed: int = seed_value + salt * 0x9E3779B9
 	mixed = (mixed ^ (mixed >> 16)) * 0x7FEB352D

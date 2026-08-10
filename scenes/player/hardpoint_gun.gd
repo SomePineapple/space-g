@@ -6,7 +6,18 @@ extends Node2D
 @export var projectile_speed: float = 700.0
 @export var recoil_force: float = 24.0
 @export var projectile_color: Color = Color(0.4, 0.9, 1.0, 1.0)
+## The wider, softer colour under each bolt. Set with projectile_color by
+## set_laser_color(); only meaningful separately if a gun is configured by hand.
+@export var projectile_halo_color: Color = Color(0.4, 0.9, 1.0, 0.5)
 @export var projectile_damage: float = 8.0
+## How long a bolt that hits nothing survives before self-destructing. The
+## actual value is randomised within projectile_lifetime_variance below this
+## max (same technique as HardpointMissileLauncher's salvo lifetimes), so a
+## burst that all misses doesn't pop out of existence in one synchronised
+## frame — which reads as a rendering glitch rather than as shots expiring.
+## HardpointMissileLauncher overwrites this with its own, much longer value.
+@export var projectile_lifetime: float = 2.0
+@export var projectile_lifetime_variance: float = 0.2
 @export var barrel_color: Color = Color(0.5, 0.85, 1.0, 1.0)
 @export var energy_cost: float = 4.0
 ## Left unassigned by default (no audio assets yet); assign a stream once
@@ -144,6 +155,21 @@ func _update_turret_transform() -> void:
 	_turret.scale = Vector2.ONE * (length / half_height)
 
 
+## Sets what colour this particular gun fires. Driven by the mounted part rather
+## than by the ship (see LaserPalette): a captured pirate cannon keeps firing
+## pirate colours once it is bolted onto a corporate hull, which is what makes a
+## salvaged ship visibly fire a mixed spread.
+##
+## `base` stays at or below white and is what the barrel is painted; the bolt and
+## its halo are pushed past white so the glow pass catches them.
+func set_laser_color(base: Color, bolt: Color, halo: Color) -> void:
+	barrel_color = base
+	projectile_color = bolt
+	projectile_halo_color = halo
+	if is_node_ready():
+		_barrel.color = barrel_color
+
+
 func aim_at(global_target: Vector2) -> void:
 	global_rotation = (global_target - global_position).angle()
 
@@ -151,6 +177,15 @@ func aim_at(global_target: Vector2) -> void:
 func _process(delta: float) -> void:
 	if _cooldown_remaining > 0.0:
 		_cooldown_remaining -= delta
+
+
+## Whether calling fire() right now would actually produce a shot, ignoring
+## energy. HardpointBank asks this to pick the next gun in its firing rotation,
+## because fire()'s return value can't answer it — a ChargedHardpoint returns
+## null on a successful trigger-pull (it has only started spinning up) exactly
+## as it does when refusing.
+func is_ready_to_fire() -> bool:
+	return _cooldown_remaining <= 0.0
 
 
 func fire() -> Projectile:
@@ -173,7 +208,10 @@ func fire() -> Projectile:
 func _execute_fire() -> Projectile:
 	var projectile: Projectile = projectile_scene.instantiate()
 	projectile.color = projectile_color
+	projectile.halo_color = projectile_halo_color
 	projectile.damage = projectile_damage
+	projectile.lifetime = GameRng.stream("projectile").randf_range(
+		projectile_lifetime - projectile_lifetime_variance, projectile_lifetime)
 	projectile.scale = Vector2.ONE * projectile_scale
 	# Bigger-tier projectiles should leave a bigger impact burst, not just a
 	# bigger travelling shot.

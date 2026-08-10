@@ -112,6 +112,8 @@ func _draw() -> void:
 	var seam_points := PackedVector2Array()
 	var weld_points := PackedVector2Array()
 	var weld_bolt_points := PackedVector2Array()
+	# The perimeter of every part damaged enough for the Slicer to cut free.
+	var cut_ready_points := PackedVector2Array()
 
 	# Textured hex fills are accumulated per texture and emitted as one mesh
 	# each. The canvas renderer issues a draw call per draw_colored_polygon()
@@ -174,7 +176,8 @@ func _draw() -> void:
 				# leave a ghost turret showing through whenever the gun aims
 				# away from its neutral orientation.
 			_collect_edges(cell, corners, placement, owner_by_cell,
-				outline_points, seam_points, weld_points, weld_bolt_points)
+				outline_points, seam_points, weld_points, weld_bolt_points,
+				cut_ready_points)
 
 	# Shadows first, under every fill: a part's shadow falls across its
 	# neighbour's cells, and only the slivers that land in the gaps the jitter
@@ -202,6 +205,10 @@ func _draw() -> void:
 		draw_multiline(weld_bolt_points, WELD_BOLT_COLOR, WELD_BOLT_WIDTH)
 	if not outline_points.is_empty():
 		draw_multiline(outline_points, OUTLINE_COLOR, OUTLINE_WIDTH)
+	# Over the silhouette: this has to be readable against space at the edge of a
+	# hull, which is exactly where a severable limb usually is.
+	if not cut_ready_points.is_empty():
+		draw_multiline(cut_ready_points, HullPaint.CUT_READY_COLOR, HullPaint.CUT_READY_WIDTH)
 
 
 func _translated(corners: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
@@ -238,11 +245,22 @@ func _build_owner_lookup() -> Dictionary:
 func _collect_edges(cell: Vector2i, corners: PackedVector2Array, placement: ModulePlacement,
 		owner_by_cell: Dictionary, outline_points: PackedVector2Array,
 		seam_points: PackedVector2Array, weld_points: PackedVector2Array,
-		weld_bolt_points: PackedVector2Array) -> void:
+		weld_bolt_points: PackedVector2Array, cut_ready_points: PackedVector2Array) -> void:
+	# A destroyed module is a hole, not something still to be cut: its condition
+	# is zero, so is_cuttable() is trivially true and the marker would sit on the
+	# scorched remains forever. The part that was severed has already left.
+	var cuttable: bool = not _destroyed_placement_ids.has(placement.placement_id) \
+		and HullPaint.is_cuttable(placement.instance)
 	for edge in HexUtils.EDGE_DIRECTIONS.size():
 		var neighbour: Variant = owner_by_cell.get(cell + HexUtils.EDGE_DIRECTIONS[edge])
 		var from: Vector2 = corners[edge]
 		var to: Vector2 = corners[(edge + 1) % corners.size()]
+
+		# Marked around the part's own outline — every edge that isn't internal to
+		# it — so the marker traces the object you would actually cut free rather
+		# than the individual hexes it happens to occupy.
+		if cuttable and neighbour != placement:
+			HullPaint.append_cut_marker(from, to, cut_ready_points)
 
 		if neighbour == null:
 			outline_points.append(from)

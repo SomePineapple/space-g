@@ -59,3 +59,9 @@ func _release_charge() -> void:
 
 func is_charging() -> bool:
 	return _charging
+
+
+## A weapon part-way through its spin-up is busy, not available — without this
+## the bank's firing rotation would keep offering it a turn every frame.
+func is_ready_to_fire() -> bool:
+	return not _charging and super.is_ready_to_fire()

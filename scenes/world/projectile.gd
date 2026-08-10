@@ -7,17 +7,33 @@ extends Area2D
 @export var explosion_scale: float = 0.35
 @export var damage: float = 10.0
 
+## The bolt's core colour. Deliberately allowed past 1.0 — both polygons draw
+## additively and the world's glow pass turns the overflow into bloom, which is
+## what makes a bolt read as light rather than as a coloured triangle. See
+## LaserPalette, and note it needs rendering/viewport/hdr_2d to survive.
 @export var color: Color = Color(1, 1, 1, 1):
 	set(value):
 		color = value
 		if is_node_ready():
-			_visual.color = value
+			_apply_colors()
+
+## Softer, wider colour drawn under the core. Set alongside `color` by whoever
+## fires the shot; left as a dimmed version of it if nobody does.
+@export var halo_color: Color = Color(1, 1, 1, 0.5):
+	set(value):
+		halo_color = value
+		_halo_color_set = true
+		if is_node_ready():
+			_apply_colors()
+
+var _halo_color_set: bool = false
 
 var _velocity: Vector2 = Vector2.ZERO
 var _time_alive: float = 0.0
 var _shooter: Node = null
 
 @onready var _visual: Polygon2D = $Visual
+@onready var _halo: Polygon2D = $Halo
 
 
 func launch(travel_speed: float, shooter: Node = null) -> void:
@@ -28,7 +44,15 @@ func launch(travel_speed: float, shooter: Node = null) -> void:
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
+	_apply_colors()
+
+
+func _apply_colors() -> void:
 	_visual.color = color
+	if _halo_color_set:
+		_halo.color = halo_color
+	else:
+		_halo.color = Color(color.r, color.g, color.b, 0.5)
 
 
 func _physics_process(delta: float) -> void:

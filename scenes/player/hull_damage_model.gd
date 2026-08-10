@@ -172,8 +172,16 @@ func _max_condition_of(placement: ModulePlacement) -> float:
 func _set_condition(placement: ModulePlacement, value: float) -> void:
 	if placement.instance == null:
 		return
+	var was_cuttable: bool = HullPaint.is_cuttable(placement.instance)
 	var max_condition: float = _max_condition_of(placement)
 	placement.instance.condition_fraction = clampf(value / max_condition, 0.0, 1.0) if max_condition > 0.0 else 0.0
+
+	# The hull only redraws when its layout changes, but the cut-ready marker
+	# depends on condition — without this it would not appear until something
+	# else happened to force a redraw, which for a part shot down mid-fight could
+	# be never.
+	if _renderer != null and was_cuttable != HullPaint.is_cuttable(placement.instance):
+		_renderer.queue_redraw()
 
 
 ## True if the module is either destroyed outright (condition at zero), still
@@ -243,17 +251,71 @@ func damage_at(amount: float, impact_point: Vector2) -> void:
 ##
 ## Anything that loses its path to the core as a result is severed intact rather
 ## than rolled for, same as before.
-func damage_cut(amount: float, impact_point: Vector2) -> void:
+## `band_fraction` is how much of the cuttable band (the last
+## HullPaint.CUTTABLE_CONDITION of a part's condition) to consume this call —
+## NOT an absolute damage figure.
+##
+## Expressed that way so a cut takes the same wall-clock time on every part. A
+## flat damage rate meant a 40-condition gun came off three times faster than a
+## 150-condition spar, which made the tool's timing a property of whatever you
+## happened to be pointing at rather than something the player could learn.
+##
+## Returns {"result": "cut"|"intact"|"miss", "progress": 0..1} — progress being
+## how far through the band the part now is, so the tool can show the cut
+## advancing (see HardpointSlicer).
+func damage_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vector2) -> Dictionary:
 	if _layout == null:
-		return
+		return {"result": "miss", "progress": 0.0}
 
-	var placement: ModulePlacement = _layout.get_placement_at(_to_hex(_ship.to_local(impact_point)))
+	var placement: ModulePlacement = _placement_under_contact(impact_point, aim_direction)
 	if placement == null:
-		return
+		return {"result": "miss", "progress": 0.0}
+
+	# A part still in good condition cannot simply be cut away — the Slicer opens
+	# a seam that damage has already started. Without this the beam alone took
+	# any part off any hull, and weapons had no role in salvage at all.
+	if not HullPaint.is_cuttable(placement.instance):
+		return {"result": "intact", "progress": 0.0}
 
 	_clean_cut_active = true
-	_apply(placement, amount)
+	_apply(placement, band_fraction * _max_condition_of(placement) * HullPaint.CUTTABLE_CONDITION)
 	_clean_cut_active = false
+	# "severed" is the finishing frame — the part has come apart and there is
+	# nothing left here to cut. Reported separately from "cut" so the Slicer can
+	# draw its beam back in on completion rather than carrying straight on into
+	# whatever is behind the hole it just made.
+	if is_destroyed(placement.placement_id):
+		return {"result": "severed", "progress": 1.0}
+	return {"result": "cut", "progress": cut_progress_of(placement)}
+
+
+## How far through the cuttable band a part is: 0 the moment it becomes
+## cuttable, 1 when it comes apart.
+func cut_progress_of(placement: ModulePlacement) -> float:
+	if placement == null or placement.instance == null:
+		return 1.0
+	return clampf(1.0 - placement.instance.condition_fraction / HullPaint.CUTTABLE_CONDITION, 0.0, 1.0)
+
+
+## Which part the beam is actually touching.
+##
+## A raycast stops on the *outer surface* of a collision shape, and that point
+## sits exactly on the hex boundary — so rounding it straight to a cell lands
+## outside the hull as often as inside. Measured: only 40% of contact points
+## resolved to an occupied cell, meaning 60% of a held beam's frames silently did
+## nothing and the cut took roughly two and a half times longer than its damage
+## rate implied. Stepping half a cell along the beam puts the sample inside the
+## cell that was hit; the raw point is kept as a fallback for a graze that steps
+## straight back out again.
+func _placement_under_contact(impact_point: Vector2, aim_direction: Vector2) -> ModulePlacement:
+	var local_point: Vector2 = _ship.to_local(impact_point)
+	if aim_direction.length() > 0.001:
+		var inward: Vector2 = aim_direction.normalized().rotated(-_ship.global_rotation)
+		var stepped: ModulePlacement = _layout.get_placement_at(
+			_to_hex(local_point + inward * _renderer.cell_size * 0.5))
+		if stepped != null:
+			return stepped
+	return _layout.get_placement_at(_to_hex(local_point))
 
 
 ## `clean_cut` marks this beam as a deliberate severing pass (HardpointSlicer)
@@ -307,6 +369,12 @@ func _to_hex(ship_local_point: Vector2) -> Vector2i:
 func _apply(placement: ModulePlacement, amount: float) -> void:
 	if is_destroyed(placement.placement_id):
 		return
+	# Damage to a module restarts the repair delay in its own right, not just
+	# damage that reaches the Health pool. The Slicer deliberately never touches
+	# Health, so without this a hull quietly regrew throughout a cut — and at a
+	# ten-second cut rate the regrowth is faster than the cutting, so a part could
+	# never be severed at all no matter how long the beam was held.
+	note_damage_taken()
 	var remaining: float = maxf(_condition_of(placement) - amount, 0.0)
 	_set_condition(placement, remaining)
 	if remaining <= 0.0:
