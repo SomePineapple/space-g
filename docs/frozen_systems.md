@@ -117,3 +117,55 @@ this commit is a freeze.
 module construction, not component crafting, and it belongs with the material
 economy in Phase 0b — after Phase 1, so salvage can feed the builder before
 buying-with-materials stops.
+
+---
+
+## Trade menu and stock market (TradeMarketPanel) — frozen Phase 0a
+
+**Flag:** `TradeMarketPanel.frozen`
+
+The roadmap lists "Stock market" and "Trade menu" as two rows. In this repo they
+are one screen: the Station Exchange, backed by the `MarketService` autoload.
+One freeze covers both.
+
+**What it did:** buying and selling all `MaterialCatalog` materials for credits
+at a station, against `MarketService`'s live prices, with quantity chips, price
+impact and spillover onto related materials. Also the game's only paid hull
+repair.
+
+**Why frozen:** credits are a universal solvent. Any part reachable through
+money is reproducible — sell salvage, buy the thing — which is precisely what a
+part cut off a specific wreck is not supposed to be. Freezing the exchange
+before freezing credits themselves is deliberate: it removes the conversion
+without touching the number, so nothing that reads a credit balance breaks.
+
+**What's disabled:** the `toggle_trade` action ("T") no longer opens the screen,
+and "T: Trade" is gone from `StationPrompt.PROMPT_TEXT` (which the ship
+builder's status line also displays). `MarketService`, `MarketMaterial` and
+every `scenes/ui/market/` component are untouched, and the service still ticks
+in the background — harmlessly, since nothing reads it while the screen is shut.
+
+**Forced change — hull repair.** `TradeMarketPanel._repair()` was the *only*
+caller of `Ship.repair_fully()`. Freezing the screen with no other change would
+have capped the hull at `passive_repair_cap_fraction` (0.4) permanently, which
+fails the "playable after every freeze" rule. Two edits in
+`hull_damage_model.gd` replace it:
+
+- `passive_repair_cap_fraction` 0.4 → **1.0**. Holed-out modules now regrow all
+  the way instead of stopping at 40% and waiting for a bill.
+- `_regenerate_modules()` now also heals modules that took chip damage without
+  being holed out. They were skipped entirely before — the paid repair was the
+  only thing that ever topped them up — so without this, partial damage
+  accumulated forever. They heal in place and do not enter `_regrowing`, which
+  would switch them off and respawn a collision shape they never lost;
+  `_advance_repair()` takes a `was_regrowing` flag to keep the two apart.
+
+`Ship.repair_fully()`, `needs_repair()`, `get_repair_cost()` and
+`repair_credit_cost` all still exist with no caller.
+
+**What this costs:** the station is now weaker as a destination — it repaired
+you, and now it only builds. Recovery is entirely passive and automatic, on a
+`repair_delay` of 6s at `repair_rate` 6 condition/sec. That is generous; if the
+loop wants attrition, the lever is `repair_rate`, not the cap. **Detached
+(severed) modules are still gone for good** — the jeopardy the thesis wants
+lives in losing the part, not in a repair bill, and that is unchanged.

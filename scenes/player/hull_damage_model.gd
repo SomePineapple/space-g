@@ -40,10 +40,13 @@ signal hull_lost
 @export var repair_delay: float = 6.0
 ## Condition/second restored to a regrowing module once it's eligible.
 @export var repair_rate: float = 6.0
-## Passive regrowth only brings a holed-out module back to this fraction of its
-## max condition — the rest requires a paid repair at a station (see
-## repair_fully). Exported so it can be tuned now and raised later by an upgrade.
-@export var passive_repair_cap_fraction: float = 0.4
+## Passive regrowth brings a holed-out module back to this fraction of its max
+## condition. Was 0.4, with the remainder sold for credits at the station; that
+## was the only paid repair in the game, and freezing the trade screen (Phase 0a,
+## see docs/frozen_systems.md) would otherwise have left the hull permanently
+## capped at 40%. Detached modules are still gone for good — the jeopardy lives
+## in losing the part, not in a repair bill.
+@export var passive_repair_cap_fraction: float = 1.0
 
 var _ship: Ship
 var _bank: HardpointBank
@@ -325,14 +328,20 @@ func _regenerate_modules(delta: float) -> void:
 		if module_type == null:
 			continue
 
+		var max_condition: float = module_type.health_contribution * _health_multiplier
 		if not _regrowing.has(placement.placement_id):
 			if get_condition(placement.placement_id) > 0.0:
-				continue # undamaged, or only combat-damaged rather than holed out
+				# Chip damage: still working, so it heals in place and must not
+				# enter _regrowing, which would switch it off and respawn a
+				# collision shape it never lost. (Topping these up used to be the
+				# station's paid repair; that screen is frozen — Phase 0a.)
+				_advance_repair(placement, module_type, max_condition, delta, false)
+				continue
 			if not _has_healthy_neighbor(placement):
 				continue # nothing healthy adjacent yet to grow back from
 			_regrowing[placement.placement_id] = true
 
-		_advance_repair(placement, module_type, module_type.health_contribution * _health_multiplier, delta)
+		_advance_repair(placement, module_type, max_condition, delta, true)
 
 
 func _has_healthy_neighbor(placement: ModulePlacement) -> bool:
@@ -344,17 +353,20 @@ func _has_healthy_neighbor(placement: ModulePlacement) -> bool:
 	return false
 
 
-func _advance_repair(placement: ModulePlacement, module_type: ModuleType, max_condition: float, delta: float) -> void:
+## `was_regrowing` distinguishes a module climbing back from zero — which is
+## switched off for the whole climb and has to be brought back online at the top
+## — from one that only took chip damage and never stopped working.
+func _advance_repair(placement: ModulePlacement, module_type: ModuleType, max_condition: float, delta: float, was_regrowing: bool) -> void:
 	var passive_cap: float = max_condition * passive_repair_cap_fraction
 	var current_condition: float = get_condition(placement.placement_id)
 	if current_condition >= passive_cap:
-		return # capped: needs a paid repair (see repair_fully) to go further
+		return
 
 	var new_condition: float = minf(current_condition + repair_rate * delta, passive_cap)
 	_conditions[placement.placement_id] = new_condition
 	hull_healed.emit(new_condition - current_condition)
 
-	if new_condition >= passive_cap:
+	if was_regrowing and new_condition >= passive_cap:
 		_regrowing.erase(placement.placement_id)
 		_on_module_repaired(placement, module_type)
 

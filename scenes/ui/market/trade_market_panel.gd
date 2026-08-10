@@ -38,6 +38,10 @@ var _footer: MarketFooter
 func _init() -> void:
 	toggle_action = "toggle_trade"
 	requires_home_base = true
+	# Phase 0a freeze — see docs/frozen_systems.md. Credits are a universal
+	# solvent: any part reachable through money is reproducible, which is the
+	# opposite of what a part cut off a specific wreck is supposed to be.
+	frozen = true
 	# Full-screen takeover: has to sit above the gameplay HUD and the station
 	# prompt, which share CanvasLayer 1.
 	layer = 10
