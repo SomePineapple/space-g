@@ -80,7 +80,7 @@ func rebuild(ship: Ship, layout: ShipLayout, renderer: ShipLayoutRenderer) -> vo
 		_winches.append(_mount_winch(placement))
 	for placement in layout.get_tractor_hardpoint_placements():
 		_mount_tractor_beam(placement)
-	for placement in layout.get_grinder_hardpoint_placements():
+	for placement in layout.get_salvager_hardpoint_placements():
 		_mount_slicer(placement)
 
 
@@ -256,9 +256,8 @@ func _mount_tractor_beam(placement: ModulePlacement) -> HardpointTractorBeam:
 	return tractor_beam
 
 
-## Same fixed-facing convention as _mount_winch — the contact point (see
-## HardpointGrinder) is a specific direction out of the anchor cell, not aimed
-## at anything.
+## Same fixed-facing convention as _mount_winch — the muzzle the beam leaves
+## from (see HardpointSlicer) is a specific direction out of the anchor cell.
 func _mount_slicer(placement: ModulePlacement) -> HardpointSlicer:
 	var slicer: HardpointSlicer = _mount(slicer_scene, placement)
 	slicer.rotation = _fixed_facing(placement)

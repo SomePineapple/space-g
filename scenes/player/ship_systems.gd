@@ -18,7 +18,7 @@ extends Node
 ## inert and free.
 ##
 ## Consumers pull their gate state each frame (Ship.is_system_enabled /
-## has_radar / has_scanner / is_grinder_active), the same pull model as
+## has_radar / has_scanner / is_slicer_active), the same pull model as
 ## is_module_destroyed, so a module that mounts or repairs mid-flight picks up
 ## the current state without anything having to re-push it.
 
@@ -33,16 +33,16 @@ const THRUSTERS: StringName = &"thrusters"
 const WEAPONS: StringName = &"weapons"
 const SENSORS: StringName = &"sensors"
 const TRACTOR: StringName = &"tractor"
-const GRINDER: StringName = &"grinder"
+const SALVAGER: StringName = &"salvager"
 
 ## Power priority, most essential first. Brownout shutdown walks it backwards,
 ## so utility goes before weapons and the helm is never cut.
-const ORDER: Array[StringName] = [CONTROL, THRUSTERS, WEAPONS, SENSORS, TRACTOR, GRINDER]
+const ORDER: Array[StringName] = [CONTROL, THRUSTERS, WEAPONS, SENSORS, TRACTOR, SALVAGER]
 
 ## Everything else is essential and deliberately has no switch — losing the
 ## ability to fly or steer to a menu press isn't system management, it's a
 ## trap.
-const TOGGLEABLE: Array[StringName] = [WEAPONS, SENSORS, TRACTOR, GRINDER]
+const TOGGLEABLE: Array[StringName] = [WEAPONS, SENSORS, TRACTOR, SALVAGER]
 
 const DISPLAY_NAMES: Dictionary = {
 	CONTROL: "CONTROL",
@@ -50,16 +50,16 @@ const DISPLAY_NAMES: Dictionary = {
 	WEAPONS: "WEAPONS",
 	SENSORS: "SENSORS",
 	TRACTOR: "TRACTOR",
-	GRINDER: "GRINDER",
+	SALVAGER: "SALVAGER",
 }
 
-## Shown on the HUD next to each switchable system. Grinder keeps its
-## established "G" rather than being renumbered.
+## Shown on the HUD next to each switchable system. The Salvager keeps the "G"
+## the Grinder established rather than being renumbered.
 const HOTKEY_HINTS: Dictionary = {
 	WEAPONS: "1",
 	SENSORS: "2",
 	TRACTOR: "3",
-	GRINDER: "G",
+	SALVAGER: "G",
 }
 
 ## Cockpit and control: a flat cost, since a layout has exactly one Core.
@@ -68,13 +68,13 @@ const HOTKEY_HINTS: Dictionary = {
 @export var weapon_idle_draw_per_module: float = 0.4
 @export var sensor_idle_draw_per_module: float = 0.3
 @export var tractor_idle_draw_per_module: float = 0.8
-@export var grinder_idle_draw_per_module: float = 0.6
+@export var salvager_idle_draw_per_module: float = 0.6
 ## Minimum gap between brownout shutdowns, so one flat pool doesn't strip every
 ## system in a single frame — the player gets one system back off at a time and
 ## can see each one go.
 @export var auto_shutdown_interval: float = 1.5
 
-## The grinder starts off because it deals continuous damage on contact; the
+## The salvager starts off because its beam damages whatever it touches; the
 ## rest start on so a fresh ship simply works.
 var _switched_on: Dictionary = {
 	CONTROL: true,
@@ -82,7 +82,7 @@ var _switched_on: Dictionary = {
 	WEAPONS: true,
 	SENSORS: true,
 	TRACTOR: true,
-	GRINDER: false,
+	SALVAGER: false,
 }
 
 ## system id -> number of live (mounted, not destroyed) modules backing it.
@@ -111,7 +111,7 @@ func refresh(ship: Ship, layout: ShipLayout) -> void:
 	_live_counts[SENSORS] = _count_live(ship, layout.get_radar_hardpoint_placements()) \
 		+ _count_live(ship, layout.get_scanner_hardpoint_placements())
 	_live_counts[TRACTOR] = _count_live(ship, layout.get_tractor_hardpoint_placements())
-	_live_counts[GRINDER] = _count_live(ship, layout.get_grinder_hardpoint_placements())
+	_live_counts[SALVAGER] = _count_live(ship, layout.get_salvager_hardpoint_placements())
 	systems_changed.emit()
 
 
@@ -180,8 +180,8 @@ func get_idle_draw(system_id: StringName) -> float:
 			return sensor_idle_draw_per_module * get_module_count(SENSORS)
 		TRACTOR:
 			return tractor_idle_draw_per_module * get_module_count(TRACTOR)
-		GRINDER:
-			return grinder_idle_draw_per_module * get_module_count(GRINDER)
+		SALVAGER:
+			return salvager_idle_draw_per_module * get_module_count(SALVAGER)
 	return 0.0
 
 

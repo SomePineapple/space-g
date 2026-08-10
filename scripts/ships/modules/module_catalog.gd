@@ -14,7 +14,7 @@ const WINCH_HARDPOINT_TYPE_ID: String = "winch_hardpoint"
 const TRACTOR_HARDPOINT_TYPE_ID: String = "tractor_beam_hardpoint"
 const RADAR_HARDPOINT_TYPE_ID: String = "radar_hardpoint"
 const SCANNER_HARDPOINT_TYPE_ID: String = "scanner_hardpoint"
-const GRINDER_HARDPOINT_TYPE_ID: String = "mining_grinder_hardpoint"
+const SALVAGER_HARDPOINT_TYPE_ID: String = "salvager_hardpoint"
 
 const SINGLE_CELL: Array[Vector2i] = [Vector2i.ZERO]
 const LINE_2_CELLS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
@@ -329,27 +329,22 @@ static func get_all() -> Array[ModuleType]:
 	scanner_type.faction_hex_textures = FactionArtImporter.load_faction_textures("scanner")
 	types.append(scanner_type)
 
-	# Mining Grinder hardpoint (see HardpointGrinder/HardpointBank._mount_
-	# grinder) — a single hex; the mining/contact side is whichever direction
-	# the placement is rotated to face (HardpointGrinder.set_cell_size reaches
-	# the muzzle out from that one hex's centre toward its facing edge).
-	# Toggled on/off by the player (the Grinder system's switch, "G") rather than
-	# always-on like the Tractor Beam, since it deals continuous damage and
-	# should require deliberate activation. Lime-green is the fallback tint
-	# for factions with no grinder art — distinct from every warm-toned module
-	# (Weapon/Missile/Reactor/Storage) and from Radar's pure green.
 	# Hull Slicer (see HardpointSlicer) — the tool the salvage loop runs on. Two
-	# hexes, fixed-facing: the cut travels straight out from the mount, so
-	# lining one up on a specific connector is a manoeuvre rather than a mouse
-	# gesture. Replaces the single-hex Mining Grinder in the same system slot
-	# (hardpoint_category stays "grinder"; see Ship.is_slicer_active).
+	# hexes, mounted with a fixed facing. Toggled on/off by the player (the
+	# Salvager system's switch, "G") rather than always-on like the Tractor Beam,
+	# since the beam damages whatever it touches and should require deliberate
+	# activation.
 	#
 	# Cold white in the fallback tint, matching the beam — this is industrial
 	# equipment and should not read as a weapon at any point.
-	var slicer_type: ModuleType = _make(GRINDER_HARDPOINT_TYPE_ID, "Hull Slicer", Color(0.85, 0.93, 1.0), LINE_2_CELLS,
-		0.6, 45.0, 0.0, null, "grinder", 1,
+	var slicer_type: ModuleType = _make(SALVAGER_HARDPOINT_TYPE_ID, "Hull Slicer", Color(0.85, 0.93, 1.0), LINE_2_CELLS,
+		0.6, 45.0, 0.0, null, "salvager", 1,
 		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 6},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_slicer.tscn"), true)
+	# Art key, not a gameplay id: the hex sprites are still filed under the name
+	# the module had when they were drawn (resources/exports/*/…_mining_grinder.png).
+	# Renaming them is an art-pipeline job (re-export, re-import, mipmap check —
+	# see CLAUDE.md) rather than part of this rename.
 	slicer_type.faction_hex_textures = FactionArtImporter.load_faction_textures("mining_grinder")
 	types.append(slicer_type)
 

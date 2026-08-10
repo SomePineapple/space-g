@@ -7,14 +7,14 @@ enum Rarity { COMMON, UNCOMMON, RARE, EXPERIMENTAL, ARTEFACT }
 ## Phase 5.3: a drop carries either a raw material (existing behavior,
 ## material_id/material_amount) or a crafted component (component_id/
 ## component_amount) — never both. Lets combat/wreck salvage hand out
-## already-crafted components directly, distinct from mining (Asteroid/
-## HardpointGrinder never set this, so it stays MATERIAL for them).
+## already-crafted components directly, distinct from mining (Asteroid never
+## sets this, so it stays MATERIAL there).
 enum Kind { MATERIAL, COMPONENT }
 
 ## Rarity is now purely a yield-size/visual tier — it no longer implies a
 ## material (see Phase 4.2). What material this salvage actually carries is
 ## set on material_id directly by whoever spawns it (Asteroid.roll_ore_material,
-## HardpointGrinder, Ship's combat drop), independently of rarity.
+## Ship's combat drop), independently of rarity.
 ## "visual_scale" and "spike_count" give higher rarities a bigger, spikier
 ## silhouette (0 spikes = plain glow, no overlay) so rarity reads at a
 ## glance without text — "pull_resistance" makes rarer salvage feel heavier
@@ -42,8 +42,8 @@ const SPIKE_ROTATION_SPEED: float = 0.6
 @export var kind: Kind = Kind.MATERIAL
 ## Extra multiplier on top of rarity's base amount and the material's own
 ## yield_multiplier — set by the spawner before add_child (same convention as
-## rarity/material_id) so e.g. HardpointGrinder can hand out more material per
-## drop than a plain weapon kill without touching rarity or material data.
+## rarity/material_id) so a spawner can hand out more material per drop than a
+## plain weapon kill without touching rarity or material data.
 @export var amount_multiplier: float = 1.0
 @export var drift_speed: float = 20.0
 @export var is_dangerous: bool = false
@@ -92,7 +92,7 @@ func _ready() -> void:
 		_base_color = MaterialCatalog.color(material_id)
 		# Rarer materials (see MaterialCatalog.yield_multiplier) yield less per
 		# drop regardless of rarity tier; amount_multiplier layers a source-driven
-		# boost on top (e.g. grinder fragments yield more than a weapon kill).
+		# boost on top (e.g. mined fragments yield more than a weapon kill).
 		var raw_amount: float = data["amount"] * MaterialCatalog.yield_multiplier(material_id) * amount_multiplier
 		material_amount = maxi(1, roundi(raw_amount))
 	_display_color = _base_color

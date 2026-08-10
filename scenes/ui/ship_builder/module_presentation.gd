@@ -49,7 +49,7 @@ const CATEGORY_GLYPH_COLORS: Dictionary = {
 	STORAGE: Color(0.5608, 0.9137, 0.9490),  # 8fe9f2
 }
 
-## Hand-picked where initials would collide or read badly ("Mining Grinder"
+## Hand-picked where initials would collide or read badly ("Hull Slicer"
 ## and "Missile Rack" both start "MI"). Anything not listed falls back to
 ## _derive_glyph().
 const GLYPH_OVERRIDES: Dictionary = {
@@ -61,7 +61,7 @@ const GLYPH_OVERRIDES: Dictionary = {
 	"storage_mk1": "CB",
 	"reactor_mk1": "RC",
 	"battery_mk1": "BT",
-	"mining_grinder_hardpoint": "SL",
+	"salvager_hardpoint": "SL",
 	"winch_hardpoint": "WN",
 	"missile_hardpoint": "M1",
 	"missile_hardpoint_t2": "M2",

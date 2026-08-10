@@ -246,7 +246,7 @@ const STARTER_PART_TYPE_IDS: Array[String] = [
 	# something to find: cutting a part off an enemy and dragging it home is the
 	# game's core verb, and it can't be the reward for a loop it is required to
 	# run.
-	ModuleCatalog.GRINDER_HARDPOINT_TYPE_ID,
+	ModuleCatalog.SALVAGER_HARDPOINT_TYPE_ID,
 	ModuleCatalog.WINCH_HARDPOINT_TYPE_ID,
 ]
 
@@ -555,18 +555,13 @@ func _try_spend_thrust_energy(delta: float) -> bool:
 
 # --- Hardpoints --------------------------------------------------------------
 
-## The Grinder system's switch ("G" — see ship_input.gd). Every mounted, intact
-## HardpointGrinder pulls this flag each physics frame (same pull-model as
-## is_module_destroyed) rather than being pushed a one-shot command, so a
-## grinder that mounts or repairs mid-toggle picks up the current state
-## immediately instead of needing a fresh key press.
-## The system slot is still internally named GRINDER (and its action is still
-## `toggle_grinder`): the Slicer replaced the Mining Grinder in the same socket,
-## and renaming the enum, the input action and ShipLayout's lookup would touch
-## the input map and saved layouts for no behavioural gain. Worth tidying, but
-## not while the tool itself is changing.
+## The Salvager system's switch ("G" — see ship_input.gd). Every mounted, intact
+## HardpointSlicer pulls this flag each physics frame (same pull-model as
+## is_module_destroyed) rather than being pushed a one-shot command, so a slicer
+## that mounts or repairs mid-toggle picks up the current state immediately
+## instead of needing a fresh key press.
 func is_slicer_active() -> bool:
-	return is_system_enabled(ShipSystems.GRINDER)
+	return is_system_enabled(ShipSystems.SALVAGER)
 
 
 func get_scanner() -> Scanner:

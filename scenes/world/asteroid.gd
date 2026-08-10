@@ -208,8 +208,10 @@ func _spawn_fragments(child_tier: SizeTier) -> void:
 		fragment._scatter_velocity = direction * scatter_speed
 
 
-## Public so HardpointGrinder can roll the same material odds for a mined
-## fragment as a normal kill-drop, instead of duplicating this logic.
+## Public for the mining tool that used to share these odds with a normal
+## kill-drop; that tool is gone (the Slicer took its slot and cuts parts off
+## ships rather than reducing rocks to material), so the only caller left is
+## this script's own fragment drop.
 ## primary_material_chance of the time returns this asteroid's own variant
 ## primary material; otherwise picks uniformly among the other three, so a
 ## rock is never guaranteed pure but is mostly one material.

@@ -20,13 +20,13 @@ const NEBULA_LOCK_RANGE_FRACTION: float = 0.35
 
 const LOCK_INDICATOR_SCENE: PackedScene = preload("res://scenes/ui/lock_on_indicator.tscn")
 
-## Input action -> the ShipSystems id it switches. "toggle_grinder" keeps its
+## Input action -> the ShipSystems id it switches. "toggle_salvager" keeps its
 ## established G binding rather than being renumbered alongside the new ones.
 const SYSTEM_TOGGLE_ACTIONS: Dictionary = {
 	"toggle_system_weapons": ShipSystems.WEAPONS,
 	"toggle_system_sensors": ShipSystems.SENSORS,
 	"toggle_system_tractor": ShipSystems.TRACTOR,
-	"toggle_grinder": ShipSystems.GRINDER,
+	"toggle_salvager": ShipSystems.SALVAGER,
 }
 
 @onready var ship: Ship = get_parent()

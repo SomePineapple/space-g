@@ -10,7 +10,7 @@ extends CanvasLayer
 ## overlay straight back to peak and restart the fade, so anything more than one
 ## attacker held the screen at full red indefinitely, which is when the vignette
 ## stops being feedback and starts being a blindfold.
-@export var damage_flash_peak_alpha: float = 0.12
+@export var damage_flash_peak_alpha: float = 0.34
 @export var damage_flash_fade_duration: float = 0.35
 ## A hit costing this share of max health flashes at full strength; smaller hits
 ## scale down toward damage_flash_min_alpha. Being clipped by a stray laser and
@@ -19,7 +19,7 @@ extends CanvasLayer
 ## Floor, so even a graze still registers as "that hit me". Deliberately near the
 ## threshold of visibility: one laser bolt from a light pirate is the most common
 ## event in the game and must not wash the screen.
-@export var damage_flash_min_alpha: float = 0.012
+@export var damage_flash_min_alpha: float = 0.05
 @export var storage_full_display_duration: float = 1.5
 @export var storage_full_fade_duration: float = 0.6
 ## Held longer than the storage cue: losing a system to a brownout is a state
@@ -35,7 +35,12 @@ const CREDITS_FROZEN: bool = true
 
 @onready var _vitals: Control = $VitalsReadout
 @onready var _credits_label: Label = $CreditsLabel
-@onready var _damage_flash: ColorRect = $DamageFlash
+## An edge vignette, not a full-screen wash: a radial gradient that is fully
+## transparent across the middle of the screen and only reaches full strength at
+## the frame. A flat rect over the whole viewport dimmed the one place the player
+## is actually looking, which made even a light hit feel blinding — this can be
+## brighter at the border while obscuring less.
+@onready var _damage_flash: TextureRect = $DamageFlash
 @onready var _storage_full_label: Label = $StorageFullLabel
 @onready var _power_warning_label: Label = $PowerWarningLabel
 
@@ -129,10 +134,8 @@ func _flash_damage(amount: float) -> void:
 			(amount / max_health) / damage_flash_full_hit_health_fraction, 0.0, 1.0)
 	var added: float = lerpf(damage_flash_min_alpha, damage_flash_peak_alpha, severity)
 
-	# color.a= on its own doesn't write back (Color is a value type), so the
-	# alpha has to be set through a full Color reassignment.
-	var flash_color: Color = _damage_flash.color
-	flash_color.a = minf(flash_color.a + added, damage_flash_peak_alpha)
-	_damage_flash.color = flash_color
+	# The red lives in the gradient texture; intensity is carried by modulate, so
+	# alpha is the only thing this touches.
+	_damage_flash.modulate.a = minf(_damage_flash.modulate.a + added, damage_flash_peak_alpha)
 	_damage_flash_tween = create_tween()
-	_damage_flash_tween.tween_property(_damage_flash, "color:a", 0.0, damage_flash_fade_duration)
+	_damage_flash_tween.tween_property(_damage_flash, "modulate:a", 0.0, damage_flash_fade_duration)

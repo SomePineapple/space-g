@@ -182,8 +182,8 @@ func get_scanner_hardpoint_placements() -> Array[ModulePlacement]:
 	return _get_hardpoint_placements("scanner")
 
 
-func get_grinder_hardpoint_placements() -> Array[ModulePlacement]:
-	return _get_hardpoint_placements("grinder")
+func get_salvager_hardpoint_placements() -> Array[ModulePlacement]:
+	return _get_hardpoint_placements("salvager")
 
 
 ## Matches by ModuleType.hardpoint_category rather than a single fixed id,

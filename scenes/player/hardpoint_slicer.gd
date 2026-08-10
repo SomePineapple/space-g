@@ -2,7 +2,7 @@ class_name HardpointSlicer
 extends Node2D
 
 ## Hull Slicer hex module: a long, thick cutting beam the player toggles on/off
-## (the same system switch the Mining Grinder used, "G") and holds on a target
+## (the Salvager system switch, "G") and holds on a target
 ## ship to cut through its hull.
 ##
 ## Aimed with the mouse, out to beam_range and no further. The mount itself does

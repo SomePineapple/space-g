@@ -3,7 +3,7 @@ extends Node
 
 ## The ship's energy pool: the capacity/regeneration derived from installed
 ## Reactor and Battery modules on top of a baseline, and the spend-or-refuse
-## decision every consumer (thrust, weapons, tractor beam, grinder, winch)
+## decision every consumer (thrust, weapons, tractor beam, salvager, winch)
 ## routes through.
 ##
 ## Split out of ship.gd, which owned the pool, its regeneration, its signal and

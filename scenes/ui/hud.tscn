@@ -7,6 +7,18 @@
 [ext_resource type="Script" path="res://scenes/ui/cargo_widget.gd" id="5_cargo"]
 [ext_resource type="Script" path="res://scenes/ui/systems_panel.gd" id="6_systems"]
 
+[sub_resource type="Gradient" id="Gradient_vignette"]
+offsets = PackedFloat32Array(0.58, 0.85, 1)
+colors = PackedColorArray(0.72, 0.06, 0.06, 0, 0.72, 0.06, 0.06, 0.4, 0.72, 0.06, 0.06, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_vignette"]
+gradient = SubResource("Gradient_vignette")
+width = 512
+height = 512
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
 [node name="HUD" type="CanvasLayer" unique_id=309546132]
 script = ExtResource("1_0mwgc")
 
@@ -73,13 +85,15 @@ horizontal_alignment = 1
 text = "POWER SHORTAGE"
 modulate = Color(1, 1, 1, 0)
 
-[node name="DamageFlash" type="ColorRect" parent="."]
-show_behind_parent = false
+[node name="DamageFlash" type="TextureRect" parent="."]
+modulate = Color(1, 1, 1, 0)
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
-color = Color(0.72, 0.06, 0.06, 0)
+texture = SubResource("GradientTexture2D_vignette")
+expand_mode = 1
+stretch_mode = 0
 
 [node name="RadarDisplay" type="Control" parent="."]
 mouse_filter = 2

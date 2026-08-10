@@ -4,7 +4,7 @@ extends Node2D
 ## The pulsing additive line a continuous-effect hardpoint draws from its
 ## muzzle to whatever it is currently acting on. Shared by
 ## HardpointTractorBeam (which wants a wider, dimmer glow layer under the core
-## line) and HardpointGrinder (core line only) — both previously carried their
+## line) and HardpointSlicer (core line only) — both previously carried their
 ## own copy of the Line2D construction, the additive-material cache, the pulse
 ## formula and the show/hide helpers.
 ##
