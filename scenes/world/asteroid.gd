@@ -6,7 +6,7 @@ enum AsteroidVariant { ROCKY, ICY, RUSTY, CRYSTALLINE }
 
 ## Radius range, health and next-tier-down per SizeTier. Splitting a LARGE
 ## yields MEDIUM fragments, splitting a MEDIUM yields SMALL; SMALL has no
-## entry in NEXT_TIER_DOWN, so it just breaks apart into salvage.
+## entry in NEXT_TIER_DOWN, so it just breaks apart and is gone.
 const RADIUS_RANGES := {
 	SizeTier.LARGE: Vector2(70.0, 100.0),
 	SizeTier.MEDIUM: Vector2(40.0, 65.0),
@@ -45,6 +45,14 @@ static var VARIANT_PRIMARY_MATERIAL: Dictionary = {
 	AsteroidVariant.ICY: MaterialCatalog.NICKEL,
 	AsteroidVariant.CRYSTALLINE: MaterialCatalog.TITANIUM,
 }
+
+## Phase 0a freeze — see docs/frozen_systems.md. Mining competes with combat
+## salvage for the same job (fill the hold with raw material) and loses on every
+## axis, so a destroyed asteroid no longer releases an ore orb. The rock itself
+## stays: it is cover, a navigation obstacle, a winch anchor and the visual
+## character of a region, none of which are the thing being frozen. Flip to
+## false to restore the drop.
+const MINING_FROZEN: bool = true
 
 @export var size_tier: SizeTier = SizeTier.MEDIUM
 @export var random_seed: int = 1
@@ -165,9 +173,10 @@ func _finish_destruction() -> void:
 	explosion.effect_scale = destruction_explosion_scale
 	WorldSpawn.attach_at(explosion, global_position)
 
-	var salvage: Salvage = salvage_scene.instantiate()
-	salvage.material_id = roll_ore_material()
-	WorldSpawn.attach_at(salvage, global_position)
+	if not MINING_FROZEN:
+		var salvage: Salvage = salvage_scene.instantiate()
+		salvage.material_id = roll_ore_material()
+		WorldSpawn.attach_at(salvage, global_position)
 
 	if NEXT_TIER_DOWN.has(size_tier):
 		_spawn_fragments(NEXT_TIER_DOWN[size_tier])

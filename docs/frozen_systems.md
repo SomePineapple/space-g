@@ -198,3 +198,44 @@ balance still loads and saves, it is simply unreachable and unspendable.
 **Spec deviation to remember:** `docs/HUD-1d-Godot-spec.md` element 4 is the
 credits readout. The HUD no longer matches its spec on that one element. Don't
 "fix" it back; unfreeze it or amend the spec when Phase 5 decides.
+
+---
+
+## Mining — asteroid ore drops frozen Phase 0a
+
+**Flag:** `Asteroid.MINING_FROZEN`
+
+**What it did:** destroying an asteroid released a `Salvage` orb carrying a raw
+material rolled from the rock's variant (`roll_ore_material`, 80% its primary).
+
+**Why frozen:** mining competes with combat salvage for the same job — fill the
+hold with raw material — and loses on every axis. A rock does not shoot back, so
+it is the safest and dullest way to earn, and any material it yields is bulk and
+anonymous. It also anchors the bottom of the four-layer pipeline the crafting
+freeze removed the middle of.
+
+**What is deliberately NOT frozen: the asteroid itself.** Rocks still spawn,
+still split into fragments, still explode. They are cover, navigation obstacles,
+winch anchors, scanner contacts and most of a region's visual character — none
+of which is the thing being frozen. Shooting one is now simply unrewarded, which
+is the correct shape for this freeze: the object stays, the faucet closes.
+
+**What's disabled:** the ore-orb spawn in `Asteroid._finish_destruction()`.
+`roll_ore_material()`, `VARIANT_PRIMARY_MATERIAL` and `primary_material_chance`
+are untouched — the grinder still calls the first of those (see below).
+
+**Still not frozen — the grinder.** `HardpointGrinder._spawn_fragment()` also
+turns asteroids into ore, on a 1-second interval at `fragment_yield_multiplier`
+0.22. It is Phase 0's own row 8 and is next, so for exactly one commit a mounted
+grinder is the only remaining way to mine. Don't read that as an oversight.
+
+**Materials still arrive:** combat kills drop 2-3 salvage pieces, ~70% of them
+raw material (`Ship._roll_combat_material`). The ship builder's BUILD button and
+`Inventory.repair_module()` both spend materials and both still have a source,
+so freezing mining strands nothing.
+
+**Watch for:** `resources/regions/*.tres` tune asteroid density per region
+(`standard_asteroid_belt`, `dense_dangerous_belt`, `small_asteroid_cluster`,
+`sparse_open_space`). Those densities were balanced as a *yield* curve as much as
+a spatial one. They are now purely spatial and may want re-tuning — deliberately
+not touched here.
