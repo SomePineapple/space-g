@@ -14,6 +14,12 @@ extends CanvasLayer
 @export var power_warning_display_duration: float = 2.5
 @export var power_warning_fade_duration: float = 0.8
 
+## Phase 0a freeze — see docs/frozen_systems.md. With the exchange frozen there
+## is nothing that earns or spends credits, so the readout is a permanently
+## static number occupying the top-right corner. Hidden rather than deleted;
+## flip to false to bring it (and the HUD spec's element 4) back.
+const CREDITS_FROZEN: bool = true
+
 @onready var _vitals: Control = $VitalsReadout
 @onready var _credits_label: Label = $CreditsLabel
 @onready var _damage_flash: ColorRect = $DamageFlash
@@ -26,14 +32,17 @@ var _power_warning_tween: Tween
 
 
 func _ready() -> void:
+	_credits_label.visible = not CREDITS_FROZEN
+
 	var ship: Ship = PlayerContext.get_ship()
 	if ship == null:
 		return
 
 	var inventory: Inventory = ship.get_inventory()
 	inventory.storage_full.connect(_on_storage_full)
-	inventory.credits_changed.connect(_update_credits_label)
-	_update_credits_label(inventory.get_credits())
+	if not CREDITS_FROZEN:
+		inventory.credits_changed.connect(_update_credits_label)
+		_update_credits_label(inventory.get_credits())
 
 	# Health readouts and the damage vignette both come off the Ship's own
 	# relayed signals now, rather than this panel reaching into the ship scene

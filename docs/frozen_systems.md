@@ -169,3 +169,32 @@ you, and now it only builds. Recovery is entirely passive and automatic, on a
 loop wants attrition, the lever is `repair_rate`, not the cap. **Detached
 (severed) modules are still gone for good** — the jeopardy the thesis wants
 lives in losing the part, not in a repair bill, and that is unchanged.
+
+---
+
+## Credits — frozen Phase 0a
+
+**Flag:** `Hud.CREDITS_FROZEN`
+
+**What it did:** a per-inventory currency (`Inventory._credits`), persisted
+through `GameState`, displayed top-right on the gameplay HUD.
+
+**Why frozen:** any part reachable through money is reproducible. Credits are
+the mechanism by which a specific thing becomes an amount.
+
+**Why this freeze is small:** the exchange was the only thing that ever created
+or consumed credits — `add_credits` had exactly one caller (a market sale) and
+`spend_credits` two (a market purchase and the paid repair), all inside the
+screen frozen in the previous entry. Freezing that screen already made the
+balance inert. What was left was a permanently static number in the corner of
+the HUD, so this freeze is just hiding the readout.
+
+**What's disabled:** `Hud`'s `CreditsLabel` is hidden and its `credits_changed`
+subscription is skipped. `Inventory.get_credits/add_credits/has_credits/
+spend_credits`, the `credits_changed` signal, `Ship.repair_credit_cost`,
+`Ship.get_repair_cost()` and the `GameState` round-trip are untouched — a saved
+balance still loads and saves, it is simply unreachable and unspendable.
+
+**Spec deviation to remember:** `docs/HUD-1d-Godot-spec.md` element 4 is the
+credits readout. The HUD no longer matches its spec on that one element. Don't
+"fix" it back; unfreeze it or amend the spec when Phase 5 decides.
