@@ -1,7 +1,12 @@
 # Session Handover — Space Game Prototype
 
-Purpose: bring a fresh chat up to speed without re-deriving context. Read this,
-`CLAUDE.md`, `roadmap.md`, and `Roadmap v.2-v.9.md` before continuing.
+Purpose: bring a fresh chat up to speed without re-deriving context.
+**Read `docs/direction.md` first.** A design review and the first human playtest
+changed what the game is trying to be, and seven working systems were
+deliberately switched off as a result (`docs/frozen_systems.md`) — so
+`roadmap.md` and `Roadmap v.2-v.9.md` are now history rather than instructions
+wherever the two disagree. Then read this, `CLAUDE.md`, `roadmap.md`, and
+`Roadmap v.2-v.9.md`.
 `vision.md` is longer-term aspirational material — only relevant if the user
 explicitly brings it up. `docs/gotchas.md` has durable GDScript/Godot/MCP
 gotchas pulled out of session history — check it before fighting a weird

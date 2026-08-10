@@ -14,9 +14,18 @@ extends Node2D
 ## fixed interval, breaks off one small physical ore fragment (a Salvage
 ## instance, same material odds as a normal kill-drop but a smaller amount
 ## per fragment — see fragment_yield_multiplier below) at the contact point
-## for the Tractor Beam or the ship's own hull to collect. Draws energy/sec
+## for the Tractor Beam or the ship's own hull to collect. **The fragment
+## output is frozen — see ORE_OUTPUT_FROZEN below.** Draws energy/sec
 ## from the shooter's pool the whole time it's actively touching a target,
 ## same "spend or stop" pattern as the Tractor Beam and Winch.
+
+## Phase 0a freeze — see docs/frozen_systems.md. A tool that reduces a specific
+## object to bulk material is a smelter, and that is the mechanic the design
+## thesis is built against. The beam, the contact/energy/damage loop and the
+## module itself all stay: Phase 1's cutting tool is this tool with a different
+## output, so freezing it wholesale would mean rebuilding it. Flip to false to
+## restore ore fragments.
+const ORE_OUTPUT_FROZEN: bool = true
 
 @export var contact_range: float = 55.0
 @export var damage_per_second: float = 14.0
@@ -141,10 +150,11 @@ func _find_nearest_asteroid_in_range() -> Asteroid:
 func _grind(delta: float) -> void:
 	_active_target.take_damage(damage_per_second * delta)
 
-	_fragment_timer += delta
-	if _fragment_timer >= fragment_interval:
-		_fragment_timer -= fragment_interval
-		_spawn_fragment()
+	if not ORE_OUTPUT_FROZEN:
+		_fragment_timer += delta
+		if _fragment_timer >= fragment_interval:
+			_fragment_timer -= fragment_interval
+			_spawn_fragment()
 
 	_update_beam_visual()
 

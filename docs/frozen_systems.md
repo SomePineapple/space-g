@@ -239,3 +239,37 @@ so freezing mining strands nothing.
 `sparse_open_space`). Those densities were balanced as a *yield* curve as much as
 a spatial one. They are now purely spatial and may want re-tuning — deliberately
 not touched here.
+
+---
+
+## Grinder ore output — frozen Phase 0a
+
+**Flag:** `HardpointGrinder.ORE_OUTPUT_FROZEN`
+
+**What it did:** while held against an asteroid, broke off one `Salvage`
+fragment every `fragment_interval` (1s) at `fragment_yield_multiplier` (0.22) of
+a kill-drop's amount, on top of the rock's own death drop. Across a full grind
+this was the best material income in the game.
+
+**Why frozen:** a tool whose function is "reduce a specific object to bulk
+material" is a smelter, and that is the mechanic the whole design thesis is
+built against. It is also the last mining faucet — the previous entry closed the
+asteroid death-drop and explicitly left this one open for one commit.
+
+**What is deliberately NOT frozen: the grinder itself.** The module stays
+buildable, the "G" toggle still works, and the beam, contact detection, energy
+drain and continuous damage all still run. Phase 1's cutting tool *is* this
+tool with a different output — freezing the module wholesale would mean
+rebuilding it two steps later, and removing it from `ModuleCatalog` would
+invalidate any saved layout that already has one placed. `_spawn_fragment()` is
+left intact and simply not called.
+
+**What the grinder is right now:** a rock-breaker. It still destroys asteroids,
+faster than shooting them and without ammo, which is worth something for
+clearing obstacles — but it earns nothing, and it will feel like a tool waiting
+for a job until Phase 1 gives it one. That is the intended state, not a bug to
+report.
+
+**With this entry, Phase 0's freeze table is fully applied.** All eight rows:
+research, upgrade tree, crafting, trade menu, stock market, credits, mining, and
+the grinder.
