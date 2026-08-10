@@ -82,6 +82,29 @@ a similar wall — don't rediscover these from scratch. (Extracted from
   game via `load(path).get_image().has_mipmaps()`. Fix: set
   `mipmaps/generate=true` in every affected `.import`, then
   `filesystem_manage(op="reimport", paths=[...])`.
+- **The faction plate textures have a rivet ring authored around each hex, so
+  every cell is outlined by its own art no matter what the renderers do.**
+  Measured radii (fraction of image width): `corporate_hull_mk1` 0.465,
+  `pirate_hull_mk1` 0.425, `ancient_hull_mk1` 0.391 — all inside the 0.49
+  `HexUtils.hex_uv_corners()` samples to. Two consequences worth knowing before
+  changing any joint rule: a multi-hex part still reads as N separate tiles
+  even though `ShipLayoutRenderer._collect_edges` deliberately drops its
+  internal edges, and the hull's outer silhouette appears to carry warm seam
+  marks that no seam predicate produced. **Accepted as-is for now** — the fix
+  is repainting the plates, not a code change. Ways out if it is revisited:
+  drop `uv_radius` to ~0.38 (one constant, but zooms each plate ~29% and eats
+  the border bevel), or repaint. Don't "fix" it by loosening the weld rule.
+- **When a rendering bug is about what something *looks* like, render it to a
+  PNG and look at it before measuring predicates.** The rivet ring above cost
+  two rounds of well-formed verification that each answered the wrong question
+  (both correctly reported that welds only land on edges shared by two occupied
+  cells — which was true, and irrelevant). The decisive test took one run:
+  render the hull with the suspected code path forced off and see whether the
+  artefact survives. A `Node2D` scene run **without** `--headless`, plus
+  `await RenderingServer.frame_post_draw` and
+  `get_viewport().get_texture().get_image().save_png(...)`, produces a file that
+  can be read back directly. `--headless` uses a dummy rasteriser and renders
+  nothing, so it cannot answer visual questions at all.
 - `editor_manage(op="monitors_get")` reports the **editor process's**
   Performance singleton, not the isolated running game's (can be 100x the
   real node count). For real gameplay numbers, call

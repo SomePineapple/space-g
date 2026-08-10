@@ -36,7 +36,18 @@ signal destroyed
 @export var max_speed: float = 400.0
 @export var reverse_max_speed: float = 140.0
 @export var boost_multiplier: float = 1.8
+## Turn rate at `handling_reference_mass`. Actual rate is scaled by
+## _mass_handling_factor() — see there for why this is no longer a flat rate.
 @export var rotation_speed: float = 3.5
+## The hull mass `rotation_speed` is quoted at. Set to the starter ship's real
+## total (measured, not guessed) so the default loadout turns at exactly the
+## rate it always did and only ships that deviate from it feel the change.
+@export var handling_reference_mass: float = 3.85
+## How far mass is allowed to move the turn rate. Without a floor, a large hull
+## becomes unplayable rather than merely ponderous; without a ceiling, a nearly
+## stripped hull spins fast enough to make aiming trivial.
+@export var handling_factor_min: float = 0.45
+@export var handling_factor_max: float = 1.6
 @export var drag: float = 0.6
 @export var mass: float = 1.0
 @export var explosion_scene: PackedScene = preload("res://scenes/world/explosion.tscn")
@@ -71,6 +82,12 @@ signal destroyed
 @export var engine_thruster_scene: PackedScene = preload("res://scenes/player/engine_thruster.tscn")
 @export var reverse_thrust_ratio: float = 0.2
 @export var speed_per_acceleration: float = 1.0
+## Hard ceiling on the derived `max_speed`, before boost. Without it, max_speed
+## is thrust/mass unbounded, so a stripped hull carrying one thruster block
+## reaches 500 (900 boosted) and outruns its own projectiles, which travel at
+## HardpointGun.projectile_speed = 700. Set so even a boosted ship stays under
+## that: a shot must always visibly leave the ship that fired it.
+@export var max_speed_ceiling: float = 360.0
 @export var reverse_speed_ratio: float = 0.35
 
 ## Cargo capacity available even with no Storage modules installed, matching the
@@ -267,7 +284,7 @@ func _recompute_thrust_stats() -> void:
 	reverse_thrust_force = thrust_force * reverse_thrust_ratio
 
 	var acceleration_estimate: float = (thrust_force / mass) if mass > 0.0 else 0.0
-	max_speed = acceleration_estimate * speed_per_acceleration
+	max_speed = minf(acceleration_estimate * speed_per_acceleration, max_speed_ceiling)
 	reverse_max_speed = max_speed * reverse_speed_ratio
 
 
@@ -692,7 +709,7 @@ func _physics_process(delta: float) -> void:
 	# its reactor spends what it just made and then eats into the reserve.
 	_systems.process(delta)
 	_hull_damage.process(delta)
-	rotation += _turn_input * rotation_speed * delta
+	rotation += _turn_input * rotation_speed * _mass_handling_factor() * delta
 
 	if _thrust_input != 0.0 and _try_spend_thrust_energy(delta):
 		var thrust: float = thrust_force if _thrust_input > 0.0 else reverse_thrust_force
@@ -704,7 +721,7 @@ func _physics_process(delta: float) -> void:
 		velocity += transform.x * _thrust_input * acceleration * delta
 
 		if _thrust_input > 0.0:
-			velocity = velocity.limit_length(current_max_speed)
+			_bleed_overspeed(current_max_speed, acceleration, delta)
 		else:
 			var forward_speed: float = velocity.dot(transform.x)
 			if forward_speed < -reverse_max_speed:
@@ -723,6 +740,44 @@ func _physics_process(delta: float) -> void:
 	_update_engine_particles()
 	if _hardpoints.has_aimable_hardpoints():
 		_hardpoints.update_aim(get_aim_target())
+
+
+## How much this hull's mass slows its turn rate. Turning used to be a flat
+## constant, completely independent of the ship — a 13-cell hull and a 60-cell
+## hull rotated identically, which made filling in the interior free. Since
+## rotation is the handling stat combat legibility leans on hardest, that was
+## most of why a solid blob was the optimal shape.
+##
+## Deliberately mass only, not moment of inertia: this punishes volume, which is
+## the blob. It does NOT punish sprawl, so a long thin hull currently turns just
+## as well as a compact one of the same mass. Scaling by mass * extent^2 would
+## add that opposing pressure (get_layout_extent() already exists), but it is a
+## separate design decision and wants its own playtest.
+func _mass_handling_factor() -> float:
+	if mass <= 0.0:
+		return handling_factor_max
+	return clampf(handling_reference_mass / mass, handling_factor_min, handling_factor_max)
+
+
+## Pulls speed down to `cap` gradually instead of snapping to it.
+##
+## `velocity.limit_length(cap)` used to do this, which was invisible while
+## accelerating (the cap is approached from below) but wrong the instant the cap
+## itself dropped — releasing boost cut current_max_speed by boost_multiplier and
+## the clamp deleted the excess velocity in one frame, so the ship teleported
+## down to cruise speed instead of decelerating into it.
+##
+## The bleed rate is the ship's own coasting drag, so dropping boost feels like
+## the same deceleration as letting go of the throttle. It is floored at this
+## frame's acceleration so the cap still genuinely holds: without that, a hull
+## whose acceleration exceeds its drag would out-accelerate the bleed and creep
+## past max_speed indefinitely.
+func _bleed_overspeed(cap: float, acceleration: float, delta: float) -> void:
+	var speed: float = velocity.length()
+	if speed <= cap:
+		return
+	var bleed: float = maxf(drag * max_speed, acceleration) * delta
+	velocity = velocity.normalized() * maxf(cap, speed - bleed)
 
 
 func _spawn_thrusters() -> void:
