@@ -4,7 +4,6 @@
 [ext_resource type="Script" path="res://scenes/ui/radar_display.gd" id="2_radar"]
 [ext_resource type="Script" path="res://scenes/ui/scanner_display.gd" id="3_scanner"]
 [ext_resource type="Script" path="res://scenes/ui/vitals_readout.gd" id="4_vitals"]
-[ext_resource type="Script" path="res://scenes/ui/cargo_widget.gd" id="5_cargo"]
 [ext_resource type="Script" path="res://scenes/ui/systems_panel.gd" id="6_systems"]
 
 [sub_resource type="Gradient" id="Gradient_vignette"]
@@ -29,10 +28,6 @@ script = ExtResource("4_vitals")
 [node name="SystemsPanel" type="Control" parent="."]
 mouse_filter = 2
 script = ExtResource("6_systems")
-
-[node name="CargoWidget" type="Control" parent="."]
-mouse_filter = 2
-script = ExtResource("5_cargo")
 
 [node name="CreditsLabel" type="Label" parent="."]
 anchors_preset = 1

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body{margin:0;background:#0a0d12;}
+  @keyframes caretBlink{0%,55%{opacity:1}56%,100%{opacity:0}}
+  @keyframes advBob{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+</style>
+</helmet>
+
+<section style="padding:48px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0a0d12;display:flex;flex-direction:column;gap:14px;box-sizing:border-box;">
+  <div style="color:#c7d0d8;font-size:22px;font-weight:600;letter-spacing:0.02em;">Dialogue box — bottom-of-screen comms panel</div>
+  <div style="color:#6b7784;font-size:13px;max-width:860px;line-height:1.5;">Same chrome as the HUD panels: <span style="font-family:monospace;color:#8fa0ab;">rgba(20,26,33,.72)</span> fill, 1px cyan hairline, 6px radius, monospace label caps. Click a panel to type / advance. Portrait areas are placeholders — drop character art in.</div>
+
+  <div style="display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap;margin-top:10px;">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#55d6e8;padding:2px 7px;border-radius:3px;">1A</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Text only — speaker tab</div>
+      </div>
+      <div style="position:relative;width:1000px;height:420px;border-radius:6px;overflow:hidden;background:#05070b;">
+        <img src="game-screenshot-context.png" style="position:absolute;left:0;bottom:0;width:1000px;height:520px;object-fit:cover;object-position:50% 70%;display:block;opacity:0.9;">
+        <div onClick="{{ advance }}" style="position:absolute;left:28px;right:28px;bottom:96px;cursor:pointer;">
+          <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(20,26,33,0.92);border:1px solid rgba(85,214,232,0.28);border-bottom:none;border-radius:5px 5px 0 0;padding:5px 12px;margin-left:2px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#55d6e8;box-shadow:0 0 6px #55d6e8;"></span>
+            <span style="font-family:monospace;font-size:11px;letter-spacing:0.16em;color:#8fe9f2;">{{ speaker }}</span>
+            <span style="font-family:monospace;font-size:10px;letter-spacing:0.12em;color:#5c6b78;">{{ affil }}</span>
+          </div>
+          <div style="background:rgba(20,26,33,0.86);border:1px solid rgba(85,214,232,0.22);border-radius:0 6px 6px 6px;padding:20px 24px 18px;min-height:104px;box-sizing:border-box;position:relative;">
+            <div style="font-family:monospace;font-size:16px;line-height:1.65;color:#dfe7ec;text-wrap:pretty;">{{ typed }}<span style="animation:caretBlink 1s step-end infinite;color:#55d6e8;">{{ caret }}</span></div>
+            <div style="position:absolute;right:16px;bottom:12px;font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#55d6e8;animation:advBob 1.4s ease-in-out infinite;">{{ advLabel }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#f2c14e;padding:2px 7px;border-radius:3px;">1B</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Inset portrait — comms feed</div>
+      </div>
+      <div style="position:relative;width:1000px;height:420px;border-radius:6px;overflow:hidden;background:#05070b;">
+        <img src="game-screenshot-context.png" style="position:absolute;left:0;bottom:0;width:1000px;height:520px;object-fit:cover;object-position:50% 70%;display:block;opacity:0.9;">
+        <div onClick="{{ advance }}" style="position:absolute;left:28px;right:28px;bottom:96px;display:flex;gap:0;background:rgba(20,26,33,0.86);border:1px solid rgba(85,214,232,0.22);border-radius:6px;cursor:pointer;overflow:hidden;">
+          <div style="width:132px;flex:none;background:repeating-linear-gradient(135deg,#141a21 0 6px,#1a222b 6px 12px);border-right:1px solid rgba(85,214,232,0.22);display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;position:relative;">
+            <span style="font-family:monospace;font-size:9px;letter-spacing:0.1em;color:#55697a;">portrait 132×132</span>
+            <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,rgba(85,214,232,0.10),transparent 70%);"></div>
+          </div>
+          <div style="flex:1;padding:16px 22px 16px 20px;min-height:132px;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;position:relative;">
+            <div style="display:flex;align-items:baseline;gap:10px;">
+              <span style="font-family:monospace;font-size:12px;letter-spacing:0.16em;color:#8fe9f2;">{{ speaker }}</span>
+              <span style="font-family:monospace;font-size:10px;letter-spacing:0.12em;color:#5c6b78;">{{ affil }}</span>
+              <span style="margin-left:auto;font-family:monospace;font-size:10px;letter-spacing:0.12em;color:#f2c14e;">■ LIVE LINK</span>
+            </div>
+            <div style="height:1px;background:linear-gradient(to right,rgba(85,214,232,0.35),rgba(85,214,232,0));"></div>
+            <div style="font-family:monospace;font-size:15px;line-height:1.65;color:#dfe7ec;text-wrap:pretty;">{{ typed }}<span style="animation:caretBlink 1s step-end infinite;color:#55d6e8;">{{ caret }}</span></div>
+            <div style="margin-top:auto;display:flex;align-items:center;gap:14px;font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#5c6b78;">
+              <span>{{ progress }}</span>
+              <span style="margin-left:auto;color:#55d6e8;animation:advBob 1.4s ease-in-out infinite;">{{ advLabel }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#c98fe8;padding:2px 7px;border-radius:3px;">1C</div>
+        <div style="color:#c7d0d8;font-size:14px;font-weight:600;">Standing bust behind panel + reply options</div>
+      </div>
+      <div style="position:relative;width:1000px;height:580px;border-radius:6px;overflow:hidden;background:#05070b;">
+        <img src="game-screenshot-context.png" style="position:absolute;left:0;bottom:0;width:1000px;height:680px;object-fit:cover;object-position:50% 70%;display:block;opacity:0.9;">
+        <div style="position:absolute;left:28px;right:28px;bottom:96px;display:flex;flex-direction:column;align-items:flex-start;">
+        <sc-if value="{{ showBust }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-left:244px;margin-bottom:-42px;width:210px;height:230px;background:repeating-linear-gradient(135deg,#141a21 0 6px,#1a222b 6px 12px);border:1px solid rgba(85,214,232,0.18);border-bottom:none;border-radius:6px 6px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:10px;">
+          <span style="font-family:monospace;font-size:9px;letter-spacing:0.1em;color:#55697a;">character bust art</span>
+        </div>
+        </sc-if>
+        <div onClick="{{ advance }}" style="align-self:stretch;background:rgba(16,21,27,0.9);border:1px solid rgba(85,214,232,0.22);border-radius:6px;padding:18px 24px;box-sizing:border-box;cursor:pointer;position:relative;">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
+            <span style="font-family:monospace;font-size:12px;letter-spacing:0.16em;color:#8fe9f2;">{{ speaker }}</span>
+            <span style="font-family:monospace;font-size:10px;letter-spacing:0.12em;color:#5c6b78;">{{ affil }}</span>
+            <span style="margin-left:auto;font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#55d6e8;animation:advBob 1.4s ease-in-out infinite;">{{ advLabel }}</span>
+          </div>
+          <div style="font-family:monospace;font-size:15px;line-height:1.65;color:#dfe7ec;text-wrap:pretty;min-height:50px;">{{ typed }}<span style="animation:caretBlink 1s step-end infinite;color:#55d6e8;">{{ caret }}</span></div>
+          <sc-if value="{{ showChoices }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;border-top:1px solid rgba(85,214,232,0.14);padding-top:12px;">
+              <sc-for list="{{ choices }}" as="c" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:4px;background:rgba(85,214,232,0.05);border:1px solid rgba(85,214,232,0.14);cursor:pointer;" style-hover="background:rgba(85,214,232,0.14);border-color:rgba(85,214,232,0.4)">
+                  <span style="font-family:monospace;font-size:10px;letter-spacing:0.1em;color:#f2c14e;">{{ c.key }}</span>
+                  <span style="font-family:monospace;font-size:13px;color:#c7d0d8;">{{ c.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showBust&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;1C options&quot;}}">
+const LINES = [
+  {speaker:'HALLER', affil:'SALVAGE GUILD · CH 7', text:'You are drifting into a claimed wreck field. Two of my haulers went quiet in there last cycle.'},
+  {speaker:'HALLER', affil:'SALVAGE GUILD · CH 7', text:'Cut your engines and I will mark the safe corridor. Or keep going and find out what ate them.'},
+  {speaker:'HALLER', affil:'SALVAGE GUILD · CH 7', text:'Your call, pilot. The field does not negotiate.'}
+];
+class Component extends DCLogic {
+  state = {i:0, n:0};
+  componentDidMount(){ this.t = setInterval(() => {
+    const line = LINES[this.state.i];
+    if(this.state.n < line.text.length) this.setState(s => ({n:s.n+1}));
+  }, 28); }
+  componentWillUnmount(){ clearInterval(this.t); }
+  renderVals(){
+    const {i,n} = this.state;
+    const line = LINES[i];
+    const done = n >= line.text.length;
+    return {
+      showBust: this.props.showBust ?? true,
+      speaker: line.speaker,
+      affil: line.affil,
+      typed: line.text.slice(0,n),
+      caret: done ? '' : '▌',
+      advLabel: done ? (i === LINES.length-1 ? 'END ▾' : 'SPACE ▾') : 'SKIP ▾',
+      progress: (i+1) + ' / ' + LINES.length,
+      showChoices: done && i === LINES.length-1,
+      choices: [
+        {key:'1', label:'Cutting engines. Mark the corridor.'},
+        {key:'2', label:'I have salvage rights of my own.'},
+        {key:'3', label:'What exactly ate them?'}
+      ],
+      advance: () => {
+        if(!done) return this.setState({n:line.text.length});
+        this.setState(s => ({i:(s.i+1) % LINES.length, n:0}));
+      }
+    };
+  }
+}
+
+</script>
+</body>
+</html>

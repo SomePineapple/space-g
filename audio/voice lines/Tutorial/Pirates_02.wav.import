@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://s57qs53prs0"
+path="res://.godot/imported/Pirates_02.wav-fd056c270c20367e5376f4f5be0edd9a.sample"
+
+[deps]
+
+source_file="res://audio/voice lines/Tutorial/Pirates_02.wav"
+dest_files=["res://.godot/imported/Pirates_02.wav-fd056c270c20367e5376f4f5be0edd9a.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

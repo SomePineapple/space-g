@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" uid="uid://g4010rlocqis" path="res://scenes/world/starfield_layer.gd" id="1_starfield"]
 [ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="2_ship"]
@@ -9,8 +9,22 @@
 [ext_resource type="PackedScene" uid="uid://c8k2f6qh1w3xa" path="res://scenes/ui/ship_builder/ship_builder_panel.tscn" id="7_builder"]
 [ext_resource type="Script" path="res://scenes/world/intro_director.gd" id="8_director"]
 [ext_resource type="Script" path="res://scenes/ui/contact_marker.gd" id="9_marker"]
+[ext_resource type="PackedScene" path="res://scenes/ui/dialogue/dialogue_box.tscn" id="10_dialogue"]
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 4
+ambient_light_source = 0
+glow_enabled = true
+glow_intensity = 1.2
+glow_strength = 1.1
+glow_bloom = 0.15
+glow_hdr_threshold = 1.0
+glow_blend_mode = 0
 
 [node name="IntroRegion" type="Node2D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
 
 [node name="SpaceBackground" type="ParallaxBackground" parent="."]
 
@@ -93,3 +107,5 @@ script = ExtResource("9_marker")
 script = ExtResource("8_director")
 builder_path = NodePath("../ShipBuilderPanel")
 marker_path = NodePath("../ContactLayer/ContactMarker")
+
+[node name="DialogueBox" parent="." instance=ExtResource("10_dialogue")]

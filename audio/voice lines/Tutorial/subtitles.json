@@ -1,0 +1,21 @@
+{
+  "Boot_01": "Emergency construction interface online.",
+  "Build_01": "No registered vessel detected. Assemble one.",
+  "Build_02": "Structural integrity requirements are minimal. Survival requirements are not.",
+  "Launch_01": "Vessel recognised. Navigation systems online.",
+  "Intro_01": "Hello, Captain. I am NAVOS, your onboard Navigation and Vessel Operations System. I will monitor ship functions, environmental readings, and anything attempting to kill you.",
+  "Launch_02": "Local space appears empty.",
+  "Scan_01": "Anomalous mass signature detected.",
+  "Scan_02": "Source is significantly larger than this vessel.",
+  "Graveyard_01": "Multiple derelict signatures detected. Classification: battle graveyard.",
+  "Graveyard_02": "No active transmissions detected. This is not evidence of safety.",
+  "Salvage_01": "Small derelict vessel detected nearby.",
+  "Salvage_02": "Recoverable ship component identified.",
+  "Salvage_03": "Salvage beam available. Remove anything useful.",
+  "Weapon_01": "Weapon system installed.",
+  "Weapon_02": "Offensive capability has increased from negligible to limited.",
+  "Pirates_01": "Three vessels approaching at combat speed.",
+  "Pirates_02": "Their weapon systems are active.",
+  "Pirates_03": "Hostile intent confirmed.",
+  "Combat_01": "Returning fire is now statistically preferable."
+}

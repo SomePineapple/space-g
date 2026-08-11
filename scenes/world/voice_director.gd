@@ -16,11 +16,24 @@ extends AudioStreamPlayer
 ## Emitted when the queue empties — the cue for a beat that is waiting on its
 ## own dialogue to finish before moving on.
 signal finished_speaking
+## A line has started, with its written text if one is known. Whoever wants to
+## put that on screen listens for this; nothing about playback knows a subtitle
+## panel exists, so the voice works with or without one.
+signal line_started(text: String)
+
+## The written script, read from the same generated table that holds the clips
+## (see CoreVoiceLines). Previously this parsed a loose .txt at runtime; the clip
+## generator now emits clips and subtitles together, which is both one less thing
+## to keep in step and one less file that would have to be added to the export
+## filters to survive a build.
 
 ## Lines are already mastered with the space filter baked in (the `_space`
 ## suffix on every file), so they play on the default bus with no effect chain
 ## and no bus layout to install.
-@export var line_volume_db: float = -2.0
+##
+## The clips are mastered hot, so this sits well below unity to bring them into
+## line with the rest of the mix (ambient music -22, engines -20, lasers -16).
+@export var line_volume_db: float = -18.0
 
 var _queue: Array[AudioStream] = []
 
@@ -70,3 +83,14 @@ func _advance() -> void:
 		return
 	stream = _queue.pop_front()
 	play()
+	line_started.emit(subtitle_for(stream))
+
+
+## The written line for a clip, or "" if the table has no entry for it. The clip's
+## own filename is the id — Boot_01.wav is "Boot_01" — so nothing has to maintain
+## a second mapping from one to the other.
+static func subtitle_for(clip: AudioStream) -> String:
+	if clip == null:
+		return ""
+	var id: StringName = StringName(clip.resource_path.get_file().get_basename())
+	return CoreVoiceLines.SUBTITLES.get(id, "")

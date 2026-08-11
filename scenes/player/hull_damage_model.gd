@@ -332,6 +332,88 @@ func damage_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vect
 	return {"result": "cut", "progress": cut_progress_of(placement)}
 
 
+## The single hex cell the beam is touching, described in world space, so a
+## cutting effect can trace that cell's own outline rather than guessing at the
+## geometry from the raycast point alone.
+##
+## Returns {} when the contact does not land on an occupied cell. Uses the same
+## step-half-a-cell-inward trick as _placement_under_contact, and for the same
+## reason: a raycast stops on the outer surface, which rounds to the cell outside
+## the hull as often as the one inside it.
+##
+## Reports the *cell*, not the placement: a three-hex spar is one placement but
+## the beam is cutting around one hex of it.
+func cut_cell_at(impact_point: Vector2, aim_direction: Vector2) -> Dictionary:
+	if _layout == null or _renderer == null:
+		return {}
+	var local_point: Vector2 = _ship.to_local(impact_point)
+	var coord: Vector2i = _to_hex(local_point)
+	if not _layout.is_occupied(coord) and aim_direction.length() > 0.001:
+		var inward: Vector2 = aim_direction.normalized().rotated(-_ship.global_rotation)
+		coord = _to_hex(local_point + inward * _renderer.cell_size * 0.5)
+	return _describe_cell(coord)
+
+
+## The same description as cut_cell_at, for a cell already chosen. A cutting beam
+## resolves the cell once when it locks on and then asks for it by coordinate
+## every frame after: re-resolving from the contact point each frame made the
+## lock flicker between neighbouring cells as the two hulls drifted, and the ramp
+## never got past its first frame.
+##
+## Empty once that cell is no longer part of the hull.
+func cell_geometry(coord: Vector2i) -> Dictionary:
+	return _describe_cell(coord)
+
+
+## One hex cell, described in every space the cutting effect needs it in.
+##
+## `corners_hull` are that cell's outline **exactly as the renderer draws it** —
+## same jitter, same part offset and rotation — expressed in the hull renderer's
+## own local space, which is where a cut seam is parented. `corners` is the same
+## outline in world space, for the beam's contact point.
+##
+## Both are returned rather than letting the caller rebuild the hexagon from
+## `center`/`radius`/`rotation`: the renderer's node carries a fixed 90° rotation
+## that `center_local` already has folded in, so reconstructing corners outside
+## this class applied that rotation a second time and swung every cell off its
+## true position by an amount that grew with its distance from the hull's origin.
+func _describe_cell(coord: Vector2i) -> Dictionary:
+	if _layout == null or _renderer == null:
+		return {}
+	var placement: ModulePlacement = _layout.get_placement_at(coord)
+	if placement == null:
+		return {}
+
+	var cell_size: float = _renderer.cell_size
+	var corners_hull: PackedVector2Array = HullPaint.jittered_corners(
+		HexUtils.hex_corners(HexUtils.axial_to_pixel(coord, cell_size), cell_size),
+		HullPaint.part_centroid(_layout, placement, cell_size),
+		HullPaint.part_offset(placement.instance, cell_size),
+		HullPaint.part_rotation(placement.instance))
+	var corners_world := PackedVector2Array()
+	for corner in corners_hull:
+		corners_world.append(_ship.to_global(corner.rotated(_renderer.rotation)))
+
+	# axial_to_pixel works in un-rotated hull space; the renderer's own fixed
+	# rotation has to be put back to land in ship-local space.
+	var center_local: Vector2 = HexUtils.axial_to_pixel(coord, cell_size) \
+		.rotated(_renderer.rotation)
+	return {
+		"coord": coord,
+		"center_local": center_local,
+		"center": _ship.to_global(center_local),
+		"radius": cell_size,
+		"rotation": _renderer.rotation + _ship.global_rotation,
+		"corners_hull": corners_hull,
+		"corners": corners_world,
+		# Whether the beam may lock here at all. Matches the cut-ready marker the
+		# renderer draws (destroyed cells are holes, not parts waiting to be cut),
+		# so the tool can only lock onto something the hull is visibly offering.
+		"cuttable": not is_destroyed(placement.placement_id) \
+			and HullPaint.is_cuttable(placement.instance),
+	}
+
+
 ## How far through the cuttable band a part is: 0 the moment it becomes
 ## cuttable, 1 when it comes apart.
 func cut_progress_of(placement: ModulePlacement) -> float:

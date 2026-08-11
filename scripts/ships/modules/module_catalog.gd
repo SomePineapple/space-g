@@ -273,7 +273,10 @@ static func get_all() -> Array[ModuleType]:
 	var storage_type: ModuleType = _make("storage_mk1", "Cargo Container", Color(0.6, 0.45, 0.3), SINGLE_CELL,
 		0.4, 30.0, 0.0, null, "", 1,
 		{ComponentCatalog.METAL_SHEETS: 2, ComponentCatalog.CANISTER: 3},
-		0.0, 0.0, null, false, 0.5, 0.35, 60.0)
+		# The two -1.0s are "use ModuleType's own capture defaults"; they are only
+		# here to reach cargo_capacity_contribution, and a Cargo Container is not
+		# capturable tech in any case.
+		0.0, 0.0, null, false, -1.0, -1.0, 60.0)
 	storage_type.faction_hex_textures = FactionArtImporter.load_faction_textures("cargo_container")
 	types.append(storage_type)
 
@@ -375,8 +378,8 @@ static func _make(id: String, display_name: String, color: Color, footprint_cell
 		hex_texture: Texture2D = null, hardpoint_category: String = "", tier: int = 1,
 		build_costs: Dictionary = {}, energy_generation: float = 0.0,
 		energy_capacity_contribution: float = 0.0, hardpoint_scene: PackedScene = null,
-		is_capturable_tech: bool = false, capture_health_fraction: float = 0.5,
-		capture_chance: float = 0.35, cargo_capacity_contribution: float = 0.0) -> ModuleType:
+		is_capturable_tech: bool = false, capture_health_fraction: float = -1.0,
+		capture_chance: float = -1.0, cargo_capacity_contribution: float = 0.0) -> ModuleType:
 	var type := ModuleType.new()
 	type.id = id
 	type.display_name = display_name
@@ -393,7 +396,13 @@ static func _make(id: String, display_name: String, color: Color, footprint_cell
 	type.energy_capacity_contribution = energy_capacity_contribution
 	type.hardpoint_scene = hardpoint_scene
 	type.is_capturable_tech = is_capturable_tech
-	type.capture_health_fraction = capture_health_fraction
-	type.capture_chance = capture_chance
+	# Negative means "not specified for this type" — leave ModuleType's own default
+	# standing. These used to be repeated as defaults in this signature too, which
+	# silently shadowed the ones on ModuleType: retuning capture there changed
+	# nothing, because every catalogue entry overwrote it on the way past.
+	if capture_health_fraction >= 0.0:
+		type.capture_health_fraction = capture_health_fraction
+	if capture_chance >= 0.0:
+		type.capture_chance = capture_chance
 	type.cargo_capacity_contribution = cargo_capacity_contribution
 	return type

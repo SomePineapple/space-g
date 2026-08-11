@@ -40,53 +40,63 @@ enum Beat { BUILDER, OPENING, EXPLORING, CONTACT_CALL, FOUND, FITTING, AMBUSH, D
 ## shipped with: both were always null placeholders waiting for exactly these
 ## recordings, and a beat turned out to need several lines rather than one.
 @export var boot_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/start_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Boot_01_space.wav"),
+	CoreVoiceLines.CLIPS[&"Boot_01"],
 ]
 ## Spoken over the ship builder while the player has it open.
 @export var build_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Build_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Build_02_space.wav"),
+	CoreVoiceLines.CLIPS[&"Build_01"],
+	CoreVoiceLines.CLIPS[&"Build_02"],
 ]
-## The moment they close the builder and are actually flying.
+## Played once the player leaves the builder with a ship they have built.
+##
+## Intro_01 — NAVOS introducing itself — deliberately sits BETWEEN the two launch
+## lines rather than after them: "Vessel recognised" acknowledges the ship, the
+## introduction follows, and "Local space appears empty" then hands the player
+## their first look around. That is the order the clip set itself is written in.
 @export var launch_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Launch_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Launch_02_space.wav"),
+	CoreVoiceLines.CLIPS[&"Launch_01"],
+	CoreVoiceLines.CLIPS[&"Intro_01"],
+	CoreVoiceLines.CLIPS[&"Launch_02"],
 ]
 ## "Large ship detected" — the derelict does not exist in the world until these
 ## have finished playing, so the player never sees it arrive.
 @export var scan_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Scan_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Scan_02_space.wav"),
+	CoreVoiceLines.CLIPS[&"Scan_01"],
+	CoreVoiceLines.CLIPS[&"Scan_02"],
 ]
 ## On arriving at the wreck field.
 @export var graveyard_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Graveyard_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Graveyard_02_space.wav"),
+	CoreVoiceLines.CLIPS[&"Graveyard_01"],
+	CoreVoiceLines.CLIPS[&"Graveyard_02"],
 ]
 ## The cutting lesson, once they are close enough to the target hull to act on it.
 @export var salvage_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Salvage_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Salvage_02_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Salvage_03_space.wav"),
+	CoreVoiceLines.CLIPS[&"Salvage_01"],
+	CoreVoiceLines.CLIPS[&"Salvage_02"],
+	CoreVoiceLines.CLIPS[&"Salvage_03"],
 ]
 ## Once the salvaged gun is bolted onto their own hull.
 @export var weapon_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Weapon_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Weapon_02_space.wav"),
+	CoreVoiceLines.CLIPS[&"Weapon_01"],
+	CoreVoiceLines.CLIPS[&"Weapon_02"],
 ]
 ## The raiders arriving.
 @export var pirate_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Pirates_01_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Pirates_02_space.wav"),
-	preload("res://audio/voice lines/Tutorial/Pirates_03_space.wav"),
+	CoreVoiceLines.CLIPS[&"Pirates_01"],
+	CoreVoiceLines.CLIPS[&"Pirates_02"],
+	CoreVoiceLines.CLIPS[&"Pirates_03"],
 ]
 ## Held back until a raider is actually in the fight, rather than stacked onto
 ## the arrival lines — it is a reaction to being engaged, not to being spotted.
 @export var combat_lines: Array[AudioStream] = [
-	preload("res://audio/voice lines/Tutorial/Combat_01_space.wav"),
+	CoreVoiceLines.CLIPS[&"Combat_01"],
 ]
-@export var voice_volume_db: float = -2.0
+@export var voice_volume_db: float = -18.0
+
+## Who the tutorial voice is, as shown in the dialogue panel's header. Exported
+## because the words are the ship's, not this script's.
+@export var voice_speaker: String = "NAVOS"
+@export var voice_affiliation: String = "NAV / VESSEL OPS"
 
 ## How near the Colossus the player has to get for the graveyard lines, as a
 ## multiple of its own radius, so rescaling the art cannot leave the cue firing
@@ -126,6 +136,9 @@ enum Beat { BUILDER, OPENING, EXPLORING, CONTACT_CALL, FOUND, FITTING, AMBUSH, D
 ## a real fight" — and it exists mostly so the player gets a second, unscripted
 ## chance to cut something free, this time off a hull that is shooting back.
 @export var ambush_scene: PackedScene = preload("res://scenes/enemies/pirate_light_one.tscn")
+## Three, and not freely tunable: Pirates_01 says "Three vessels approaching at
+## combat speed" out loud. Change this and the ship starts miscounting for the
+## player. Re-cut the line first.
 @export var ambush_count: int = 3
 ## Grace period between the part going on and the raiders arriving — long enough
 ## to close the builder and get oriented, short enough to still read as a
@@ -170,6 +183,10 @@ func _ready() -> void:
 	_voice = VoiceDirector.new()
 	_voice.line_volume_db = voice_volume_db
 	add_child(_voice)
+	# The voice does not know the panel exists; this is the only thing that joins
+	# them, so a region with no dialogue box simply plays the audio unsubtitled.
+	_voice.line_started.connect(_on_voice_line_started)
+	_voice.finished_speaking.connect(_on_voice_finished)
 	# Deferred so every node in the scene — the builder included — has run its
 	# own _ready before the opening tries to drive them.
 	_open_builder.call_deferred()
@@ -234,6 +251,24 @@ func _process(delta: float) -> void:
 				_update_combat_cue()
 		Beat.DONE:
 			pass
+
+
+## Subtitles each spoken line as it starts. A clip with no entry in the script
+## file — start_01 is currently the only one — leaves whatever is on screen
+## alone rather than blanking the panel, since an empty comms box is worse than
+## a slightly stale one.
+func _on_voice_line_started(text: String) -> void:
+	if text.is_empty():
+		return
+	var box: DialogueBox = DialogueBox.find(self)
+	if box != null:
+		box.show_subtitle(voice_speaker, voice_affiliation, text)
+
+
+func _on_voice_finished() -> void:
+	var box: DialogueBox = DialogueBox.find(self)
+	if box != null and box.is_open():
+		box.dismiss()
 
 
 func _begin_opening() -> void:

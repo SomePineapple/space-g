@@ -1,8 +1,14 @@
 extends CanvasLayer
 
 ## Gameplay HUD root. Owns only the pieces that need ship signals routed to
-## them (vitals, credits, damage vignette, storage-full cue) — CargoWidget,
-## RadarDisplay and ScannerDisplay each subscribe to their own sources.
+## them (vitals, credits, damage vignette, storage-full cue) — RadarDisplay and
+## ScannerDisplay each subscribe to their own sources.
+##
+## The bottom-left cargo chip and its dropdown (HUD-1d spec §2) were taken out of
+## this scene: the cargo figure is available on demand in the builder and cargo
+## screens, and the chip was permanently occupying the corner the dialogue panel
+## now sits above. cargo_widget.gd is left in the project, unreferenced, since it
+## still implements that section of the spec if it is ever wanted back.
 ## Layout and colours come from docs/HUD-1d-Godot-spec.md via HudPalette.
 
 ## Ceiling on the damage vignette. The flash accumulates toward this rather than

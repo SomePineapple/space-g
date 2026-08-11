@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bowo7h4t5fh3v"
+path="res://.godot/imported/Salvage_02.wav-4e712d38094dc2ce514143c5218a1e25.sample"
+
+[deps]
+
+source_file="res://audio/voice lines/Tutorial/Salvage_02.wav"
+dest_files=["res://.godot/imported/Salvage_02.wav-4e712d38094dc2ce514143c5218a1e25.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -21,6 +21,13 @@ extends Node
 @export var clean_cut_kick_speed: float = 10.0
 @export var clean_cut_spin_range: float = 0.3
 
+## What a part keeps of its remaining integrity when it is blown off rather than
+## cut off (see ModuleInstance.integrity). Being torn free by an explosion is
+## rough treatment, and the difference is the argument for the Slicer: a cut part
+## comes off as good as it was, a shot-off one comes off worn. Rarity alone made
+## gunfire a worse lottery for the same prize; this makes it a worse prize.
+@export var explosive_recovery_integrity: float = 0.6
+
 @export var ship_debris_scene: PackedScene = preload("res://scenes/world/ship_debris.tscn")
 @export var captured_tech_part_scene: PackedScene = preload("res://scenes/world/captured_tech_part.tscn")
 @export var seam_spark_scene: PackedScene = preload("res://scenes/world/seam_spark.tscn")
@@ -59,6 +66,12 @@ func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType,
 		# job ends — carrying it onto the player's hull would hand them an
 		# indestructible module.
 		instance.damage_immune = false
+		if not clean_cut:
+			# Torn free by a detonation rather than opened up along a seam. The part
+			# survives, but not unmarked — and integrity never comes back.
+			instance.integrity = maxf(instance.integrity * explosive_recovery_integrity,
+				ModuleInstance.MINIMUM_INTEGRITY)
+			instance.condition_fraction = minf(instance.condition_fraction, instance.integrity)
 		part.set_instance(instance)
 	else:
 		_spawn_piece(ship_debris_scene, placement, module_type, clean_cut)

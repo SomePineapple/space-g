@@ -71,10 +71,16 @@ extends Resource
 ## the instant it's severed to be capturable — a module chewed down to a
 ## sliver of health isn't intact enough to recover, only a clean severance.
 @export var capture_health_fraction: float = 0.5
-## Random roll on top of the health-fraction gate, applied only once that
-## gate is already met — capture is meant to be a notable, not guaranteed,
-## outcome even for a clean severance.
-@export var capture_chance: float = 0.35
+## Random roll on top of the health-fraction gate, applied only once that gate is
+## already met. Applies ONLY to a part shaken loose by weapon fire; a deliberate
+## Slicer cut always recovers (see WreckageSpawner.spawn_severed_piece), so this
+## number is really "how often shooting a wing off substitutes for cutting it".
+##
+## Was 0.35, which measured at ~45% recovery in practice — near enough to the
+## Slicer's guaranteed result that holding a beam on a hull for ten seconds was
+## strictly the worse option, and the whole salvage loop could be skipped by
+## shooting. Low enough now to be a lucky break rather than a strategy.
+@export var capture_chance: float = 0.1
 ## Whether this module must be researched (see Inventory.research) before it
 ## can be placed in the ship builder — reserved for tech that's meaningfully
 ## faction-exclusive (Railgun, Phase Lance), not every capturable module,

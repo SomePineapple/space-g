@@ -489,6 +489,26 @@ func take_slicer_cut(band_fraction: float, impact_point: Vector2, aim_direction:
 	return _hull_damage.damage_cut(band_fraction, impact_point, aim_direction)
 
 
+## Geometry of the hex a cutting beam is touching, in world space — see
+## HullDamageModel.cut_cell_at. Public so the Slicer's effect can draw its
+## reticle and walk its contact point around the actual cell instead of
+## reconstructing the hull's hex layout from outside.
+func get_cut_cell(impact_point: Vector2, aim_direction: Vector2) -> Dictionary:
+	return _hull_damage.cut_cell_at(impact_point, aim_direction)
+
+
+## The same geometry for a cell already locked on to — see
+## HullDamageModel.cell_geometry.
+func get_cell_geometry(coord: Vector2i) -> Dictionary:
+	return _hull_damage.cell_geometry(coord)
+
+
+## Where a cut seam should be parented so it stays on this hull as it moves and
+## survives the tile coming off (see SalvageCutTrail).
+func get_hull_renderer_node() -> Node2D:
+	return _hull_renderer
+
+
 ## Credits one kill to the specific part that fired the fatal shot, recorded on
 ## the mounted ModuleInstance rather than on the ship or the module type. That is
 ## the point: the tally travels with the object, so a gun cut off a raider

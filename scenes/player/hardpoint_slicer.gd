@@ -48,7 +48,14 @@ extends Node2D
 ##
 ## Ten seconds is a long commitment on purpose: it has to be held on one specific
 ## connector, on a moving target, while that ship is still fighting back.
-@export var cut_duration: float = 10.0
+## Per the spec's phase table this is the CUT phase alone — the upgradeable stat
+## a faster cutter shortens. The lock/spool/pilot ramp in front of it
+## (LOCK_SECONDS) is fixed, so a whole cut is that ramp plus this.
+##
+## Was 10.0 for the hold-the-beam-forever version of this tool. The spec's
+## timeline is the contract now, and it puts the cut at 3.6s after a 2.4s ramp:
+## roughly six seconds end to end rather than ten.
+@export var cut_duration: float = 3.6
 @export var energy_cost_per_second: float = 9.0
 ## Thick and near-white, deliberately unlike every weapon in the game — this is
 ## industrial cutting equipment, not ordnance, and it should never be mistaken
@@ -70,13 +77,32 @@ extends Node2D
 ## What the beam is modulated by while touching a part too healthy to cut.
 const INTACT_BEAM_FADE: Color = Color(0.5, 0.55, 0.62, 0.45)
 
+# --- Phase timings (docs/design_salvage/salvage-beam-Godot-spec.md) -----------
+# Seconds from acquiring a cuttable cell. The spec drives these from one
+# AnimationPlayer over a fixed 10s; here they are driven from live state instead,
+# because this cut is something the player holds on a moving target and can break
+# off at any moment — a canned timeline cannot be interrupted halfway and
+# resumed, which is most of what actually happens in play.
+const SPOOL_START: float = 1.1
+const PILOT_START: float = 1.55
+const CUT_START: float = 2.4
+## Camera shake while cutting, from the spec's ±1.3px.
+@export var shake_strength: float = 1.3
+
+## Every hull in the game draws at the default z_index, so among themselves ships
+## sort by scene-tree order — and an enemy added to the world after the player
+## therefore draws *over* anything parented under the player's ship, including
+## this beam. The cutting effect has to be above the hull it is cutting, so it is
+## pulled out of that ordering entirely (z_as_relative = false).
+const EFFECT_Z_INDEX: int = 20
+
 ## Which ModulePlacement (on the shooter's ShipLayout) this hardpoint was
 ## spawned from — set by Ship right after instancing, same convention as
 ## every other hardpoint.
 var source_placement_id: String = ""
 
 var _shooter: Ship
-var _beam: BeamVisual
+var _beam: SalvageBeam
 ## What the last cut attempt did: "cut", "intact" or "miss" (see
 ## Ship.take_slicer_cut), and how far through the band that part is. Together
 ## these drive the beam's own feedback.
@@ -93,14 +119,33 @@ var _last_direction: Vector2 = Vector2.RIGHT
 ## is a visible completed action rather than the beam carrying straight on
 ## through the hole into whatever was behind the part.
 var _finishing_cut: bool = false
+## Seconds the beam has been locked on the current cell, driving the lock/spool/
+## pilot ramp. Reset whenever the lock is lost.
+var _lock_elapsed: float = 0.0
+## The cell currently being cut, as reported by Ship.get_cut_cell.
+var _cell: Dictionary = {}
+## The ship and hex the beam has committed to for this cut.
+var _locked_ship: Object = null
+var _locked_coord: Vector2i = Vector2i.ZERO
+var _reticle: SalvageReticle
+## The seam being burned into the target, parented to that ship so it stays with
+## the hull. Dropped (not freed) when the cut ends — it carries on cooling.
+var _trail: SalvageCutTrail
 
 @onready var _muzzle: Marker2D = $Muzzle
 
 
 func _ready() -> void:
-	_beam = BeamVisual.new()
+	_beam = SalvageBeam.new()
+	_beam.z_index = EFFECT_Z_INDEX
+	_beam.z_as_relative = false
 	add_child(_beam)
-	_beam.configure(beam_color, beam_width, pulse_speed, pulse_strength)
+	_reticle = SalvageReticle.new()
+	_reticle.z_index = EFFECT_Z_INDEX + 1
+	_reticle.z_as_relative = false
+	# In the world rather than under the muzzle: it has to sit on the target hex
+	# while this node swings around with its own ship.
+	WorldSpawn.attach(_reticle)
 
 
 func setup(shooter: Ship) -> void:
@@ -184,44 +229,175 @@ func _cut(delta: float) -> void:
 	query.exclude = [_shooter.get_rid()]
 	var result: Dictionary = space_state.intersect_ray(query)
 
-	# The beam is drawn to whatever it actually reaches, so its length reads as
-	# the tool's reach rather than as a fixed decorative bar.
-	if not result.is_empty():
-		to_point = result.position
-	# Mixed spaces on purpose — draw_beam() takes its start in this hardpoint's
-	# local space and its end in WORLD space, applying to_local() to the end
-	# itself. Converting the end first transforms it twice, which leaves the far
-	# tip wandering somewhere near the ship instead of tracking the cursor.
-	# Dimmed while the beam is landing on something it cannot open, so "nothing is
-	# happening" is visible on the tool as well as on the target (which carries
-	# the cut-ready marker — see HullPaint.CUT_READY_COLOR). Set as modulate
-	# rather than by reconfiguring the beam: configure() rebuilds its Line2D
-	# children, and doing that every frame is the per-frame resource construction
-	# docs/performance.md is about.
-	_apply_beam_tint()
-	_beam.draw_beam(_muzzle.position, to_point)
-
 	if result.is_empty():
+		_lose_lock()
+		_beam.set_state(0.0, 0.0, Color.WHITE)
+		_beam.set_endpoints(_muzzle.position, to_point)
 		_last_result = "miss"
 		_last_progress = 0.0
 		return
+
 	var target: Object = result.collider
 	if target == _shooter or not target.has_method("take_slicer_cut"):
+		_lose_lock()
+		_beam.set_state(0.0, 0.0, Color.WHITE)
+		_beam.set_endpoints(_muzzle.position, result.position)
 		_last_result = "miss"
 		_last_progress = 0.0
 		return
 
-	# Just the contact point. The cut lands on the one part the beam is touching
-	# and stops there — see Ship.take_slicer_cut. The direction is passed so the
-	# hull can sample just inside the surface the ray stopped on.
-	# The share of the cut spent this frame is simply the share of cut_duration
-	# this frame represents.
+	# A cell the beam is not allowed to open never gets a lock at all, so the
+	# reticle and spool are a promise the tool can keep: if it locks on, it will
+	# cut. Feedback is the dimmed beam and the target's own missing cut-ready
+	# marker, same as before.
+	if not _track_lock(target, result.position, direction, delta):
+		_beam.set_state(0.0, 0.0, INTACT_BEAM_FADE)
+		_beam.set_endpoints(_muzzle.position, result.position)
+		_last_result = "intact"
+		_last_progress = 0.0
+		return
+
+	# Lock and spool happen before anything is actually being cut: the tool has to
+	# settle on the cell first. Only past CUT_START does the beam bite.
+	if _lock_elapsed < CUT_START:
+		_show_ramp(result.position)
+		_last_result = "cut"
+		return
+
+	# Aimed at the locked cell's own centre rather than the raw contact point, so
+	# the part being damaged is always the part the reticle is drawn around.
+	var cut_at: Vector2 = _cell["center"] if not _cell.is_empty() else result.position
 	var outcome: Dictionary = target.take_slicer_cut(
-		delta / maxf(cut_duration, 0.001), result.position, direction)
+		delta / maxf(cut_duration, 0.001), cut_at, direction)
 	_last_result = outcome["result"]
 	_last_progress = outcome["progress"]
+
+	_show_cut(target, result.position)
 	if _last_result == "severed":
+		_on_severed(target)
 		_finishing_cut = true
+
+
+## Keeps the reticle and seam pointed at the cell under the beam. Losing the cell
+## — the cursor slipping onto a different hex — restarts the ramp, so you cannot
+## spool up on one part and cash it in on another.
+##
+## False when there is nothing here the beam may lock onto: no cell, or a cell
+## still in good enough condition that the Slicer cannot open it. The lock used to
+## be granted on any occupied cell and cuttability only checked once damage was
+## being applied, so the tool would fly its reticle in and spool all the way up on
+## an intact part before quietly doing nothing.
+func _track_lock(target: Object, contact: Vector2, direction: Vector2, delta: float) -> bool:
+	if not target.has_method("get_cut_cell"):
+		_lose_lock()
+		return false
+
+	# Once locked, the cell is held by coordinate rather than re-resolved from the
+	# contact point. Re-resolving every frame made the lock flicker between
+	# neighbouring hexes as the two hulls drifted against each other, which reset
+	# the ramp continuously and meant a cut could never start at all.
+	var cell: Dictionary = {}
+	if _locked_ship == target and _lock_elapsed > 0.0:
+		cell = target.get_cell_geometry(_locked_coord)
+	if cell.is_empty():
+		cell = target.get_cut_cell(contact, direction)
+		if cell.is_empty():
+			_lose_lock()
+			return false
+		# A genuinely different cell — the player has moved the beam onto another
+		# part — starts its own lock rather than inheriting this one's progress.
+		if _locked_ship != target or _locked_coord != cell["coord"]:
+			_lose_lock()
+		_locked_ship = target
+		_locked_coord = cell["coord"]
+
+	if not cell.get("cuttable", false):
+		_lose_lock()
+		return false
+
+	_cell = cell
+	_lock_elapsed += delta
+	_reticle.lock_on(cell["center"], cell["rotation"], cell["radius"])
+	return true
+
+
+func _lose_lock() -> void:
+	_lock_elapsed = 0.0
+	_cell = {}
+	_locked_ship = null
+	_trail = null
+	_reticle.release()
+
+
+## Lock, spool and pilot: the beam is present but not yet cutting.
+func _show_ramp(contact: Vector2) -> void:
+	var charge: float = clampf((_lock_elapsed - SPOOL_START) / (CUT_START - SPOOL_START), 0.0, 1.0)
+	var strength: float = 0.0 if _lock_elapsed < PILOT_START else 0.0
+	_beam.set_state(strength, charge, Color.WHITE)
+	# Nothing is drawn at all until the pilot beam: the lock phase is the reticle's.
+	if _lock_elapsed < PILOT_START:
+		_beam.hide_beam()
+		return
+	_beam.set_endpoints(_muzzle.position, contact)
+
+
+## Full cut: the contact point walks the hex perimeter and burns a seam as it
+## goes, rather than sitting wherever the raycast happened to land.
+func _show_cut(target: Object, fallback_contact: Vector2) -> void:
+	_beam.set_state(1.0, 1.0, _cut_tint())
+	if _cell.is_empty():
+		_beam.set_endpoints(_muzzle.position, fallback_contact)
+		return
+
+	# Both outlines come from the target itself (HullDamageModel._describe_cell)
+	# rather than being rebuilt from centre and radius here: the hull renderer
+	# carries its own rotation and jitters every part off its grid cell, so a
+	# hexagon reconstructed out here landed somewhere the hull was not.
+	_beam.set_endpoints(_muzzle.position,
+		SalvageCutTrail.perimeter_point(_cell["corners"], _last_progress))
+
+	_ensure_trail(target)
+	if _trail != null and is_instance_valid(_trail):
+		_trail.advance(_cell["corners_hull"], _last_progress)
+
+	_shake()
+
+
+## The seam belongs to the hull being cut, so it is parented there and simply
+## left behind when the cut ends.
+func _ensure_trail(target: Object) -> void:
+	if _trail != null and is_instance_valid(_trail):
+		return
+	if not target.has_method("get_hull_renderer_node"):
+		return
+	_trail = SalvageCutTrail.new()
+	target.get_hull_renderer_node().add_child(_trail)
+
+
+func _cut_tint() -> Color:
+	return Color.WHITE.lerp(cut_progress_color, _last_progress)
+
+
+func _shake() -> void:
+	if shake_strength <= 0.0 or _shooter == null:
+		return
+	var camera: Node = _shooter.get_node_or_null("ShipCamera")
+	if camera != null and camera.has_method("add_shake"):
+		camera.add_shake(shake_strength)
+
+
+func _on_severed(target: Object) -> void:
+	if _cell.is_empty():
+		return
+	var burst := SalvageSeverFx.new()
+	burst.z_index = EFFECT_Z_INDEX
+	burst.z_as_relative = false
+	WorldSpawn.attach_at(burst, _cell["center"])
+	burst.burst(_cell["radius"])
+	_reticle.release()
+	# The seam is deliberately NOT freed: it is the socket rim on the hull the
+	# part came off, and it carries on cooling there.
+	_trail = null
 
 
 ## Draws the beam back in rather than switching it off. Once it is fully home the
@@ -233,23 +409,32 @@ func _retract(delta: float) -> void:
 	if not _finishing_cut:
 		_last_result = "miss"
 		_last_progress = 0.0
+		_lose_lock()
 	_current_length = move_toward(_current_length, 0.0, extend_speed * delta)
 	if _current_length <= 0.01:
 		_finishing_cut = false
 		_last_result = "miss"
 		_last_progress = 0.0
+		_lose_lock()
 		_beam.hide_beam()
 		return
-	_apply_beam_tint()
-	_beam.draw_beam(_muzzle.position,
+	_beam.set_state(1.0 if _finishing_cut else 0.0, 0.0, _beam_tint())
+	_beam.set_endpoints(_muzzle.position,
 		_muzzle.global_position + _last_direction * _current_length)
 
 
-## Colour is set through modulate rather than by reconfiguring the beam:
-## configure() rebuilds its Line2D children, and doing that every frame is the
-## per-frame resource construction docs/performance.md is about.
-func _apply_beam_tint() -> void:
+## Dimmed while the beam is landing on something it cannot open, so "nothing is
+## happening" is visible on the tool as well as on the target (which carries the
+## cut-ready marker — see HullPaint.CUT_READY_COLOR).
+func _beam_tint() -> Color:
 	if _last_result == "intact":
-		_beam.modulate = INTACT_BEAM_FADE
-		return
-	_beam.modulate = Color.WHITE.lerp(cut_progress_color, _last_progress)
+		return INTACT_BEAM_FADE
+	return _cut_tint()
+
+
+func _exit_tree() -> void:
+	# The reticle lives in the world rather than under this node, so it has to be
+	# taken down by hand when the hardpoint goes (a refit, or the module being
+	# shot off).
+	if _reticle != null and is_instance_valid(_reticle):
+		_reticle.queue_free()
