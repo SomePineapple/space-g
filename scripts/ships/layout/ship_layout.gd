@@ -84,7 +84,15 @@ func thrust_for(placement: ModulePlacement) -> float:
 	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 	if module_type == null:
 		return 0.0
-	return module_type.thrust_contribution
+	return module_type.thrust_contribution * efficiency_of(placement)
+
+
+## How much of its rated output the part mounted here still delivers. A placement
+## with no instance yet (a layout straight off disk, before rebuild() stamps one)
+## counts as perfect — the alternative is a brand new ship briefly flying as a
+## wreck, the same reasoning as HullPaint.is_clean_joint.
+func efficiency_of(placement: ModulePlacement) -> float:
+	return placement.instance.efficiency() if placement.instance != null else 1.0
 
 
 func total_energy_generation() -> float:
@@ -93,7 +101,9 @@ func total_energy_generation() -> float:
 		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 		if module_type != null:
 			var base: float = module_type.energy_generation + _manufacturer_stat_delta(placement, "energy_generation")
-			total += base * _core_distance_energy_multiplier(placement)
+			# A damaged reactor makes less power — the wear equivalent of a weapon
+			# firing slower or a thruster pushing softer.
+			total += base * _core_distance_energy_multiplier(placement) * efficiency_of(placement)
 	return total
 
 
@@ -104,7 +114,8 @@ func total_energy_capacity() -> float:
 		if module_type != null:
 			var base: float = module_type.energy_capacity_contribution \
 				+ _manufacturer_stat_delta(placement, "energy_capacity_contribution")
-			total += base * _core_distance_energy_multiplier(placement)
+			# A cracked battery holds less charge.
+			total += base * _core_distance_energy_multiplier(placement) * efficiency_of(placement)
 	return total
 
 

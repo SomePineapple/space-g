@@ -55,6 +55,20 @@ signal hull_lost
 ## in losing the part, not in a repair bill.
 @export var passive_repair_cap_fraction: float = 1.0
 
+## Integrity permanently lost when a part absorbs damage equal to its entire
+## condition pool (see ModuleInstance.integrity). Deliberately slow: at this rate
+## a module has to be shot to pieces around six times over before it bottoms out,
+## so wear accumulates across a campaign rather than across one fight. It is the
+## dial that decides how badly the player needs fresh parts.
+@export var integrity_loss_per_full_hit: float = 0.1
+
+## Whether this hull repairs itself at all. False for a derelict: a wreck that
+## has been adrift for years does not knit itself back together, and — the reason
+## this exists — passive regrowth otherwise heals a deliberately damaged part
+## back above HullPaint.CUTTABLE_CONDITION a few seconds after it spawns, which
+## silently removes the cut-ready marker and makes the part uncuttable.
+@export var regenerates: bool = true
+
 var _ship: Ship
 var _bank: HardpointBank
 var _wreckage: WreckageSpawner
@@ -173,8 +187,13 @@ func _set_condition(placement: ModulePlacement, value: float) -> void:
 	if placement.instance == null:
 		return
 	var was_cuttable: bool = HullPaint.is_cuttable(placement.instance)
+	var previous_efficiency_step: int = _efficiency_step(placement)
 	var max_condition: float = _max_condition_of(placement)
-	placement.instance.condition_fraction = clampf(value / max_condition, 0.0, 1.0) if max_condition > 0.0 else 0.0
+	# Clamped to integrity rather than to 1.0, in the one place condition is
+	# written, so no repair path anywhere can put a part back above what it has
+	# permanently left.
+	placement.instance.condition_fraction = clampf(value / max_condition, 0.0,
+		placement.instance.integrity) if max_condition > 0.0 else 0.0
 
 	# The hull only redraws when its layout changes, but the cut-ready marker
 	# depends on condition — without this it would not appear until something
@@ -182,6 +201,27 @@ func _set_condition(placement: ModulePlacement, value: float) -> void:
 	# be never.
 	if _renderer != null and was_cuttable != HullPaint.is_cuttable(placement.instance):
 		_renderer.queue_redraw()
+
+	# Thrust and the energy pool are derived from how well each part is working
+	# (see ModuleInstance.efficiency), so wear has to reach them as it happens
+	# rather than only when something is destroyed outright.
+	if _efficiency_step(placement) != previous_efficiency_step:
+		modules_changed.emit()
+
+
+## Efficiency quantised into coarse steps. The stats derived from it are re-summed
+## across every placement on the ship, and condition moves on almost every frame
+## of sustained fire — announcing each individual point of damage would re-derive
+## the whole hull dozens of times a second for changes far too small to feel.
+func _efficiency_step(placement: ModulePlacement) -> int:
+	if placement.instance == null:
+		return 0
+	return int(placement.instance.efficiency() * EFFICIENCY_STEPS)
+
+
+## Number of bands efficiency is reported in. Twenty gives 5% granularity, which
+## is finer than the part card's own rounding.
+const EFFICIENCY_STEPS: float = 20.0
 
 
 ## True if the module is either destroyed outright (condition at zero), still
@@ -274,6 +314,9 @@ func damage_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vect
 	# A part still in good condition cannot simply be cut away — the Slicer opens
 	# a seam that damage has already started. Without this the beam alone took
 	# any part off any hull, and weapons had no role in salvage at all.
+	# An immune part reports "intact" rather than silently absorbing the beam, so
+	# the tool gives its usual "this cannot be opened" feedback instead of looking
+	# broken (see HardpointSlicer.INTACT_BEAM_FADE).
 	if not HullPaint.is_cuttable(placement.instance):
 		return {"result": "intact", "progress": 0.0}
 
@@ -369,16 +412,39 @@ func _to_hex(ship_local_point: Vector2) -> Vector2i:
 func _apply(placement: ModulePlacement, amount: float) -> void:
 	if is_destroyed(placement.placement_id):
 		return
+	# The one blanket exemption: a part marked damage_immune absorbs nothing at
+	# all, from any source. Checked here rather than at each call site so weapon
+	# fire, splash and the Slicer are covered by one rule.
+	if placement.instance != null and placement.instance.damage_immune:
+		return
 	# Damage to a module restarts the repair delay in its own right, not just
 	# damage that reaches the Health pool. The Slicer deliberately never touches
 	# Health, so without this a hull quietly regrew throughout a cut — and at a
 	# ten-second cut rate the regrowth is faster than the cutting, so a part could
 	# never be severed at all no matter how long the beam was held.
 	note_damage_taken()
-	var remaining: float = maxf(_condition_of(placement) - amount, 0.0)
+	var current: float = _condition_of(placement)
+	var remaining: float = maxf(current - amount, 0.0)
+	# Charged on what the part actually absorbed, not on what was aimed at it: an
+	# overkill hit (the battleground wrecks its hulls with 99999) must not count as
+	# a thousand fights' worth of wear.
+	_wear_integrity(placement, current - remaining)
 	_set_condition(placement, remaining)
 	if remaining <= 0.0:
 		_on_module_destroyed(placement)
+
+
+## Takes a permanent bite out of what this part can ever be repaired back to.
+## Never restored anywhere — that is the whole point (see ModuleInstance.integrity).
+func _wear_integrity(placement: ModulePlacement, absorbed: float) -> void:
+	if placement.instance == null or absorbed <= 0.0:
+		return
+	var max_condition: float = _max_condition_of(placement)
+	if max_condition <= 0.0:
+		return
+	placement.instance.integrity = maxf(
+		placement.instance.integrity - (absorbed / max_condition) * integrity_loss_per_full_hit,
+		ModuleInstance.MINIMUM_INTEGRITY)
 
 
 func _on_module_destroyed(placement: ModulePlacement) -> void:
@@ -484,7 +550,7 @@ func _detach_module(placement: ModulePlacement) -> void:
 ## inward rather than every hex in it popping back at once. Detached modules are
 ## excluded entirely — a piece that's already flown off has nothing to grow onto.
 func _regenerate_modules(delta: float) -> void:
-	if _layout == null or _time_since_last_damage < repair_delay:
+	if not regenerates or _layout == null or _time_since_last_damage < repair_delay:
 		return
 
 	for placement in _layout.placements:
@@ -524,7 +590,10 @@ func _has_healthy_neighbor(placement: ModulePlacement) -> bool:
 ## switched off for the whole climb and has to be brought back online at the top
 ## — from one that only took chip damage and never stopped working.
 func _advance_repair(placement: ModulePlacement, module_type: ModuleType, max_condition: float, delta: float, was_regrowing: bool) -> void:
-	var passive_cap: float = max_condition * passive_repair_cap_fraction
+	# Repair chases the part's remaining integrity, not its original rating — a
+	# worn part patches up to being as good as it still gets, not as good as new.
+	var passive_cap: float = max_condition * minf(passive_repair_cap_fraction,
+		placement.instance.integrity if placement.instance != null else 1.0)
 	var current_condition: float = _condition_of(placement)
 	if current_condition >= passive_cap:
 		return

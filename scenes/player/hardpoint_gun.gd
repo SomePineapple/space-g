@@ -215,12 +215,39 @@ func is_ready_to_fire() -> bool:
 	return _cooldown_remaining <= 0.0
 
 
+## How well the module this gun is bolted to is still working, 0..1. Asked of the
+## ship every shot rather than pushed in at mount time, because condition moves
+## constantly during a fight and a cached copy would quote the gun's health as of
+## whenever it was last rebuilt.
+##
+## Duck-typed rather than a static Ship reference: this file is preloaded through
+## the projectile scene, and a typed reference here closes a parse cycle (see
+## docs/gotchas.md).
+func _efficiency() -> float:
+	if _shooter == null or not _shooter.has_method("get_module_efficiency"):
+		return 1.0
+	return _shooter.get_module_efficiency(source_placement_id)
+
+
+## Damage this shot actually lands, after wear.
+func _effective_damage() -> float:
+	return projectile_damage * _efficiency()
+
+
+## The gap until this gun may fire again, after wear. A beaten-up gun cycles
+## slower, so wear costs rate of fire and damage together rather than either
+## alone — halving one is a stat change, halving both is the part visibly
+## struggling.
+func _shot_cooldown() -> float:
+	return 1.0 / maxf(fire_rate * _efficiency(), 0.001)
+
+
 func fire() -> Projectile:
 	if _cooldown_remaining > 0.0 or _shooter == null:
 		return null
 	if not _shooter.spend_energy(energy_cost):
 		return null
-	_cooldown_remaining = 1.0 / fire_rate
+	_cooldown_remaining = _shot_cooldown()
 	if malfunction_chance > 0.0 and GameRng.stream("malfunction").randf() < malfunction_chance:
 		_shooter.damage_own_module(source_placement_id, malfunction_self_damage)
 		return null
@@ -237,7 +264,7 @@ func _execute_fire() -> Projectile:
 	projectile.source_placement_id = source_placement_id
 	projectile.color = projectile_color
 	projectile.halo_color = projectile_halo_color
-	projectile.damage = projectile_damage
+	projectile.damage = _effective_damage()
 	projectile.lifetime = GameRng.stream("projectile").randf_range(
 		projectile_lifetime - projectile_lifetime_variance, projectile_lifetime)
 	projectile.scale = Vector2.ONE * projectile_scale

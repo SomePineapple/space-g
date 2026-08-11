@@ -3,37 +3,42 @@
 [ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_xx3w0"]
 [ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_ktkxa"]
 
-[sub_resource type="Resource" id="Resource_6hl05"]
+[sub_resource type="Resource" id="Resource_xx3w0"]
 script = ExtResource("1_xx3w0")
 placement_id = "p_17398_10"
 module_type_id = "command_core"
 
-[sub_resource type="Resource" id="Resource_h3g6o"]
+[sub_resource type="Resource" id="Resource_ktkxa"]
 script = ExtResource("1_xx3w0")
 placement_id = "p_17398_11"
 module_type_id = "hull_wedge"
 hex_coord = Vector2i(0, -2)
 
-[sub_resource type="Resource" id="Resource_t6sck"]
+[sub_resource type="Resource" id="Resource_6hl05"]
 script = ExtResource("1_xx3w0")
 placement_id = "p_17398_12"
 module_type_id = "gun_mk1"
-hex_coord = Vector2i(-1, 0)
-rotation_steps = 4
+hex_coord = Vector2i(2, -1)
 
-[sub_resource type="Resource" id="Resource_0svic"]
+[sub_resource type="Resource" id="Resource_h3g6o"]
 script = ExtResource("1_xx3w0")
 placement_id = "p_17398_13"
 module_type_id = "thruster_block"
 hex_coord = Vector2i(0, 1)
 
-[sub_resource type="Resource" id="Resource_ek80a"]
+[sub_resource type="Resource" id="Resource_t6sck"]
 script = ExtResource("1_xx3w0")
 placement_id = "p_17398_14"
 module_type_id = "reactor_pair"
 hex_coord = Vector2i(-2, 1)
 
+[sub_resource type="Resource" id="Resource_0svic"]
+script = ExtResource("1_xx3w0")
+placement_id = "p_35523_10"
+module_type_id = "hull"
+hex_coord = Vector2i(1, 0)
+
 [resource]
 script = ExtResource("2_ktkxa")
-placements = Array[ExtResource("1_xx3w0")]([SubResource("Resource_6hl05"), SubResource("Resource_h3g6o"), SubResource("Resource_t6sck"), SubResource("Resource_0svic"), SubResource("Resource_ek80a")])
+placements = Array[ExtResource("1_xx3w0")]([SubResource("Resource_xx3w0"), SubResource("Resource_ktkxa"), SubResource("Resource_6hl05"), SubResource("Resource_h3g6o"), SubResource("Resource_t6sck"), SubResource("Resource_0svic")])
 core_placement_id = "p_17398_10"

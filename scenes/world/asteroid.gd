@@ -29,12 +29,27 @@ const VARIANT_SHAPE := {
 	AsteroidVariant.RUSTY: {"point_count": 7, "irregularity": 0.45},
 	AsteroidVariant.CRYSTALLINE: {"point_count": 6, "irregularity": 0.15},
 }
+## Deliberately faint — no channel strays more than 8% from neutral. These tints
+## were authored when an asteroid's colour told you which material it would drop,
+## so they were saturated enough to identify across the screen. With mining
+## frozen (see MINING_FROZEN) a rock is scenery and an obstacle, and a saturated
+## rust-orange lump against a near-black starfield read as the most important
+## thing on screen — competing for attention with the ship, the salvage and the
+## enemies, all of which actually matter.
+##
+## Variant is still legible, but through silhouette (VARIANT_SHAPE) first and
+## a hint of hue second, which is the right order for something this common.
 const VARIANT_TINT := {
-	AsteroidVariant.ROCKY: Color(1.0, 0.95, 0.9),
-	AsteroidVariant.ICY: Color(0.8, 0.9, 1.15),
-	AsteroidVariant.RUSTY: Color(1.15, 0.75, 0.6),
-	AsteroidVariant.CRYSTALLINE: Color(0.85, 1.05, 1.0),
+	AsteroidVariant.ROCKY: Color(1.0, 0.98, 0.96),
+	AsteroidVariant.ICY: Color(0.94, 0.99, 1.06),
+	AsteroidVariant.RUSTY: Color(1.07, 0.95, 0.89),
+	AsteroidVariant.CRYSTALLINE: Color(0.95, 1.02, 1.05),
 }
+## Applied on top of every variant tint: the cool cast the space background and
+## the hull plating already carry. Keeps rocks reading as part of the scene
+## rather than as objects lit by a different sun.
+const ENVIRONMENT_TINT: Color = Color(0.90, 0.95, 1.0)
+
 ## Phase 4.2 raw materials: each asteroid variant has one primary material
 ## (see roll_ore_material) — chosen to loosely match each variant's own tint
 ## above (Rusty's red-brown ~ Copper, Icy's pale blue ~ Nickel, Crystalline's
@@ -120,8 +135,13 @@ func _ready() -> void:
 	_visual.polygon = points
 	_collision.polygon = points
 
-	var shade: float = _rng.randf_range(0.35, 0.55)
-	var tint: Color = VARIANT_TINT[variant]
+	# Darker than the old 0.35-0.55, and pulled toward the cool blue the space
+	# background and the hull plating already share, so rocks sit in the same
+	# family as everything around them instead of opposing it. Measured against
+	# the rendered scene rather than picked: the background reads about
+	# (0.08, 0.09, 0.12), blue-dominant.
+	var shade: float = _rng.randf_range(0.22, 0.34)
+	var tint: Color = VARIANT_TINT[variant] * ENVIRONMENT_TINT
 	_visual.color = Color(shade * tint.r, shade * tint.g, shade * tint.b)
 
 	_rotation_speed = _rng.randf_range(0.05, 0.25) * (1.0 if _rng.randf() < 0.5 else -1.0)

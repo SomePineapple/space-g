@@ -21,12 +21,15 @@ extends PanelContainer
 ## Deliberately narrow and quiet: it overlays the field, so it has to stay out of
 ## the way of the hull being edited.
 
-## Weapon numbers are quoted at full condition with no hull bonuses applied: the
-## part's own ceiling, not what it will do once mounted. Where the gun ends up
-## matters (HardpointGun.apply_core_distance_bonus pays out to half again for a
-## weapon mounted far from the Core), and that is a property of the hull design
-## rather than of the part sitting in the hold.
-const PERFORMANCE_NOTE: String = "at full condition"
+## Performance numbers are quoted for *this* part in its current state — wear
+## included — but with no hull bonuses applied. Where a gun ends up matters
+## (HardpointGun.apply_core_distance_bonus pays out to half again for a weapon
+## mounted far from the Core), and that is a property of the hull design rather
+## than of the part being inspected.
+const PERFORMANCE_NOTE: String = "this part, at its current wear"
+## Shown instead when the part is unworn, so the numbers are not silently read as
+## already-degraded ones.
+const PERFORMANCE_NOTE_INTACT: String = "at full condition"
 
 ## Fixed, because the card floats over the build field instead of being sized by
 ## a column — long part names wrap at this width rather than stretching the card
@@ -106,9 +109,41 @@ func show_instance(instance: ModuleInstance, module_type_id: String = "") -> voi
 	_clear_stats()
 	_add_stat("Condition", "%d%%" % roundi(instance.condition_fraction * 100.0),
 		_condition_color(instance.condition_fraction))
+	_add_integrity(instance)
+	_add_efficiency(instance)
 	_add_stat("Kills", str(instance.kill_count))
 	_add_weapon_stats(instance)
+	_add_output_stats(instance)
 	_add_origin(instance)
+
+
+## How much life the part has permanently left — the ceiling repair can restore
+## it to (see ModuleInstance.integrity). Shown right under Condition, because the
+## pair is the whole story: what is wrong with it now, and how much of that will
+## never come back.
+##
+## Hidden on a factory-fresh part, like Efficiency, so the rows only appear once
+## they mean something.
+func _add_integrity(instance: ModuleInstance) -> void:
+	if instance.integrity >= 1.0:
+		return
+	_add_stat("Integrity", "%d%%" % roundi(instance.integrity * 100.0),
+		_condition_color(instance.integrity))
+
+
+## Condition says how beaten up a part is; efficiency says what that costs. They
+## are not the same number (see ModuleInstance.efficiency — light wear costs
+## nothing at all), and showing only the first left the player to guess the
+## conversion.
+##
+## Hidden when a part is working perfectly: a row reading "100%" on every intact
+## part is noise, and its absence is what makes it worth reading when it appears.
+func _add_efficiency(instance: ModuleInstance) -> void:
+	var efficiency: float = instance.efficiency()
+	if efficiency >= 1.0:
+		return
+	_add_stat("Efficiency", "%d%%" % roundi(efficiency * 100.0),
+		_condition_color(instance.condition_fraction))
 
 
 func _show_type_only(module_type_id: String) -> void:
@@ -143,9 +178,13 @@ func _add_weapon_stats(instance: ModuleInstance) -> void:
 
 	if fire_rate <= 0.0:
 		return
-	_add_stat("DPS", "%.1f" % (damage * fire_rate))
-	_add_stat("Fire rate", "%.2f/s" % fire_rate)
-	_add_note(PERFORMANCE_NOTE)
+	# Wear costs damage and rate of fire together (see HardpointGun._shot_cooldown),
+	# so it lands on DPS twice — which is the point. A gun at 60% efficiency is not
+	# a 60% gun.
+	var efficiency: float = instance.efficiency()
+	_add_stat("DPS", "%.1f" % (damage * efficiency * fire_rate * efficiency))
+	_add_stat("Fire rate", "%.2f/s" % (fire_rate * efficiency))
+	_add_note(PERFORMANCE_NOTE if efficiency < 1.0 else PERFORMANCE_NOTE_INTACT)
 
 
 ## An unparented, never-readied hardpoint node used purely to read its stats.
@@ -167,6 +206,38 @@ func _probe_hardpoint(module_type: ModuleType, manufacturer_id: String) -> Node:
 		# reimplemented so the card cannot disagree with the gun.
 		HardpointBank.apply_modifiers(probe, manufacturer.stat_modifiers)
 	return probe
+
+
+## What a non-weapon part contributes, after wear. Wear means something different
+## for each of these — a thruster pushes softer, a reactor makes less power, a
+## battery holds less charge — but it is the same one efficiency figure behind
+## all three, so they are quoted the same way.
+##
+## Base rates only: the core-distance multiplier that reactors and batteries also
+## carry (see ShipLayout._core_distance_energy_multiplier) depends on where the
+## part is bolted, which is a fact about the hull rather than about the part.
+func _add_output_stats(instance: ModuleInstance) -> void:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(instance.module_type_id)
+	if module_type == null:
+		return
+
+	var efficiency: float = instance.efficiency()
+	var quoted: bool = false
+	quoted = _add_output("Thrust", module_type.thrust_contribution, efficiency, "%.0f") or quoted
+	quoted = _add_output("Output", module_type.energy_generation, efficiency, "%.1f/s") or quoted
+	quoted = _add_output("Capacity", module_type.energy_capacity_contribution, efficiency, "%.0f") or quoted
+	if quoted:
+		_add_note(PERFORMANCE_NOTE if efficiency < 1.0 else PERFORMANCE_NOTE_INTACT)
+
+
+## Returns whether the row was worth showing at all, so a part that contributes
+## nothing here (a plain hull plate) does not get a trailing performance note
+## attached to no numbers.
+func _add_output(label: String, base: float, efficiency: float, format: String) -> bool:
+	if base <= 0.0:
+		return false
+	_add_stat(label, format % (base * efficiency))
+	return true
 
 
 func _add_origin(instance: ModuleInstance) -> void:

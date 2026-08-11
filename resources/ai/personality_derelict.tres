@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ShipPersonality" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/ai/ship_personality.gd" id="1_ship_personality"]
+
+[resource]
+script = ExtResource("1_ship_personality")
+display_name = "Derelict"
+is_player_controlled = false
+detection_range = 0.0
+fire_range = 0.0
+keep_distance = 0.0
+aim_tolerance_deg = 180.0
+turn_response = 0.0
+suspicion_delay = 999.0
+retreats_when_too_close = false
+use_primary_weapon = false
+use_secondary_weapon = false
+health_multiplier = 1.0
+faction_id = "corporate"

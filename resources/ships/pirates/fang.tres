@@ -1,0 +1,62 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_hsu1n"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_6beys"]
+
+[sub_resource type="Resource" id="Resource_dnlha"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_49"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_sqik1"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_50"
+module_type_id = "strut"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_b4oc5"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_51"
+module_type_id = "strut"
+hex_coord = Vector2i(-1, 1)
+
+[sub_resource type="Resource" id="Resource_110ao"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_52"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(2, 0)
+
+[sub_resource type="Resource" id="Resource_a0qd1"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_53"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(1, -1)
+
+[sub_resource type="Resource" id="Resource_wm0tv"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_54"
+module_type_id = "hull"
+hex_coord = Vector2i(0, 1)
+
+[sub_resource type="Resource" id="Resource_nf8xe"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_55"
+module_type_id = "engine"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_osf02"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_56"
+module_type_id = "engine"
+hex_coord = Vector2i(-2, 2)
+
+[sub_resource type="Resource" id="Resource_xsg2c"]
+script = ExtResource("1_hsu1n")
+placement_id = "p_31324_57"
+module_type_id = "hull"
+hex_coord = Vector2i(-1, 2)
+
+[resource]
+script = ExtResource("2_6beys")
+placements = Array[ExtResource("1_hsu1n")]([SubResource("Resource_dnlha"), SubResource("Resource_sqik1"), SubResource("Resource_b4oc5"), SubResource("Resource_110ao"), SubResource("Resource_a0qd1"), SubResource("Resource_wm0tv"), SubResource("Resource_nf8xe"), SubResource("Resource_osf02"), SubResource("Resource_xsg2c")])
+core_placement_id = "p_31324_49"

@@ -81,7 +81,7 @@ func _resolve_beam() -> void:
 	# ShipLayout resource to a plain Resource.
 	var was_alive: bool = target.has_method("get_current_health") \
 		and target.get_current_health() > 0.0
-	target.take_beam_damage(projectile_damage, result.position, _pending_aim_direction, travel_distance)
+	target.take_beam_damage(_effective_damage(), result.position, _pending_aim_direction, travel_distance)
 	if was_alive and target.get_current_health() <= 0.0 and _shooter != null:
 		_shooter.record_hardpoint_kill(source_placement_id)
 

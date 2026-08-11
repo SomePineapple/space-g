@@ -1,0 +1,68 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_sqf7w"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_ig4ig"]
+
+[sub_resource type="Resource" id="Resource_56h8x"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_69"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_pieub"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_70"
+module_type_id = "hull_spar"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_yc4to"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_71"
+module_type_id = "hull_spar"
+hex_coord = Vector2i(4, 0)
+
+[sub_resource type="Resource" id="Resource_xvssj"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_72"
+module_type_id = "weapon_hardpoint_t2"
+hex_coord = Vector2i(7, 0)
+
+[sub_resource type="Resource" id="Resource_n1kfa"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_73"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(3, -1)
+
+[sub_resource type="Resource" id="Resource_q3y0a"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_74"
+module_type_id = "strut"
+hex_coord = Vector2i(0, 1)
+
+[sub_resource type="Resource" id="Resource_1jj4p"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_75"
+module_type_id = "missile_hardpoint"
+hex_coord = Vector2i(1, 1)
+
+[sub_resource type="Resource" id="Resource_ohl6u"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_76"
+module_type_id = "reactor_mk1"
+hex_coord = Vector2i(-1, 1)
+
+[sub_resource type="Resource" id="Resource_hpwek"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_77"
+module_type_id = "engine"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_6ju3t"]
+script = ExtResource("1_sqf7w")
+placement_id = "p_31324_78"
+module_type_id = "thruster_block"
+hex_coord = Vector2i(-3, 1)
+
+[resource]
+script = ExtResource("2_ig4ig")
+placements = Array[ExtResource("1_sqf7w")]([SubResource("Resource_56h8x"), SubResource("Resource_pieub"), SubResource("Resource_yc4to"), SubResource("Resource_xvssj"), SubResource("Resource_n1kfa"), SubResource("Resource_q3y0a"), SubResource("Resource_1jj4p"), SubResource("Resource_ohl6u"), SubResource("Resource_hpwek"), SubResource("Resource_6ju3t")])
+core_placement_id = "p_31324_69"

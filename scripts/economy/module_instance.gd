@@ -62,6 +62,37 @@ const NICKNAMES: Array[String] = [
 ## opening the ship builder erased the ship's memory of every fight.
 @export var condition_fraction: float = 1.0
 
+## The ceiling `condition_fraction` can be repaired back to — how much of its
+## original life the part has permanently left. Every hit takes a little of this
+## with it, and nothing gives it back: a part that has been through five fights
+## is worn out even when fully patched up, and eventually has to be replaced with
+## one cut off somebody else.
+##
+## This is what stops passive repair making damage free. Condition is the wound;
+## integrity is the scar.
+@export var integrity: float = 1.0
+
+## How far integrity is allowed to fall. Deliberately above
+## HullPaint.CUTTABLE_CONDITION (0.30): a part worn past that point would sit
+## permanently under the cut-ready threshold and wear the white slicer marker
+## forever on its owner's own hull, which reads as a bug rather than as age.
+const MINIMUM_INTEGRITY: float = 0.35
+
+## Above this much condition a part performs exactly as designed (see
+## efficiency()). The deadband is deliberate: chip damage is constant in any
+## fight, and without it every graze would shave a little off the ship's output,
+## leaving the player managing a slow leak rather than reacting to real damage.
+const FULL_PERFORMANCE_CONDITION: float = 0.8
+
+## What a part on the very brink still manages. Not zero, for two reasons: a part
+## that does nothing is indistinguishable from a destroyed one, and the case this
+## whole mechanic exists for — shooting a gun off a wreck and bolting it on —
+## would otherwise hand the player something useless as its reward. Note that
+## HullPaint.CUTTABLE_CONDITION is 0.3, so *every* freshly cut part lands in the
+## degraded band by construction: you cannot cut a part free without first
+## hurting it, which is the trade.
+const MINIMUM_EFFICIENCY: float = 0.4
+
 ## Which faction's hull this part was cut off (see ShipPersonality.faction_id).
 ## Empty for a part that was fabricated rather than salvaged.
 @export var origin_faction_id: String = ""
@@ -70,11 +101,20 @@ const NICKNAMES: Array[String] = [
 ## changes hands later keeps naming where it originally came from. Empty means
 ## fabricated, never salvaged.
 @export var origin_description: String = ""
-## How many ships this specific part has helped destroy. Nothing increments this
-## yet: kills are not attributed to a firing module anywhere in the project (a
-## Projectile knows its shooter Ship, not the hardpoint that launched it), and
-## building that attribution is its own change.
+## How many ships this specific part has killed. Credited to the gun that fired
+## the fatal shot — see Ship.record_hardpoint_kill.
 @export var kill_count: int = 0
+
+## Nothing the player does can hurt this part: no weapon fire, no splash, and no
+## Slicer cut. Set on scenery that exists to be *taken* rather than fought over —
+## the opening's derelict arm, which would otherwise be destroyable by a stray
+## shot before the player ever learned what it was for.
+##
+## Lives on the instance rather than on ModuleType because it is a property of
+## this particular object in this particular scene, not of Hull Spars in general.
+## Cleared the moment the part is cut free (see WreckageSpawner) — it protects
+## scenery waiting to be taken, and a salvaged part is neither.
+@export var damage_immune: bool = false
 
 
 ## The one place a part comes into existence. Every field that identifies it is
@@ -105,6 +145,20 @@ static func _serial_prefix(type_id: String) -> String:
 	if words.size() >= 2:
 		return (words[0].substr(0, 1) + words[1].substr(0, 1)).to_upper()
 	return type_id.substr(0, 2).to_upper()
+
+
+## How well a part still does its job, 0..1, derived from its wear. The one
+## place the curve lives — weapons, thrusters, reactors and batteries all read
+## this and then apply it to whatever "output" means for them.
+##
+## Deliberately derived rather than stored: condition is already the
+## authoritative record of a part's damage, and a second field would be one more
+## thing to keep in step with it across salvage, refit and repair.
+func efficiency() -> float:
+	if condition_fraction >= FULL_PERFORMANCE_CONDITION:
+		return 1.0
+	return lerpf(MINIMUM_EFFICIENCY, 1.0,
+		clampf(condition_fraction / FULL_PERFORMANCE_CONDITION, 0.0, 1.0))
 
 
 ## What the builder calls this part: the type it is, plus which one it is.

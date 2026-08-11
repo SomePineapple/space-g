@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="SpaceG"
-run/main_scene="res://scenes/world/map_tester.tscn"
+run/main_scene="res://scenes/world/intro_region.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -23,6 +23,7 @@ PlayerContext="*res://scripts/player_context.gd"
 GameRng="*res://scripts/game_rng.gd"
 MarketService="*res://scripts/economy/market_service.gd"
 AmbientMusic="*res://scripts/world/ambient_music.gd"
+
 
 [display]
 

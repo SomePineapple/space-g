@@ -3,38 +3,43 @@
 [ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_bsq6h"]
 [ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_p013l"]
 
-[sub_resource type="Resource" id="Resource_0f31i"]
+[sub_resource type="Resource" id="Resource_bsq6h"]
 script = ExtResource("1_bsq6h")
 placement_id = "p_17398_5"
 module_type_id = "command_core"
 
-[sub_resource type="Resource" id="Resource_ern7h"]
+[sub_resource type="Resource" id="Resource_p013l"]
 script = ExtResource("1_bsq6h")
 placement_id = "p_17398_6"
 module_type_id = "gun_mk1"
-hex_coord = Vector2i(0, -1)
-rotation_steps = 4
+hex_coord = Vector2i(2, -2)
 manufacturer_id = "black_market_foundry"
 
-[sub_resource type="Resource" id="Resource_64yfl"]
+[sub_resource type="Resource" id="Resource_0f31i"]
 script = ExtResource("1_bsq6h")
 placement_id = "p_17398_7"
 module_type_id = "thruster_block"
 hex_coord = Vector2i(-1, 1)
 
-[sub_resource type="Resource" id="Resource_rukun"]
+[sub_resource type="Resource" id="Resource_ern7h"]
 script = ExtResource("1_bsq6h")
 placement_id = "p_17398_8"
 module_type_id = "reactor_pair"
 hex_coord = Vector2i(1, 0)
 
-[sub_resource type="Resource" id="Resource_mvfrl"]
+[sub_resource type="Resource" id="Resource_64yfl"]
 script = ExtResource("1_bsq6h")
 placement_id = "p_17398_9"
 module_type_id = "hull_spar"
 hex_coord = Vector2i(-3, 0)
 
+[sub_resource type="Resource" id="Resource_rukun"]
+script = ExtResource("1_bsq6h")
+placement_id = "p_35523_9"
+module_type_id = "hull"
+hex_coord = Vector2i(1, -1)
+
 [resource]
 script = ExtResource("2_p013l")
-placements = Array[ExtResource("1_bsq6h")]([SubResource("Resource_0f31i"), SubResource("Resource_ern7h"), SubResource("Resource_64yfl"), SubResource("Resource_rukun"), SubResource("Resource_mvfrl")])
+placements = Array[ExtResource("1_bsq6h")]([SubResource("Resource_bsq6h"), SubResource("Resource_p013l"), SubResource("Resource_0f31i"), SubResource("Resource_ern7h"), SubResource("Resource_64yfl"), SubResource("Resource_rukun")])
 core_placement_id = "p_17398_5"

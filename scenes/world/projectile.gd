@@ -4,7 +4,10 @@ extends Area2D
 @export var speed: float = 700.0
 @export var lifetime: float = 2.0
 @export var explosion_scene: PackedScene = preload("res://scenes/world/explosion.tscn")
-@export var explosion_scale: float = 0.35
+## Impact burst size. Bigger-tier guns multiply this by their projectile_scale
+## (see HardpointGun._execute_fire), so this is the tier-1 bolt's hit and every
+## other laser hit is relative to it.
+@export var explosion_scale: float = 0.21
 @export var damage: float = 10.0
 
 ## The bolt's core colour. Deliberately allowed past 1.0 — both polygons draw

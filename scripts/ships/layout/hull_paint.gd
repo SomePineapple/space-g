@@ -64,7 +64,9 @@ const CUT_READY_DASH_SPANS: Array[float] = [0.06, 0.30, 0.40, 0.60, 0.70, 0.94]
 
 
 static func is_cuttable(instance: ModuleInstance) -> bool:
-	return instance != null and instance.condition_fraction < CUTTABLE_CONDITION
+	if instance == null or instance.damage_immune:
+		return false
+	return instance.condition_fraction < CUTTABLE_CONDITION
 
 
 ## Appends one edge of a cut-ready part's outline as dashes, ready for

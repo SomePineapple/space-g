@@ -67,6 +67,9 @@ signal destroyed
 @export var explosion_scene: PackedScene = preload("res://scenes/world/explosion.tscn")
 @export var destruction_explosion_scale: float = 2.2
 @export var drops_salvage: bool = true
+## Off for a derelict, which stays exactly as damaged as it spawned. See
+## HullDamageModel.regenerates for why this matters to salvage specifically.
+@export var regenerates_hull: bool = true
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
 ## Combat kills drop a handful of raw-material salvage pieces rather than
 ## just one (Phase 4.2) — each drop rolls its own rarity/material separately.
@@ -191,9 +194,11 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	_hull_damage.configure(self, _hardpoints, _wreckage)
+	_hull_damage.regenerates = regenerates_hull
 	# The damage model never touches this ship's Health pool directly — it
 	# reports what happened and the ship decides what that costs.
 	_hull_damage.modules_changed.connect(_recompute_thrust_stats)
+	_hull_damage.modules_changed.connect(_recompute_energy_stats)
 	_hull_damage.modules_changed.connect(_refresh_systems)
 	_hull_damage.hull_healed.connect(_health.heal)
 	_hull_damage.hull_lost.connect(_on_hull_lost)
@@ -304,6 +309,19 @@ func _refresh_layout_stats() -> void:
 ##
 ## Deliberately does not re-derive `mass`: a hull losing modules getting lighter
 ## — and therefore more agile — is a gameplay change, not a bug fix.
+## Re-derives the energy pool from whatever the reactors and batteries are still
+## managing. Separate from _refresh_layout_stats because this also has to run
+## when nothing about the *layout* changed and only the parts' condition did —
+## a reactor at half efficiency is a smaller reactor.
+##
+## ShipEnergy.configure keeps the pool's fill fraction across the change, so
+## being shot does not hand the ship free energy or empty it.
+func _recompute_energy_stats() -> void:
+	if ship_layout == null:
+		return
+	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
+
+
 func _recompute_thrust_stats() -> void:
 	var live_thrust: float = 0.0
 	for placement in ship_layout.placements:
@@ -379,6 +397,18 @@ func get_module_condition(placement_id: String) -> float:
 
 func is_module_destroyed(placement_id: String) -> bool:
 	return _hull_damage.is_destroyed(placement_id)
+
+
+## How much of its rated output the part at this placement still delivers, 0..1
+## (see ModuleInstance.efficiency). A destroyed or severed module returns 0 —
+## everything that reads this is already gated on is_module_destroyed elsewhere,
+## but a wrecked module reporting partial output would be a quiet way for a dead
+## gun to keep shooting.
+func get_module_efficiency(placement_id: String) -> float:
+	if ship_layout == null or is_module_destroyed(placement_id):
+		return 0.0
+	var placement: ModulePlacement = ship_layout.get_placement_by_id(placement_id)
+	return ship_layout.efficiency_of(placement) if placement != null else 1.0
 
 
 ## Health readouts as a small public API, so the HUD, trade panel and GameState
@@ -457,14 +487,6 @@ func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector
 ## HullDamageModel.damage_cut, which also documents the returned dictionary.
 func take_slicer_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vector2) -> Dictionary:
 	return _hull_damage.damage_cut(band_fraction, impact_point, aim_direction)
-
-
-## Whether the ship is actually under boost — held throttle forward *and* the
-## boost key down. Public because the camera reads it to rumble while boosting
-## (see camera_shake.gd) and EngineAudio reads it through Ship to pitch its note
-## up; both would otherwise have to duplicate the two-part condition.
-func is_boosting() -> bool:
-	return _boost_active and _thrust_input > 0.0
 
 
 ## Credits one kill to the specific part that fired the fatal shot, recorded on
@@ -918,29 +940,40 @@ func _spawn_thrusters() -> void:
 	_engine_audio.configure(ship_layout, personality.faction_id)
 
 	for placement in ship_layout.get_thruster_placements():
-		var thruster: Node2D = engine_thruster_scene.instantiate()
-		add_child(thruster)
-		# Offset from the hex's center toward its trailing vertex, so the
-		# flame visually bursts from the back tip of the hex instead of its
-		# middle. This is in hex-grid-local space (same space as hex_center,
-		# pre-_hull_renderer.rotation) — _hull_renderer.rotation is a fixed
-		# +90° twist between the hex grid's own authored axes and the ship's
-		# true movement-forward (+X) axis, so hex-grid-local "backward" is
-		# +Y (a vertex per HexUtils.hex_corners), not -X. Only the *position*
-		# needs that rotation applied (matching hex_center below) — the
-		# thruster's own rotation stays default (0) so the particle's local
-		# -X direction keeps pointing at the ship's real physics-backward,
-		# not doubly twisted by the hex grid's separate authoring offset.
-		var hex_center: Vector2 = HexUtils.axial_to_pixel(placement.hex_coord, _hull_renderer.cell_size)
-		var back_vertex_offset: Vector2 = Vector2(0.0, _hull_renderer.cell_size)
-		thruster.position = (hex_center + back_vertex_offset).rotated(_hull_renderer.rotation)
-		_thrusters.append(thruster)
-		_thruster_placement_ids.append(placement.placement_id)
-		_thruster_particles_boost.append(thruster.get_node("Particles"))
-		_thruster_particles_boost_soft.append(thruster.get_node("ParticlesSoft"))
-		_thruster_particles_normal.append(thruster.get_node("ParticlesNormal"))
-		_thruster_particles_turn_left.append(thruster.get_node("ParticlesTurnLeft"))
-		_thruster_particles_turn_right.append(thruster.get_node("ParticlesTurnRight"))
+		# One flame per *cell*, not per placement. A multi-hex thruster (the
+		# Thruster Block is two hexes) used to light only its anchor cell, so half
+		# of it sat visibly dead while the ship accelerated on it — the module
+		# contributes thrust as a whole, and it should burn as a whole.
+		#
+		# The parallel arrays below now hold one entry per cell rather than per
+		# module, with a multi-hex module's cells repeating its placement_id. That
+		# is what _update_engine_particles wants anyway: it asks per flame whether
+		# that flame's module is still alive, so every cell of a destroyed block
+		# goes dark together.
+		for cell in ship_layout.get_occupied_cells(placement):
+			var thruster: Node2D = engine_thruster_scene.instantiate()
+			add_child(thruster)
+			# Offset from the hex's center toward its trailing vertex, so the
+			# flame visually bursts from the back tip of the hex instead of its
+			# middle. This is in hex-grid-local space (same space as hex_center,
+			# pre-_hull_renderer.rotation) — _hull_renderer.rotation is a fixed
+			# +90° twist between the hex grid's own authored axes and the ship's
+			# true movement-forward (+X) axis, so hex-grid-local "backward" is
+			# +Y (a vertex per HexUtils.hex_corners), not -X. Only the *position*
+			# needs that rotation applied (matching hex_center below) — the
+			# thruster's own rotation stays default (0) so the particle's local
+			# -X direction keeps pointing at the ship's real physics-backward,
+			# not doubly twisted by the hex grid's separate authoring offset.
+			var hex_center: Vector2 = HexUtils.axial_to_pixel(cell, _hull_renderer.cell_size)
+			var back_vertex_offset: Vector2 = Vector2(0.0, _hull_renderer.cell_size)
+			thruster.position = (hex_center + back_vertex_offset).rotated(_hull_renderer.rotation)
+			_thrusters.append(thruster)
+			_thruster_placement_ids.append(placement.placement_id)
+			_thruster_particles_boost.append(thruster.get_node("Particles"))
+			_thruster_particles_boost_soft.append(thruster.get_node("ParticlesSoft"))
+			_thruster_particles_normal.append(thruster.get_node("ParticlesNormal"))
+			_thruster_particles_turn_left.append(thruster.get_node("ParticlesTurnLeft"))
+			_thruster_particles_turn_right.append(thruster.get_node("ParticlesTurnRight"))
 
 
 func _update_engine_particles() -> void:

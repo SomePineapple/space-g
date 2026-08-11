@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bmbsfkef1fkii"
+path="res://.godot/imported/Weapon_02_space.wav-64b3f71fa095a138152c144fb0808b52.sample"
+
+[deps]
+
+source_file="res://audio/voice lines/Tutorial/Weapon_02_space.wav"
+dest_files=["res://.godot/imported/Weapon_02_space.wav-64b3f71fa095a138152c144fb0808b52.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

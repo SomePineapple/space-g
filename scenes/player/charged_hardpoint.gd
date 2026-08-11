@@ -23,7 +23,7 @@ func fire() -> Projectile:
 	if not _shooter.has_energy(energy_cost):
 		return null
 
-	_cooldown_remaining = 1.0 / fire_rate
+	_cooldown_remaining = _shot_cooldown()
 	_charging = true
 	_charge_remaining = charge_time
 	_on_charge_started()

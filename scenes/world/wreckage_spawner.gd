@@ -54,6 +54,11 @@ func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType,
 	if instance != null and (clean_cut or _roll_capturable(module_type, condition_fraction)):
 		var part: CapturedTechPart = _spawn_piece(captured_tech_part_scene, placement, module_type, clean_cut)
 		instance.stamp_origin(_faction_id, _origin_description())
+		# Immunity protects a part while it is scenery waiting to be taken (see
+		# ModuleInstance.damage_immune). Coming free is exactly the moment that
+		# job ends — carrying it onto the player's hull would hand them an
+		# indestructible module.
+		instance.damage_immune = false
 		part.set_instance(instance)
 	else:
 		_spawn_piece(ship_debris_scene, placement, module_type, clean_cut)

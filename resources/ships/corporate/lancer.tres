@@ -1,0 +1,74 @@
+[gd_resource type="Resource" script_class="ShipLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/modules/module_placement.gd" id="1_hlmof"]
+[ext_resource type="Script" path="res://scripts/ships/layout/ship_layout.gd" id="2_vsk8c"]
+
+[sub_resource type="Resource" id="Resource_hlmof"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_1"
+module_type_id = "command_core"
+
+[sub_resource type="Resource" id="Resource_vsk8c"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_2"
+module_type_id = "hull"
+hex_coord = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_cue6w"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_3"
+module_type_id = "hull"
+hex_coord = Vector2i(-1, 0)
+
+[sub_resource type="Resource" id="Resource_kv4lt"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_4"
+module_type_id = "hull_spar"
+hex_coord = Vector2i(-1, 1)
+
+[sub_resource type="Resource" id="Resource_4ssfv"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_5"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(3, -1)
+
+[sub_resource type="Resource" id="Resource_gsu86"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_6"
+module_type_id = "weapon_hardpoint"
+hex_coord = Vector2i(1, -1)
+
+[sub_resource type="Resource" id="Resource_jmoc0"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_7"
+module_type_id = "radar_hardpoint"
+hex_coord = Vector2i(0, -1)
+
+[sub_resource type="Resource" id="Resource_vvbcd"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_8"
+module_type_id = "reactor_mk1"
+hex_coord = Vector2i(2, 1)
+
+[sub_resource type="Resource" id="Resource_aosaa"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_9"
+module_type_id = "thruster_block"
+hex_coord = Vector2i(-3, 0)
+
+[sub_resource type="Resource" id="Resource_dsn6m"]
+script = ExtResource("1_hlmof")
+placement_id = "p_31324_10"
+module_type_id = "engine"
+hex_coord = Vector2i(-2, 1)
+
+[sub_resource type="Resource" id="Resource_tojpu"]
+script = ExtResource("1_hlmof")
+placement_id = "p_35523_12"
+module_type_id = "hull"
+hex_coord = Vector2i(2, 0)
+
+[resource]
+script = ExtResource("2_vsk8c")
+placements = Array[ExtResource("1_hlmof")]([SubResource("Resource_hlmof"), SubResource("Resource_vsk8c"), SubResource("Resource_cue6w"), SubResource("Resource_kv4lt"), SubResource("Resource_4ssfv"), SubResource("Resource_gsu86"), SubResource("Resource_jmoc0"), SubResource("Resource_vvbcd"), SubResource("Resource_aosaa"), SubResource("Resource_dsn6m"), SubResource("Resource_tojpu")])
+core_placement_id = "p_31324_1"

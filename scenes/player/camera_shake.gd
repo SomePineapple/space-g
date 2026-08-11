@@ -4,14 +4,6 @@ extends Camera2D
 @export var destroyed_shake_strength: float = 20.0
 @export var shake_decay_rate: float = 40.0
 
-## Continuous rumble while boosting. Deliberately small — this runs for as long
-## as the player holds the key, and a shake that would read as a punch on a
-## single hit is unbearable sustained. It is a floor under the impulse shakes
-## rather than an addition to them, so taking a hit mid-boost still reads as a
-## hit instead of stacking into a screen-wide blur.
-@export var boost_shake_strength: float = 1.6
-@export var boost_shake_response: float = 8.0
-
 ## Ship layout extent (see Ship.get_layout_extent()) at which zoom is
 ## max_zoom — tuned to the starter ship's size.
 @export var reference_ship_extent: float = 66.0
@@ -28,7 +20,6 @@ extends Camera2D
 @export var scroll_max_zoom: float = 0.6
 
 var _shake_strength: float = 0.0
-var _sustained_shake: float = 0.0
 var _base_zoom: float = 1.0
 var _manual_zoom_offset: float = 0.0
 var _target_zoom: float = 1.0
@@ -88,14 +79,7 @@ func _update_target_zoom() -> void:
 func _process(delta: float) -> void:
 	zoom = zoom.move_toward(Vector2(_target_zoom, _target_zoom), zoom_response * delta)
 
-	# Eased in and out rather than switched, so the rumble arrives with the
-	# engines rather than a frame before them.
-	_sustained_shake = move_toward(_sustained_shake,
-		boost_shake_strength if _ship.is_boosting() else 0.0,
-		boost_shake_strength * boost_shake_response * delta)
-
-	var strength: float = maxf(_shake_strength, _sustained_shake)
-	if strength <= 0.0:
+	if _shake_strength <= 0.0:
 		offset = Vector2.ZERO
 		return
 
@@ -104,5 +88,5 @@ func _process(delta: float) -> void:
 	# drawing it from a shared stream would advance that stream once per rendered
 	# frame — a different number of times on every machine — and desync every
 	# simulation roll downstream of it. See GameRng's header.
-	offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * strength
+	offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake_strength
 	_shake_strength = maxf(_shake_strength - shake_decay_rate * delta, 0.0)
