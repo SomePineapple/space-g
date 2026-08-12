@@ -21,19 +21,20 @@ extends Node2D
 const GLOW_GAIN: float = 3.4
 ## How far it falls at the bottom, as a fraction of GLOW_GAIN.
 ##
-## Has to be this deep to be visible at all. A lamp's lit pixels are near white
-## already, so any level much above 1.0 clamps to white on screen no matter how
-## much higher it goes — at a depth of 0.3 the whole cycle sat between 2.4 and
-## 3.4, the core stayed saturated end to end, and the only thing that moved was
-## the width of the bloom halo. Measured: the saturated core covered 447px at the
-## trough against 646px at the peak, which is not something you notice. At 0.55
-## the trough is 1.53 and the core runs 210px against 629px — a threefold swing,
-## and plainly a breath.
+## The trough has to cross BELOW the glow threshold of 1.0, which is the
+## opposite of what it looks like it should do. A lamp's lit pixels are already
+## near white, so at any level above about 1.05 they display as pure white no
+## matter how much higher the level goes — the whole cycle sat between 1.53 and
+## 3.4 at first, every lamp core stayed white end to end, and the only thing that
+## actually moved was the width of the bloom halo. That is invisible on the small
+## lamps, which have barely any halo: measured against what the eye sees, the
+## Battery swung 0.8% and the Thruster 1.2% while the Command Core managed 24%.
 ##
-## Deliberately not deeper. Past about 0.7 the trough crosses the glow threshold
-## of 1.0, the lamp stops blooming entirely for part of every cycle, and it reads
-## as a fault rather than as something idling.
-const PULSE_DEPTH: float = 0.55
+## At 0.75 the trough is 0.85 and the lamps themselves darken rather than just
+## their halos — the amber strips drop to a dull orange, the teal indicators
+## fade, the reactor rings shed their glow. They still read as lit, because the
+## art is coloured rather than white, so this does not look like a failure.
+const PULSE_DEPTH: float = 0.75
 ## Seconds per breath. Slow enough to read as idling machinery rather than as a
 ## blinking indicator.
 const PULSE_PERIOD: float = 5.0
