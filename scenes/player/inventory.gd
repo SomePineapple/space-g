@@ -17,6 +17,10 @@ signal components_changed(totals: Dictionary)
 ## composite "module_type_id" / "module_type_id::manufacturer_id" string the
 ## ship builder's palette already uses (see ShipBuilderPanel._palette_key).
 signal owned_modules_changed(totals: Dictionary)
+## Bays or their contents changed (see ShipHold), so the builder's INVENTORY tab
+## can redraw without polling. Fires alongside owned_modules_changed for anything
+## that moves a part in or out, and on its own when the bays themselves change.
+signal hold_changed
 
 var _credits: int = 0
 var _material_totals: Dictionary = {}
@@ -47,6 +51,11 @@ var _researched_ids: Dictionary = {}
 ## manufacturer once a station/trading system exists is a deliberate future
 ## hook, not implemented yet.
 var _known_manufacturer_ids: Dictionary = {}
+## Where each held part physically sits (see ShipHold). The pool above is what
+## the player owns; this is where it is stowed, and a part cannot be in one
+## without being in the other — every path that adds to the pool goes through
+## a stow, and every path that takes from it releases the cells.
+var _hold: ShipHold = ShipHold.new()
 
 
 func get_credits() -> int:
@@ -287,9 +296,27 @@ func add_owned_module(key: String, amount: int = 1) -> void:
 		_owned_module_pool[key] = []
 	var parts: PackedStringArray = key.split("::")
 	for i in amount:
-		_owned_module_pool[key].append(
-			ModuleInstance.create(parts[0], parts[1] if parts.size() > 1 else ""))
+		var made: ModuleInstance = ModuleInstance.create(
+			parts[0], parts[1] if parts.size() > 1 else "")
+		_owned_module_pool[key].append(made)
+		_ensure_stowed(made)
 	owned_modules_changed.emit(get_all_owned_modules())
+	hold_changed.emit()
+
+
+## Gives a part a place in the hold if it does not have one. Deliberately does
+## not fail: a part built, unbolted or restored with the bays full stays owned
+## and simply has no cell yet (see get_unstowed_instances) — refusing a build the
+## player has already paid for, or deleting a part on a region change, would both
+## be worse than a part waiting for room.
+##
+## The one path that *does* refuse is a part arriving from a wreck
+## (add_captured_instance): that one has somewhere else to be — still out there,
+## on the end of the grapple.
+func _ensure_stowed(instance: ModuleInstance) -> void:
+	if instance == null or _hold.is_stowed(instance.instance_id):
+		return
+	_hold.auto_stow(instance.instance_id, part_size(instance))
 
 
 ## Returns an already-existing instance to the pool, its condition and origin
@@ -299,7 +326,9 @@ func return_owned_module(key: String, instance: ModuleInstance) -> void:
 	if not _owned_module_pool.has(key):
 		_owned_module_pool[key] = []
 	_owned_module_pool[key].append(instance)
+	_ensure_stowed(instance)
 	owned_modules_changed.emit(get_all_owned_modules())
+	hold_changed.emit()
 
 
 ## A part cut off a wreck and reeled in (see Ship.capture_tech_part) enters the
@@ -309,10 +338,79 @@ func return_owned_module(key: String, instance: ModuleInstance) -> void:
 ##
 ## It deliberately does not matter here whether the part's type is researched.
 ## Taking a Railgun intact off a corvette is the whole way to own a Railgun.
-func add_captured_instance(instance: ModuleInstance) -> void:
+## Auto-stows, so it is the path for a part that arrives without the player
+## choosing a spot for it. Returns false and keeps the part out of the pool
+## entirely if the hold has no room — a part that cannot be stowed is not owned,
+## it is still out there (see Ship.take_in_tow).
+func add_captured_instance(instance: ModuleInstance) -> bool:
 	if instance == null:
-		return
+		return false
+	if not _hold.auto_stow(instance.instance_id, part_size(instance)):
+		return false
 	return_owned_module(owned_module_key(instance.module_type_id, instance.manufacturer_id), instance)
+	hold_changed.emit()
+	return true
+
+
+# --- The hold (see ShipHold) -------------------------------------------------
+
+func get_hold() -> ShipHold:
+	return _hold
+
+
+## How many hold cells a part takes: the same footprint it occupies on a hull.
+## A part is the shape it is, and a two-hex gun should be an awkward thing to
+## find room for.
+static func part_size(instance: ModuleInstance) -> int:
+	if instance == null:
+		return 1
+	var module_type: ModuleType = ModuleCatalog.get_by_id(instance.module_type_id)
+	if module_type == null:
+		return 1
+	return maxi(1, module_type.footprint_cells.size())
+
+
+## Re-derives the bays from the ship's current layout. Any part whose bay is gone
+## goes with it — the parts are dropped from the pool as well, because a hold
+## cell is where a part *is*, and a container blown off the hull takes its
+## contents. The ship builder refuses a removal that would do this (see
+## ShipBuilderPanel), so in practice this is combat damage.
+func rebuild_hold(layout: Resource, base_cells: int = 0) -> void:
+	var displaced: Array[String] = _hold.rebuild(layout, base_cells)
+	for instance_id in displaced:
+		take_owned_instance(instance_id)
+	# Anything owned but homeless — built while the bays were full, or arriving
+	# from a region change — takes a cell as soon as one exists.
+	for instance in get_owned_instances():
+		_ensure_stowed(instance)
+	hold_changed.emit()
+
+
+## Parts the player owns that have no cell (see _ensure_stowed). The builder
+## lists them separately rather than hiding them, so a part is never invisible
+## just because the bays were full when it arrived.
+func get_unstowed_instances() -> Array[ModuleInstance]:
+	var homeless: Array[ModuleInstance] = []
+	for instance in get_owned_instances():
+		if not _hold.is_stowed(instance.instance_id):
+			homeless.append(instance)
+	return homeless
+
+
+## Stows a specific part into a specific bay cell — the INVENTORY tab's click.
+## False if it will not fit from there, leaving everything untouched.
+func stow_instance(instance: ModuleInstance, bay_index: int, cell: Vector2i) -> bool:
+	if instance == null:
+		return false
+	if not _hold.stow(bay_index, cell, instance.instance_id, part_size(instance)):
+		return false
+	return_owned_module(owned_module_key(instance.module_type_id, instance.manufacturer_id), instance)
+	hold_changed.emit()
+	return true
+
+
+func has_hold_room_for(instance: ModuleInstance) -> bool:
+	return _hold.has_room_for(part_size(instance))
 
 
 func get_owned_module_count(key: String) -> int:
@@ -335,9 +433,17 @@ func get_all_owned_module_instances() -> Dictionary:
 ## Bulk-restore for GameState after a scene change — replaces the whole pool
 ## outright (GameState always captures the complete pool, never a partial
 ## delta, so there's nothing to merge).
+## Cell positions are deliberately not part of the snapshot — the destination
+## ship rebuilds its own bays, and re-stowing on arrival keeps the two from
+## disagreeing. The cost is that the exact arrangement inside a bay is not
+## preserved across a region change; what is preserved is which parts you have.
 func restore_owned_module_pool(pool: Dictionary) -> void:
 	_owned_module_pool = pool
+	_hold.clear()
+	for instance in get_owned_instances():
+		_ensure_stowed(instance)
 	owned_modules_changed.emit(get_all_owned_modules())
+	hold_changed.emit()
 
 
 ## Every part in the hold, flattened out of the per-type buckets — what the ship
@@ -369,7 +475,11 @@ func take_owned_instance(instance_id: String) -> ModuleInstance:
 				continue
 			var instance: ModuleInstance = pool[i]
 			pool.remove_at(i)
+			# Leaving the hold frees its cells: bolted onto the hull, it is not
+			# in the hold any more.
+			_hold.release(instance.instance_id)
 			owned_modules_changed.emit(get_all_owned_modules())
+			hold_changed.emit()
 			return instance
 	return null
 
@@ -381,7 +491,9 @@ func take_owned_module(key: String) -> ModuleInstance:
 	if pool.is_empty():
 		return null
 	var instance: ModuleInstance = pool.pop_back()
+	_hold.release(instance.instance_id)
 	owned_modules_changed.emit(get_all_owned_modules())
+	hold_changed.emit()
 	return instance
 
 

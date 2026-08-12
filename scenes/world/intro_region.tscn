@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" uid="uid://g4010rlocqis" path="res://scenes/world/starfield_layer.gd" id="1_starfield"]
 [ext_resource type="PackedScene" uid="uid://caj1515ndce58" path="res://scenes/player/ship.tscn" id="2_ship"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scenes/world/intro_director.gd" id="8_director"]
 [ext_resource type="Script" path="res://scenes/ui/contact_marker.gd" id="9_marker"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dialogue/dialogue_box.tscn" id="10_dialogue"]
+[ext_resource type="PackedScene" path="res://scenes/ui/tutorial/control_hint.tscn" id="11_hint"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 4
@@ -109,3 +110,5 @@ builder_path = NodePath("../ShipBuilderPanel")
 marker_path = NodePath("../ContactLayer/ContactMarker")
 
 [node name="DialogueBox" parent="." instance=ExtResource("10_dialogue")]
+
+[node name="ControlHint" parent="." instance=ExtResource("11_hint")]

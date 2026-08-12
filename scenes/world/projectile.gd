@@ -10,24 +10,40 @@ extends Area2D
 @export var explosion_scale: float = 0.21
 @export var damage: float = 10.0
 
-## The bolt's core colour. Deliberately allowed past 1.0 — both polygons draw
+## Which of the three bolt sprites this shot draws (see LaserBolt) — set by the
+## firing gun from its module tier.
+@export var mark: int = 1:
+	set(value):
+		mark = value
+		if is_node_ready():
+			_apply_bolt()
+## Which faction's bolt art to draw. Only the Corporate set exists so far and it
+## is deliberately hueless, so everyone borrows it and supplies their own colour.
+@export var bolt_faction: String = "corporate":
+	set(value):
+		bolt_faction = value
+		if is_node_ready():
+			_apply_bolt()
+
+## The bolt's core colour. Deliberately allowed past 1.0 — the sprite draws
 ## additively and the world's glow pass turns the overflow into bloom, which is
-## what makes a bolt read as light rather than as a coloured triangle. See
+## what makes a bolt read as light rather than as a coloured decal. See
 ## LaserPalette, and note it needs rendering/viewport/hdr_2d to survive.
 @export var color: Color = Color(1, 1, 1, 1):
 	set(value):
 		color = value
 		if is_node_ready():
-			_apply_colors()
+			_apply_bolt()
 
-## Softer, wider colour drawn under the core. Set alongside `color` by whoever
-## fires the shot; left as a dimmed version of it if nobody does.
+## The trailing streak's colour (see LaserBolt.TRAIL_OFFSET). Set alongside
+## `color` by whoever fires the shot; left as a dimmed version of it if nobody
+## does.
 @export var halo_color: Color = Color(1, 1, 1, 0.5):
 	set(value):
 		halo_color = value
 		_halo_color_set = true
 		if is_node_ready():
-			_apply_colors()
+			_apply_bolt()
 
 var _halo_color_set: bool = false
 
@@ -41,8 +57,7 @@ var _velocity: Vector2 = Vector2.ZERO
 var _time_alive: float = 0.0
 var _shooter: Node = null
 
-@onready var _visual: Polygon2D = $Visual
-@onready var _halo: Polygon2D = $Halo
+@onready var _bolt: LaserBolt = $Bolt
 
 
 func launch(travel_speed: float, shooter: Node = null) -> void:
@@ -53,15 +68,12 @@ func launch(travel_speed: float, shooter: Node = null) -> void:
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
-	_apply_colors()
+	_apply_bolt()
 
 
-func _apply_colors() -> void:
-	_visual.color = color
-	if _halo_color_set:
-		_halo.color = halo_color
-	else:
-		_halo.color = Color(color.r, color.g, color.b, 0.5)
+func _apply_bolt() -> void:
+	var trail: Color = halo_color if _halo_color_set else Color(color.r, color.g, color.b, 0.5)
+	_bolt.configure(mark, bolt_faction, color, trail)
 
 
 func _physics_process(delta: float) -> void:

@@ -215,6 +215,10 @@ func _build_right_column(root: Control) -> void:
 		_module_list.faction_id = ship.personality.faction_id
 	_module_list.module_selected.connect(_on_module_selected)
 	column.add_child(_module_list)
+	# After add_child, not before: the card builds its own children in _ready, so
+	# the hold half does not exist until it is in the tree.
+	_module_list.hold_view().stow_requested.connect(_on_stow_requested)
+	_module_list.hold_view().jettison_requested.connect(_on_jettison_requested)
 
 	column.add_child(_build_save_card())
 
@@ -322,6 +326,7 @@ func _connect_inventory() -> void:
 	# Every change to the hold changes which rows exist, because rows are parts
 	# rather than counts — there is no cheaper state-only refresh to fall back on.
 	inventory.owned_modules_changed.connect(func(_totals): _rebuild_module_list())
+	inventory.hold_changed.connect(_refresh_hold)
 
 
 func _rebuild_module_list() -> void:
@@ -523,6 +528,17 @@ func _on_remove_pressed() -> void:
 				% removed_type.display_name)
 			return
 
+	# Same rule as the cargo check above, for the hold: a container is where its
+	# parts physically are, so unbolting one with parts in it would have to
+	# destroy them. Empty it first.
+	if inventory != null and removed_type.hold_cells > 0:
+		var bay_used: int = _bay_usage(removed_placement.placement_id)
+		if bay_used > 0:
+			_report("Cannot remove %s: %d %s still stowed in it."
+				% [removed_type.display_name, bay_used,
+					"part" if bay_used == 1 else "parts"])
+			return
+
 	working_layout.remove(_grid.selected_placement_id)
 	_grid.selected_placement_id = ""
 
@@ -574,6 +590,57 @@ func _refresh() -> void:
 		_current_cargo_capacity())
 
 	_cell_count_label.text = "%d/%d" % [_grid.used_cell_count(), _grid.total_cell_count()]
+	_refresh_hold()
+
+
+# --- The hold (INVENTORY tab) ------------------------------------------------
+
+## The bays and whatever is waiting on the end of the grapple. Read from the
+## *ship's* inventory rather than the working layout, because the hold is
+## physical state that exists whether or not the builder is open — an edit here
+## is not applied to it until the layout is (see _apply_to_ship).
+func _refresh_hold() -> void:
+	if inventory == null:
+		return
+	var contents: Dictionary = {}
+	for part: ModuleInstance in inventory.get_owned_instances():
+		contents[part.instance_id] = part
+	var view: HoldView = _module_list.hold_view()
+	if ship != null:
+		view.faction_id = ship.personality.faction_id
+	view.refresh(inventory.get_hold(), contents, _towed_instance(),
+		inventory.get_unstowed_instances())
+
+
+func _towed_instance() -> ModuleInstance:
+	if ship == null:
+		return null
+	var part: Node2D = ship.get_towed_part()
+	if part == null or not part.has_method("peek_instance"):
+		return null
+	return part.call("peek_instance")
+
+
+func _on_stow_requested(bay_index: int, cell: Vector2i) -> void:
+	if ship == null or _towed_instance() == null:
+		return
+	var instance: ModuleInstance = _towed_instance()
+	if ship.stow_towed_part(bay_index, cell):
+		_report("Stowed %s (%s)." % [instance.display_name(), instance.serial])
+	else:
+		_report("Won't fit there — needs %d adjacent open cells."
+			% Inventory.part_size(instance))
+	_refresh_hold()
+
+
+func _on_jettison_requested() -> void:
+	if ship == null:
+		return
+	var instance: ModuleInstance = _towed_instance()
+	ship.jettison_towed_part()
+	if instance != null:
+		_report("Released %s. It is adrift, not gone." % instance.display_name())
+	_refresh_hold()
 
 
 ## All transient feedback goes to the top instruction line, which the handoff
@@ -649,3 +716,13 @@ func _get_save_path() -> String:
 	if sanitized.is_empty():
 		sanitized = "ship"
 	return "%s/%s.tres" % [SAVE_DIRECTORY, sanitized]
+
+
+## How many cells of one bay are in use, found by placement id — the hold keys
+## its bays the same way the layout keys its placements.
+func _bay_usage(placement_id: String) -> int:
+	var hold: ShipHold = inventory.get_hold()
+	for index in hold.bay_count():
+		if hold.bay_id(index) == placement_id:
+			return hold.bay_used(index)
+	return 0

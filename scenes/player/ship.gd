@@ -70,6 +70,16 @@ signal destroyed
 ## Off for a derelict, which stays exactly as damaged as it spawned. See
 ## HullDamageModel.regenerates for why this matters to salvage specifically.
 @export var regenerates_hull: bool = true
+## Takes no weapon damage at all — not to its modules, and not to its Health
+## pool. Deliberately does NOT block the Slicer (take_slicer_cut), which is a
+## dismantling tool rather than a weapon.
+##
+## Exists for the opening's salvage target: a hull the lesson depends on must not
+## be destructible by anything the player or a raider can shoot at it. Per-module
+## damage_immune was not enough on its own, because Health is a separate pool and
+## a wreck shot to zero takes every part on it — including the one the player was
+## sent there to cut off (see Battleground._prepare_salvage_target).
+@export var invulnerable: bool = false
 @export var salvage_scene: PackedScene = preload("res://scenes/world/salvage.tscn")
 ## Combat kills drop a handful of raw-material salvage pieces rather than
 ## just one (Phase 4.2) — each drop rolls its own rarity/material separately.
@@ -110,6 +120,18 @@ signal destroyed
 ## Cargo capacity available even with no Storage modules installed, matching the
 ## same "baseline + layout total" shape as ShipEnergy's base_capacity.
 @export var base_cargo_capacity: float = 100.0
+## Cells in the hull's own parts bay, before any Cargo Container adds its own
+## (see ShipHold). Non-zero for the same reason base_cargo_capacity is: a hull
+## with no storage module still has to be able to carry the first part it cuts
+## free, which is the opening of the game.
+##
+## Deliberately the same 4 cells a basic Cargo Container gives, so fitting one is
+## a doubling rather than a rounding error. The seven starter parts need 15 cells
+## between them and therefore do NOT all fit at the start — they are a crate of
+## parts waiting to be bolted on, not cargo, and the builder lists them whether
+## or not they have a cell (see Inventory.get_unstowed_instances). By the time
+## the ship is built the hold is empty and the first salvaged part has room.
+@export var base_hold_cells: int = 4
 ## Energy/sec spent thrusting at full non-boosted throttle. Deliberately at
 ## or below ShipEnergy.base_generation so cruising is sustainable forever on
 ## base power alone — firing weapons or boosting is what actually draws the
@@ -300,6 +322,7 @@ func _refresh_layout_stats() -> void:
 	mass = ship_layout.total_mass()
 	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
 	_inventory.set_cargo_capacity(base_cargo_capacity + ship_layout.total_cargo_capacity())
+	_inventory.rebuild_hold(ship_layout, base_hold_cells)
 	_recompute_thrust_stats()
 	_refresh_systems()
 
@@ -453,6 +476,8 @@ func repair_fully() -> void:
 
 
 func take_damage(amount: float) -> void:
+	if invulnerable:
+		return
 	_hull_damage.note_damage_taken()
 	_health.take_damage(amount)
 
@@ -462,6 +487,8 @@ func take_damage(amount: float) -> void:
 ## mid-fight — the ship's overall Health pool takes the same damage either way;
 ## module condition is a separate, parallel effect.
 func take_damage_at(amount: float, impact_point: Vector2) -> void:
+	if invulnerable:
+		return
 	take_damage(amount)
 	_hull_damage.damage_at(amount, impact_point)
 
@@ -469,6 +496,8 @@ func take_damage_at(amount: float, impact_point: Vector2) -> void:
 ## Fired by HardpointPhaseLance — a piercing hit along a line rather than one
 ## hex plus splash. Overall Health only takes the hit once, same as a normal shot.
 func take_beam_damage(amount: float, entry_point: Vector2, aim_direction: Vector2, max_travel_distance: float) -> void:
+	if invulnerable:
+		return
 	take_damage(amount)
 	_hull_damage.damage_beam(amount, entry_point, aim_direction, max_travel_distance)
 
@@ -749,12 +778,74 @@ func try_add_component(component_id: String, amount: int) -> bool:
 ## A non-empty manufacturer_id also discovers that manufacturer (see
 ## Inventory.discover_manufacturer) — knowing "Atlas Heavy exists" is a separate
 ## fact from holding one of their guns.
-func capture_tech_part(instance: ModuleInstance) -> void:
+## Returns false if the hold has no room for it, in which case the part is NOT
+## taken and stays wherever it is — on the end of the grapple, usually (see
+## take_in_tow). A part is only owned once it physically has cells.
+func capture_tech_part(instance: ModuleInstance) -> bool:
 	if instance == null:
-		return
-	_inventory.add_captured_instance(instance)
+		return false
+	if not _inventory.add_captured_instance(instance):
+		return false
 	if not instance.manufacturer_id.is_empty():
 		_inventory.discover_manufacturer(instance.manufacturer_id)
+	return true
+
+
+# --- Towing ------------------------------------------------------------------
+
+## The part currently on the end of the grapple, hauled home but not yet stowed
+## (see HardpointWinch._on_secured). It is a world object the whole time — the
+## player is carrying it around rather than having absorbed it — and the ship
+## builder is where it gets put into a bay.
+var _towed_part: Node2D = null
+
+
+## Called by the grapple once a part is docked at the hull. The part keeps
+## living in the world on the end of the line; this is only the ship knowing it
+## is there, so the builder can offer to stow it.
+func take_in_tow(part: Node2D) -> void:
+	_towed_part = part
+
+
+## The towed part, or null. Clears itself if the part has been freed — cut loose,
+## shot, or claimed by something else.
+func get_towed_part() -> Node2D:
+	if _towed_part != null and not is_instance_valid(_towed_part):
+		_towed_part = null
+	return _towed_part
+
+
+func clear_tow() -> void:
+	_towed_part = null
+
+
+## Puts the towed part into a specific bay cell — the INVENTORY tab's click.
+## False, and nothing changes, if it will not fit from that cell: the part stays
+## on the line and the player can try another cell, another bay, or let it go.
+func stow_towed_part(bay_index: int, cell: Vector2i) -> bool:
+	var part: Node2D = get_towed_part()
+	if part == null or not part.has_method("peek_instance"):
+		return false
+	var instance: ModuleInstance = part.call("peek_instance")
+	if instance == null:
+		return false
+	if not _inventory.stow_instance(instance, bay_index, cell):
+		return false
+	# Only now does the part stop being a world object. Taking the instance and
+	# freeing the node are deliberately the last steps, after the hold has
+	# committed — a refused stow must leave the part exactly as it was.
+	part.call("release_instance")
+	if not instance.manufacturer_id.is_empty():
+		_inventory.discover_manufacturer(instance.manufacturer_id)
+	part.call("collect")
+	_towed_part = null
+	return true
+
+
+## Lets the towed part go. The grapple holding it drops the line; the part drifts
+## off from wherever it was, still recoverable if the player changes their mind.
+func jettison_towed_part() -> void:
+	_hardpoints.drop_towed_parts()
 
 
 # --- Flight ------------------------------------------------------------------

@@ -154,6 +154,15 @@ func fire_secondary() -> void:
 ## Called on fire_winch's just-pressed edge (see ship_input.gd). One press does
 ## whatever the grapple's current state calls for — cast, wind in, stop — so this
 ## is the only thing the bank forwards (see HardpointWinch.press).
+## Whichever grapple is holding the towed part lets it go. Broadcast rather than
+## addressed, because only the winch itself knows whether it is the one holding
+## it (see HardpointWinch.is_towing).
+func drop_towed_parts() -> void:
+	for winch in _winches:
+		if winch.is_towing():
+			winch.drop_tow()
+
+
 func press_winch() -> void:
 	for winch in _winches:
 		if not _ship.is_module_destroyed(winch.source_placement_id):
@@ -202,6 +211,8 @@ func _mount_gun(placement: ModulePlacement) -> HardpointGun:
 	if overlay == null:
 		overlay = module_type.get_hex_overlay_texture(_ship.personality.faction_id)
 	gun.set_turret_texture(overlay, HullPaint.part_tint(placement, _ship.personality.faction_id))
+	if gun.has_method("set_bolt_faction"):
+		gun.set_bolt_faction(art_faction)
 	# Not every weapon hardpoint is a plain gun (Railgun, Phase Lance carry their
 	# own scenes), so this is asked for rather than assumed.
 	if gun.has_method("set_laser_color"):

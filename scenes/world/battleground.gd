@@ -185,6 +185,12 @@ func _wreck(ship: Ship, rng: RandomNumberGenerator) -> void:
 ## `salvage_design` does not silently break the tutorial.
 func _prepare_salvage_target(ship: Ship) -> void:
 	var layout: ShipLayout = ship.ship_layout
+	# Nothing may shoot this hull apart — not the player experimenting with their
+	# gun, and not the raiders that turn up later. A playtest lost the prize to a
+	# stray shot before the player had cut it, which ends the opening with nothing
+	# left to salvage. The Slicer is exempt, so the lesson still works.
+	ship.invulnerable = true
+
 	var prize: ModulePlacement = _furthest_weapon(layout)
 	if prize == null:
 		return

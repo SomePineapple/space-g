@@ -10,8 +10,8 @@ extends Node2D
 ## mouse — a grapple is bolted to the hull pointing one way, and which way that
 ## is, is the placement decision the builder screen is for.
 ##
-## It catches severed parts and nothing else, and a caught part is always hauled
-## to the ship and captured on arrival.
+## It catches severed parts and nothing else. A caught part is hauled to the ship
+## and then *stays on the line* — see _on_secured.
 ##
 ## **All the motion belongs to GrappleRope.** This script owns intent and
 ## consequences — when to cast, when to wind in, what energy that costs, what
@@ -110,10 +110,37 @@ func press() -> void:
 	if _shooter == null:
 		return
 	_forget_dead_rope()
+	# A press while something is on the hook and already home lets it go. That is
+	# the only way to get rid of a part you have decided not to keep without
+	# opening a screen, and it is the same key that caught it.
+	if is_towing():
+		drop_tow()
+		return
 	if _rope == null:
 		_cast()
 		return
 	_winching = not _winching
+
+
+## Whether this grapple is the one currently holding the ship's towed part.
+func is_towing() -> bool:
+	if _shooter == null or _rope == null or not is_instance_valid(_rope):
+		return false
+	return _shooter.get_towed_part() != null and _rope.is_hooked()
+
+
+## Lets the towed part go, drifting from where it was. The chain draws itself
+## back in on its own once nothing is on the end of it.
+func drop_tow() -> void:
+	if _shooter == null:
+		return
+	var part: Node2D = _shooter.get_towed_part()
+	if part != null and part.has_method("end_reel_in"):
+		part.call("end_reel_in")
+	_shooter.clear_tow()
+	if _rope != null and is_instance_valid(_rope):
+		_rope.release()
+	_winching = false
 
 
 func _cast() -> void:
@@ -177,15 +204,18 @@ func _on_hooked(body: Node2D) -> void:
 		body.call("begin_reel_in")
 
 
-## The part reached the maw. It hands over the very ModuleInstance it was carrying
-## rather than a description of one, which is what keeps a salvaged part
-## non-fungible.
+## The part reached the maw — and stays there, on the end of the line. It is
+## **not** absorbed: the hold is a set of hex bays now (see ShipHold), and which
+## bay a part goes in is a decision the player makes on the builder screen. Until
+## they do, they are towing it, which is a thing you can keep flying with, drop
+## with another press, or lose to whatever shoots it.
+##
+## What this replaces: the part handing over its ModuleInstance here and deleting
+## itself, so a haul ended with a number changing somewhere off screen.
 func _on_secured(body: Node2D) -> void:
-	if _shooter != null and body.has_method("release_instance"):
-		_shooter.capture_tech_part(body.release_instance())
-	if body.has_method("collect"):
-		body.call("collect")
-	_rope.release()
+	if _shooter != null:
+		_shooter.take_in_tow(body)
+	_winching = false
 
 
 func _on_snapped_taut(_at_global: Vector2) -> void:

@@ -164,9 +164,14 @@ func _pull_target(delta: float) -> void:
 		part.begin_reel_in()
 		part.global_position = part.global_position.move_toward(_muzzle.global_position, tech_part_pull_speed * delta)
 		if part.global_position.distance_to(_muzzle.global_position) <= tech_part_collect_radius:
-			_shooter.capture_tech_part(part.release_instance())
-			part.collect()
-			_active_target = null
+			# Straight into a bay, unlike the grapple, which tows and lets the
+			# player choose (see HardpointWinch._on_secured): the tractor has no
+			# line left holding the part, so there is nowhere for it to wait. A
+			# full hold simply refuses it and it stays adrift at the muzzle.
+			if _shooter.capture_tech_part(part.peek_instance()):
+				part.release_instance()
+				part.collect()
+				_active_target = null
 			_beam.hide_beam()
 			return
 

@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://b4megoah7coiw"]
+[gd_scene load_steps=5 format=3 uid="uid://b4megoah7coiw"]
 
 [ext_resource type="Script" uid="uid://bou0ihvxcteh6" path="res://scenes/world/projectile.gd" id="1_jveri"]
+[ext_resource type="Script" path="res://scenes/world/laser_bolt.gd" id="2_bolt"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_dmo7y"]
 radius = 3.0
@@ -11,15 +12,9 @@ blend_mode = 1
 [node name="Projectile" type="Area2D" unique_id=1253589394]
 script = ExtResource("1_jveri")
 
-[node name="Halo" type="Polygon2D" parent="." unique_id=1923175294]
+[node name="Bolt" type="Sprite2D" parent="."]
 material = SubResource("CanvasItemMaterial_additive")
-color = Color(1, 0.3, 0.3, 0.5)
-polygon = PackedVector2Array(17, 0, -14, -6.5, -14, 6.5)
-
-[node name="Visual" type="Polygon2D" parent="." unique_id=1923175295]
-material = SubResource("CanvasItemMaterial_additive")
-color = Color(1, 0.3, 0.3, 1)
-polygon = PackedVector2Array(10, 0, -8, -2.5, -8, 2.5)
+script = ExtResource("2_bolt")
 
 [node name="Collision" type="CollisionShape2D" parent="." unique_id=421659573]
 shape = SubResource("CircleShape2D_dmo7y")

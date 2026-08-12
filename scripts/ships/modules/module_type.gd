@@ -67,6 +67,14 @@ extends Resource
 ## Cargo capacity this module adds to the ship's material storage (see
 ## ShipLayout.total_cargo_capacity/Ship._refresh_layout_stats).
 @export var cargo_capacity_contribution: float = 0.0
+## How many hex cells this module contributes to the hold *as its own bay* (see
+## ShipHold). Zero for everything that is not cargo storage.
+##
+## Deliberately separate from cargo_capacity_contribution rather than derived
+## from it: that number is bulk capacity for materials, this one is how many
+## recovered parts the bay can physically hold, and a bigger tier is free to
+## change one without the other.
+@export var hold_cells: int = 0
 
 ## Weapon/missile hardpoints only. Which scene Ship spawns for this specific
 ## module type instead of its default hardpoint_gun_scene/

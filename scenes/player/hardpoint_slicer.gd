@@ -420,6 +420,23 @@ func _on_severed(target: Object) -> void:
 	# The seam is deliberately NOT freed: it is the socket rim on the hull the
 	# part came off, and it carries on cooling there.
 	_trail = null
+	_power_down()
+
+
+## A finished cut switches the Salvager off. post_cut_hold alone was not enough:
+## the beam drew in, waited its beat and then reached straight back out, because
+## the switch was still on and the cursor was still on the wreck — so one cut ran
+## into the next and the tool never looked like it had finished anything.
+##
+## Switching the system off rather than latching this hardpoint is what makes that
+## legible: SALVAGER goes dark on the systems panel, which says why the beam is
+## stowed and what to press to cut again.
+func _power_down() -> void:
+	if _shooter == null:
+		return
+	var systems: ShipSystems = _shooter.get_systems()
+	if systems != null:
+		systems.set_switched_on(ShipSystems.SALVAGER, false)
 
 
 ## Draws the beam back in rather than switching it off. Once it is fully home the

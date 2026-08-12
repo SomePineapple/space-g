@@ -23,6 +23,21 @@ signal contact_spawned(contact: Node2D)
 ## admit it is over.
 enum Beat { BUILDER, OPENING, EXPLORING, CONTACT_CALL, FOUND, FITTING, AMBUSH, DONE }
 
+## The controls the opening teaches, each raised at the moment the thing it
+## drives first matters rather than as an opening slideshow — see ControlHint,
+## which owns the panel and remembers these ids so a control is only ever
+## explained once.
+##
+## The keys are deliberately not written down here: a hint is given the input
+## actions and reads the live bindings, so rebinding one is not an edit in this
+## file. The words are, though — they belong to the lesson, not to the panel.
+const HINT_MOVE: StringName = &"move"
+const HINT_BOOST: StringName = &"boost"
+const HINT_SALVAGER: StringName = &"salvager"
+const HINT_GRAPPLE: StringName = &"grapple"
+const HINT_BUILDER: StringName = &"builder"
+const HINT_FIRE: StringName = &"fire"
+
 ## Wired in the scene rather than looked up by name, so moving either node is a
 ## visible edit instead of a silent break. setup() is the alternative path, for
 ## a test that builds the sequence without a scene around it.
@@ -164,6 +179,9 @@ var _ambushers: Array = []
 var _said_graveyard: bool = false
 var _said_salvage: bool = false
 var _said_combat: bool = false
+## The builder hint waits on the part reaching the hold, which is a state to be
+## polled rather than a beat change — this stops it being polled forever after.
+var _taught_builder: bool = false
 ## Whether the current beat had any dialogue at all, so _beat_finished can tell
 ## "the lines have finished" from "there were never any lines".
 var _spoken_this_beat: bool = false
@@ -217,6 +235,12 @@ func _process(delta: float) -> void:
 			if _beat_finished(delta):
 				_beat = Beat.EXPLORING
 				_timer = explore_seconds
+				# A beat after the move hint rather than alongside it: boost is the
+				# second thing you learn about flying, not part of learning to fly.
+				# Queues behind the move hint if that one is still up.
+				ControlHint.teach(self, HINT_BOOST,
+					"Hold to boost. Faster, but it burns through energy.",
+					[&"boost"])
 		Beat.EXPLORING:
 			_timer -= delta
 			if _timer <= 0.0:
@@ -236,10 +260,17 @@ func _process(delta: float) -> void:
 			# Waiting on the player, not on a clock: they have to get the part
 			# home, into the builder and onto the hull, and that takes as long as
 			# it takes.
+			if not _taught_builder and _prize_in_hold():
+				_taught_builder = true
+				ControlHint.teach(self, HINT_BUILDER,
+					"Open the ship builder to bolt the salvaged part onto your hull.",
+					[&"toggle_builder"])
 			if _prize_installed():
 				_beat = Beat.AMBUSH
 				_timer = ambush_delay
 				_voice.say(weapon_lines)
+				ControlHint.teach(self, HINT_FIRE,
+					"Fire your primary weapon.", [&"fire_primary"])
 		Beat.AMBUSH:
 			if _ambushers.is_empty():
 				_timer -= delta
@@ -276,6 +307,11 @@ func _begin_opening() -> void:
 	# Interrupts: any build instructions still queued are about a screen the
 	# player has just closed.
 	_play(launch_lines, true)
+	# The player now has a ship and nothing telling them how to fly it. Actions in
+	# pad order — forward, left, backward, right.
+	ControlHint.teach(self, HINT_MOVE, "To thrust and steer, use these keys.",
+		[&"move_forward", &"turn_left", &"move_backward", &"turn_right"],
+		ControlHint.Formation.MOVEMENT_PAD)
 
 
 ## Two cues on the way in that belong to where the player is rather than to what
@@ -293,6 +329,10 @@ func _update_approach_cues() -> void:
 			and player.distance_to(_salvage_ship.global_position) < salvage_cue_distance:
 		_said_salvage = true
 		_voice.say(salvage_lines)
+		# Salvage_03 says the beam is available; this says how to switch it on.
+		ControlHint.teach(self, HINT_SALVAGER,
+			"Power up the salvage beam, then hold it over a hull to cut a part free.",
+			[&"toggle_salvager"])
 
 
 ## The arrival lines play as the raiders appear; this one waits until one of them
@@ -370,6 +410,11 @@ func _begin_fitting() -> void:
 	_beat = Beat.FITTING
 	if _marker != null:
 		_marker.clear_target()
+	# The part is off the hull and drifting. This is the first moment the grapple
+	# has anything to do.
+	ControlHint.teach(self, HINT_GRAPPLE,
+		"Fire the grapple at the cut part, then press again to reel it in.",
+		[&"fire_winch"])
 
 
 ## Whether the salvaged part is now bolted to the player's own hull. Matched on
@@ -389,6 +434,18 @@ func _prize_installed() -> bool:
 				and placement.instance.instance_id == _field.get_prize_instance_id():
 			return true
 	return false
+
+
+## Whether the cut part has made it into the hold — reeled in and stowed, but not
+## yet fitted. Matched on the same instance id _prize_installed uses, for the same
+## reason: it is the one thing about the part that survives the whole journey.
+func _prize_in_hold() -> bool:
+	if _field == null or _field.get_prize_instance_id().is_empty():
+		return false
+	var ship: Ship = PlayerContext.get_ship()
+	if ship == null:
+		return false
+	return ship.get_inventory().get_owned_instance(_field.get_prize_instance_id()) != null
 
 
 ## Raiders converge from every side at once, spread evenly around a random

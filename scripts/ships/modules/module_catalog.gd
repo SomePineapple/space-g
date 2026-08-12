@@ -260,8 +260,10 @@ static func get_all() -> Array[ModuleType]:
 		# here to reach cargo_capacity_contribution, and a Cargo Container is not
 		# capturable tech in any case.
 		0.0, 0.0, null, false, -1.0, -1.0, 60.0)
+	storage_type.hold_cells = 4
 	FactionArtImporter.apply_hex_art(storage_type, "cargo_container")
 	types.append(storage_type)
+	types.append_array(_bigger_storage_types(storage_type))
 
 	# Corporate Alliance: standardised, industrial kinetic weapon. Tougher
 	# than a laser hardpoint of similar footprint since it's built to
@@ -398,6 +400,40 @@ static func _grapple_types() -> Array[ModuleType]:
 	grapples.append(mk3)
 
 	return grapples
+
+
+## The two larger cargo tiers. Storage is now measured in hold cells rather than
+## bulk capacity (see ShipHold), so what a tier buys is hexes to put parts in:
+## 4, 8 and 12. Bulk material capacity scales with them, keeping ore and parts on
+## the same physical container.
+##
+## Built from the Mk1 rather than repeating its stats, because the only things
+## that differ between the tiers are size and what that size costs — writing all
+## three out separately is how they drift apart.
+##
+## They share the Mk1's art. There is no cargo_container_mk2/mk3 plate drawn yet;
+## when there is, dropping the files in and changing the two names below is the
+## whole job (see FactionArtImporter).
+static func _bigger_storage_types(mk1: ModuleType) -> Array[ModuleType]:
+	var bigger: Array[ModuleType] = []
+
+	var mk2: ModuleType = _make("storage_mk2", "Cargo Bay", mk1.color, LINE_2_CELLS,
+		0.75, 55.0, 0.0, null, "", 2,
+		{ComponentCatalog.METAL_SHEETS: 4, ComponentCatalog.CANISTER: 6},
+		0.0, 0.0, null, false, -1.0, -1.0, 120.0)
+	mk2.hold_cells = 8
+	FactionArtImporter.apply_hex_art(mk2, "cargo_container")
+	bigger.append(mk2)
+
+	var mk3: ModuleType = _make("storage_mk3", "Cargo Hold", mk1.color, TRIANGLE_3_CELLS,
+		1.1, 80.0, 0.0, null, "", 3,
+		{ComponentCatalog.METAL_SHEETS: 6, ComponentCatalog.CANISTER: 9},
+		0.0, 0.0, null, false, -1.0, -1.0, 180.0)
+	mk3.hold_cells = 12
+	FactionArtImporter.apply_hex_art(mk3, "cargo_container")
+	bigger.append(mk3)
+
+	return bigger
 
 
 static func get_by_id(id: String) -> ModuleType:

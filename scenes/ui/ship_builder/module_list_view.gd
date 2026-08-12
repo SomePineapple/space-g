@@ -30,6 +30,14 @@ var _entries: Dictionary = {}
 var _rows: Dictionary = {}
 var _tab_buttons: Dictionary = {}
 
+const TAB_PARTS: String = "PARTS"
+const TAB_INVENTORY: String = "INVENTORY"
+
+var _main_tab_buttons: Dictionary = {}
+var _main_tab: String = TAB_PARTS
+var _hold_view: HoldView
+var _filter_tabs: Control
+
 var _active_tab: String = ModulePresentation.TAB_ALL
 var _selected_key: String = ""
 
@@ -57,8 +65,19 @@ func _build_chrome() -> void:
 	header_column.add_theme_constant_override("separation", 10)
 	header.add_child(header_column)
 
-	var title: Label = BuilderTheme.mono_label("PARTS", 13, BuilderTheme.TEXT_BRIGHT)
-	header_column.add_child(title)
+	# PARTS | INVENTORY, the handoff's two main tabs. The card is one place: what
+	# you can bolt on, and where what you are carrying physically sits.
+	var main_tabs := HBoxContainer.new()
+	main_tabs.add_theme_constant_override("separation", 6)
+	header_column.add_child(main_tabs)
+	for name in [TAB_PARTS, TAB_INVENTORY]:
+		var main_tab := Button.new()
+		main_tab.text = name
+		main_tab.focus_mode = Control.FOCUS_NONE
+		main_tab.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		main_tab.pressed.connect(_on_main_tab_pressed.bind(name))
+		main_tabs.add_child(main_tab)
+		_main_tab_buttons[name] = main_tab
 
 	var tabs := HFlowContainer.new()
 	tabs.add_theme_constant_override("h_separation", 6)
@@ -96,7 +115,13 @@ func _build_chrome() -> void:
 	_list.add_theme_constant_override("separation", GROUP_SEPARATION)
 	padding.add_child(_list)
 
+	_hold_view = HoldView.new()
+	_hold_view.visible = false
+	padding.add_child(_hold_view)
+
+	_filter_tabs = tabs
 	_refresh_tab_styles()
+	_refresh_main_tab_styles()
 
 
 # --- Data -------------------------------------------------------------------
@@ -347,3 +372,39 @@ func _on_row_gui_input(event: InputEvent, key: String) -> void:
 ## (see HullPaint.art_faction_for).
 func _art_faction_for(instance: ModuleInstance) -> String:
 	return HullPaint.art_faction_for(instance, faction_id)
+
+
+# --- Main tabs ---------------------------------------------------------------
+
+## The hold half of the card. ShipBuilderPanel connects to it and refreshes it;
+## this view only decides when it is on screen.
+func hold_view() -> HoldView:
+	return _hold_view
+
+
+func _on_main_tab_pressed(name: String) -> void:
+	_main_tab = name
+	_list.visible = name == TAB_PARTS
+	_filter_tabs.visible = name == TAB_PARTS
+	_hold_view.visible = name == TAB_INVENTORY
+	_refresh_main_tab_styles()
+
+
+## Same pill treatment as the filter tabs, one size up — these switch what the
+## card *is*, so they should not read as another filter.
+func _refresh_main_tab_styles() -> void:
+	for name in _main_tab_buttons:
+		var tab: Button = _main_tab_buttons[name]
+		var is_active: bool = name == _main_tab
+		tab.add_theme_font_override("font", BuilderTheme.mono_font())
+		tab.add_theme_font_size_override("font_size", 12)
+		var fill: Color = BuilderTheme.CYAN if is_active else Color(1, 1, 1, 0.03)
+		var border: Color = BuilderTheme.CYAN if is_active else Color(1, 1, 1, 0.08)
+		var text_color: Color = BuilderTheme.BG_BASE if is_active else BuilderTheme.TEXT_MUTED_DIM
+		for state_name in ["normal", "hover", "pressed", "focus"]:
+			tab.add_theme_stylebox_override(state_name, BuilderTheme.padded(
+				BuilderTheme.flat_style(fill, border, BuilderTheme.RADIUS_SMALL), 10.0, 5.0))
+		tab.add_theme_color_override("font_color", text_color)
+		tab.add_theme_color_override("font_hover_color",
+			text_color if is_active else BuilderTheme.TEXT_BRIGHT)
+		tab.add_theme_color_override("font_pressed_color", text_color)

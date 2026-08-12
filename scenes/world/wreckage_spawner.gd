@@ -66,7 +66,11 @@ func spawn_severed_piece(placement: ModulePlacement, module_type: ModuleType,
 		# job ends — carrying it onto the player's hull would hand them an
 		# indestructible module.
 		instance.damage_immune = false
-		if not clean_cut:
+		if clean_cut:
+			# Deliberately taken, so it waits to be collected rather than ageing out
+			# while the player flies over to it.
+			part.make_permanent()
+		else:
 			# Torn free by a detonation rather than opened up along a seam. The part
 			# survives, but not unmarked — and integrity never comes back.
 			instance.integrity = maxf(instance.integrity * explosive_recovery_integrity,

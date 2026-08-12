@@ -22,6 +22,9 @@ are likewise the source of truth for the ship-builder, module-upgrade and
 scanner screens** — read the whole folder (README, LAYOUT_SPEC/STYLE_GUIDE
 where present, and the JSON/HTML) before touching
 `scenes/ui/ship_builder/`, `scenes/ui/upgrades/` or `scenes/ui/scanner_*`.
+**`docs/design_handoff_grapple/` and `docs/design_handoff_controls_tutorial/`
+are the same for the grapple line and the first-time control hints** — read
+them before touching `scenes/player/salvage/` or `scenes/ui/tutorial/`.
 **`docs/performance.md`
 is required reading before writing or changing any `_draw()` loop, starfield
 or particle emitter** — it records why the 2D canvas renderer's lack of
@@ -35,7 +38,161 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (scanner rebuilt as the directional A-scope from `docs/design_handoff_scanner_radar/`)
+## Most recent session (first-time control hints, and three fixes to the opening)
+
+### The control-hint panel (`docs/design_handoff_controls_tutorial/`)
+
+New under `scenes/ui/tutorial/`: `control_hint.gd` (`ControlHint`, the panel),
+`control_hint.tscn` (CanvasLayer 5) and `control_hint_cap.gd`
+(`ControlHintCap`, one key-cap). Instanced in `intro_region.tscn`.
+**The handoff folder is the source of truth for this screen.**
+
+- **The handoff's open question is answered: one hint per control, raised at
+  the moment that control first matters** — not a fixed opening sequence. The
+  user's ask was a screen "only used when explaining a new feature and how to
+  use it", so every hint carries its own id and is remembered individually.
+- **Hints are given input *actions*, never keys.** The panel reads the live
+  `InputMap` (`ControlHint.key_label`), so rebinding teaches the new key with
+  no edit anywhere. Gamepad still shows the action name — the handoff flags
+  controller glyphs as open.
+- **`_enabled` and `_seen` are statics**, so they survive the region changes
+  that rebuild every node. `set_enabled()` / `is_enabled()` / `reset_seen()` /
+  `has_seen()` are the hooks for the pause-menu "tooltips" switch the user
+  asked to tie in later. **Session-scoped: when a save file exists, these two
+  are what it stores.**
+- Layer 5 — above the HUD (1), below the full-screen menus (10), so the
+  builder covering a flight-control hint is correct. The panel **never
+  consumes input** (gameplay keeps running under it) and ignores presses made
+  while a `menu_panel` is open, since ship control is suspended there anyway.
+- Deviations, commented in-file: no backdrop blur (needs a screen-reading
+  shader); progress dots only appear when a second hint is queued, because in
+  the per-feature model there is no sequence to be partway through.
+- **Sized to ~70% of the handoff's px and anchored 20/20 in the top-right.**
+  That corner is only free because `Hud.CREDITS_FROZEN` hides the credits
+  readout — **if credits come back, `TOP_MARGIN` has to drop below y 42.**
+
+Triggers all live in `IntroDirector` (constants `HINT_*`), in play order:
+move (builder closes) → boost (opening lines end) → salvage beam (salvage
+proximity cue) → grapple (part comes free, `_begin_fitting`) → builder (part
+reaches the hold, new `_prize_in_hold()`) → fire (part installed).
+
+Verified live: labels resolve (W/A/S/D, SHIFT, G, L, B, SPACE), caps confirm
+individually, 0.55s advance, queue + dots, SKIP click, dismissal, and the move
+hint appearing in-region as the builder closes with gameplay live underneath.
+**Not seen firing: the salvager/grapple/builder/fire triggers** — reaching them
+needs the opening played through to the wreck.
+
+One trap worth knowing when testing this: **key presses at the real keyboard
+reach the panel**, so a hint can complete itself while you watch a scripted
+run. Two "impossible" early completions turned out to be exactly that.
+
+### Three fixes to the opening
+
+1. **A completed cut now switches the Salvager off** (`HardpointSlicer._power_down`).
+   `post_cut_hold` alone was not enough — the beam drew in, waited its beat and
+   reached straight back out, because the switch was still on and the cursor was
+   still on the wreck. Switching the system off (rather than latching the
+   hardpoint) is what makes the stowed beam legible: SALVAGER goes dark on the
+   systems panel, and G starts the next cut.
+2. **Slicer-cut parts never age out.** `WreckageSpawner` calls
+   `CapturedTechPart.make_permanent()` on a `clean_cut`; `DriftingHexPiece`
+   treats `lifetime <= 0.0` as "never expires". This is deliberately the general
+   rule, not a tutorial special case — a clean cut is already exempt from the
+   capture roll, and letting the part evaporate 45s later breaks the same
+   promise one step further on. Explosively recovered parts keep their timer.
+   **Known cost: cut parts left lying around now persist for the session.**
+3. **New `Ship.invulnerable`**, set on the salvage target by
+   `Battleground._prepare_salvage_target`. Per-module `damage_immune` was never
+   enough on its own: Health is a separate pool, so a wreck shot to zero dies
+   and takes every part with it — which soft-locked a playtest when the prize
+   was shot before it could be cut. The flag blocks `take_damage`,
+   `take_damage_at` and `take_beam_damage`, and **deliberately not
+   `take_slicer_cut`**, so the lesson still works.
+
+Verified live: 150 damage across all three entry points left the target's
+health at 305 unchanged; a scripted cut still severed the prize; the freed
+piece came out with `lifetime 0` and survived being aged to 500s;
+`_power_down()` flipped the real system off.
+
+## Session before that (grapple rebuilt as a simulated chain; hull light maps and glow; the three laser bolt sprites)
+
+Several related art/feel passes. `docs/design_handoff_grapple/` is the source
+of truth for the grapple, and `images_uploaded/Corporate Turret Lasers v2.dc
+(1).html` for the bolts.
+
+### Grapple (`docs/design_handoff_grapple/grapple-line-Godot-spec.md`)
+
+The cosmetic `WinchRope` was replaced by a real verlet chain:
+`scenes/player/salvage/grapple_rope.gd` (fixed 1/120s substep, one-sided
+distance constraints, payout velocity inheritance, wrap-spiral pinning, load
+transfer on the outermost wrapped link, body speed caps), `grapple_chain.gd`
+(four stacked Line2D passes plus a shared-mesh MultiMesh for the links) and
+`grapple_fx.gd`. `winch_rope.gd`/`.tscn` were deleted — nothing referenced them.
+
+- **Control is press-to-toggle, not hold-to-reel** (user-requested): one press
+  casts, the next winds in. `ShipIntent.winch_reel` was removed entirely;
+  `fire_winch` is the only grapple field, and `HardpointBank.press_winch()`
+  replaced `set_winch_reel_input`.
+- The spec's `TENSION_SCALE = 22` does not fit this geometry — measured 5–7 on
+  a free cast and 50–60 on a loaded haul, so it is 70 here.
+- A hauled part stalls about three free rest-lengths short of the muzzle; the
+  fix is a direct docking pull (`_draw_in`), not more reel.
+- Two wedged-input bugs fixed: a freed-but-non-null rope read as live
+  (`_forget_dead_rope`), and `stowed` only fired at the end of one particular
+  reel (`_check_stowed`).
+
+### Light maps, hull glow, and the Corporate art drop
+
+- `FactionArtImporter.apply_hex_art(type, base, overlay)` now also loads
+  `<base>_lights` (whole-plate and per-cell), so adding an emissive layer is
+  dropping a file in. All 29 call sites in `ModuleCatalog` were converted.
+- **Light layers inherit their hex geometry from the base layer.** Fitting each
+  layer's radius from its own sparse content gave mk2 78 vs the base's 130 and
+  mk3 two axes disagreeing 40.41 vs 68.29. Mismatched axes now hard-fail.
+- **A hull's emissive layer cannot be brightened through mesh vertex colours:**
+  Godot stores `ARRAY_COLOR` as 8-bit unorm, so anything over 1.0 clamps to
+  white. Proven — gain 1.0/1.7/6.0 produced byte-identical frames. The glow is
+  now its own child CanvasItem (`HullGlowLayer` + `hull_glow.gdshader`) driven
+  by shader uniforms, which are not quantised, with an independent
+  `glow_min`/`glow_max` and a per-hull random phase from `GameRng`.
+- **A lamp only visibly dims when its level crosses below 1.0**, the glow
+  threshold. The first pulse ran 1.53→3.4 — two identical whites on screen.
+- **Measure perceptible brightness with channels clamped to 1.0.**
+  `get_viewport().get_texture().get_image()` returns the HDR buffer, and raw
+  luminance sums badly overstate what the eye sees.
+- **`TAU` is built into Godot's shading language.** Declaring one is a
+  redefinition error, and a canvas shader that fails to compile falls back
+  silently to unlit drawing with no in-game sign. Grep `SHADER ERROR` as well
+  as `SCRIPT ERROR`.
+- 26 Corporate base plates replaced and 23 `_lights` added. All three region
+  environments use additive glow — a bloom sweep done with Godot's default
+  SOFTLIGHT blend is worthless.
+
+### Laser bolts
+
+`scenes/world/laser_bolt.gd` (`LaserBolt`) replaced the two flat additive
+Polygon2D triangles in `projectile.tscn`. One greyscale texture per mark, tinted
+by `modulate` (not quantised, so the HDR overflow survives into bloom), so a
+captured pirate gun keeps firing pirate red. `LaserBolt.mark_for_tier` maps
+weapon tier 1/2/3 to needle/twin/heavy, and textures load through the ordinary
+faction-art path, so a pirate bolt is a drop-in file.
+
+- **The node origin sits on each bolt's measured head core** (0.899 / 0.799 /
+  0.833 of texture width — they differ). The old triangle led its origin by 17
+  units, so bolts passed through targets before the hit registered.
+- One shared px→unit scale for all three marks, so the art's own size
+  progression survives without double-counting `TIER_PROJECTILE_SCALE_MULTIPLIER`.
+  Measured lengths 34.0 / 50.8 / 81.6.
+- Doc §1 (additive), §2 (spawn stretch + trailing copy, driven by `halo_color`)
+  and §4 (flicker; the mk3 breathes on thickness instead) are implemented.
+  **§5's per-bolt Light2D was deliberately skipped** — dozens are in flight in a
+  fight, which is exactly the per-element cost `docs/performance.md` is about.
+
+Also this session: the Slicer's beam now collapses on a completed cut
+(`cut_retract_speed`, `post_cut_hold`) — the follow-up fix is in the session
+above.
+
+## Earlier session (scanner rebuilt as the directional A-scope from `docs/design_handoff_scanner_radar/`)
 
 Short, single-purpose session. The user supplied a fourth design handoff and
 asked for "the new scanner UI hooked up to the scanner system, still returning
@@ -142,7 +299,7 @@ the documented MCP limitation), and no human has played it.
   per-return blip.
 - 1A/1B/1C were not built and there is no option switch.
 
-## Session before that (ship builder + module upgrades rebuilt to their design handoffs; per-instance upgrade system deleted)
+## Earlier session (ship builder + module upgrades rebuilt to their design handoffs; per-instance upgrade system deleted)
 
 Two design handoffs implemented back to back, then a dead-code strip. Both
 handoff folders are the source of truth for their screen's appearance — not
@@ -1542,6 +1699,19 @@ ship's overall `Health` pool.
 
 No specific next item has been chosen yet. Candidates on the table, most
 relevant first:
+- **Play the opening end to end.** It is now the most-changed and
+  least-played path in the game: five of the six control hints have never been
+  seen firing, the Salvager's power-down on a completed cut changes how cutting
+  feels, and the salvage target is newly invulnerable. One run answers all
+  three.
+- **Build the pause/escape menu with the "tooltips" switch**, which is what the
+  control-hint statics were written for — `ControlHint.set_enabled()` and
+  `reset_seen()` are waiting. The user asked for this to be tied in
+  "eventually", so it is a stated intent rather than a guess.
+- **Decide whether persistent cut parts need a cap.** Slicer-cut parts no
+  longer expire at all; a player who cuts a lot and collects nothing will
+  accumulate them for the session. A long timer instead of none is the obvious
+  alternative if it becomes clutter.
 - **Wire stat effects to the upgrade trees.** The user is authoring the
   upgrade list; hooking it up is the agreed next task. Wiring points are in
   the Module upgrades section above. Until it's done, unlocking is a

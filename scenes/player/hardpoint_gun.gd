@@ -89,6 +89,11 @@ var _cooldown_remaining: float = 0.0
 var _shooter: Ship
 var _cell_size: float = 24.0
 var _tier_scale: float = 1.0
+## Module tier this gun was mounted at, for LaserBolt.mark_for_tier.
+var _tier: int = 1
+## Which faction's bolt art it fires — the *gun's* own art faction, not the
+## hull's, on the same rule as its turret sprite and its laser colour.
+var _art_faction: String = "corporate"
 
 @onready var _barrel: Polygon2D = $Barrel
 @onready var _turret: Sprite2D = $Turret
@@ -109,6 +114,10 @@ func setup(shooter: Ship) -> void:
 ## Clamped rather than indexed raw: a ModuleType authored with a tier outside
 ## 1-3 used to crash here on an out-of-bounds read.
 func apply_tier(tier: int) -> void:
+	# Kept so the spawned bolt knows which of the three sprites to draw. The
+	# multipliers below are one-shot, so the tier itself is not otherwise
+	# recoverable afterwards.
+	_tier = tier
 	var index: int = _tier_index(tier)
 	projectile_damage *= TIER_DAMAGE_MULTIPLIER[index]
 	fire_rate *= TIER_FIRE_RATE_MULTIPLIER[index]
@@ -189,6 +198,13 @@ func _update_turret_transform() -> void:
 ##
 ## `base` stays at or below white and is what the barrel is painted; the bolt and
 ## its halo are pushed past white so the glow pass catches them.
+## The art faction this gun draws with, set alongside its turret sprite (see
+## HardpointBank._mount_gun) so a captured gun keeps firing its own equipment's
+## bolt as well as its own colour.
+func set_bolt_faction(faction_id: String) -> void:
+	_art_faction = faction_id
+
+
 func set_laser_color(base: Color, bolt: Color, halo: Color) -> void:
 	barrel_color = base
 	projectile_color = bolt
@@ -262,6 +278,8 @@ func fire() -> Projectile:
 func _execute_fire() -> Projectile:
 	var projectile: Projectile = projectile_scene.instantiate()
 	projectile.source_placement_id = source_placement_id
+	projectile.mark = LaserBolt.mark_for_tier(_tier)
+	projectile.bolt_faction = _art_faction
 	projectile.color = projectile_color
 	projectile.halo_color = projectile_halo_color
 	projectile.damage = _effective_damage()

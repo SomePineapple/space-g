@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <style>
+    body{margin:0;background:#0a0d12;}
+    a{color:#55d6e8;text-decoration:none;} a:hover{color:#8fe9f2;}
+  </style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:22px;padding:44px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0a0d12;min-height:100vh;box-sizing:border-box;">
+
+  <div style="display:flex;align-items:baseline;gap:14px;">
+    <div style="color:#c7d0d8;font-size:22px;font-weight:600;letter-spacing:0.02em;">Corporate 360 Turret — laser bolts</div>
+    <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#8fe9f2;padding:2px 7px;border-radius:3px;">PROJECTILE</div>
+  </div>
+  <div style="color:#6b7784;font-size:13px;max-width:820px;line-height:1.5;">Fired-projectile sprites for <code style="color:#8fe9f2;">corporate_turret_360</code> / <code style="color:#8fe9f2;">_mk2</code> / <code style="color:#8fe9f2;">_mk3</code>, replacing the flat sprite triangle. Drawn pure white-to-grey with no baked hue — apply a <code style="color:#8fe9f2;">Sprite2D.modulate</code> (or <code style="color:#8fe9f2;">self_modulate</code>) tint in Godot per enemy faction; the swatch below simulates that with a multiply blend so you can preview it here. Point-of-fire is the tail (left), travel direction is +X; rotate the node to aim.</div>
+
+  <div style="display:flex;gap:10px;align-items:center;">
+    <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">PREVIEW TINT</div>
+    <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="4">
+      <div onClick="{{ sw.pick }}" style="width:22px;height:22px;border-radius:4px;background:{{ sw.color }};cursor:pointer;box-shadow:{{ sw.ring }};"></div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;gap:36px;flex-wrap:wrap;">
+
+    <!-- MK1 -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="position:relative;width:340px;height:130px;background:#05070a;border-radius:6px;overflow:hidden;isolation:isolate;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);">
+        <svg viewBox="0 0 300 60" width="300" height="60">
+          <defs>
+            <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+              <stop offset="60%" stop-color="#ffffff" stop-opacity="0.25"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="gc1" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+              <stop offset="35%" stop-color="#ffffff" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="205" cy="30" rx="118" ry="22" fill="url(#g1)" opacity="0.38"/>
+          <path d="M8,30 C60,27.4 118,26 168,26.5 C205,26.8 232,26 252,24 L266,30 L252,36 C232,34 205,33.2 168,33.5 C118,34 60,32.6 8,30 Z" fill="url(#gc1)"/>
+          <g stroke="#04060a" stroke-width="2.2" fill="none" opacity="0.35" stroke-linecap="round">
+            <path d="M126,23 Q129,30 126,37"/>
+            <path d="M158,22.4 Q161,30 158,37.6"/>
+            <path d="M190,23 Q193,30 190,37"/>
+          </g>
+          <circle cx="266" cy="30" r="13" fill="url(#g1)"/>
+          <circle cx="272" cy="30" r="5.6" fill="#ffffff"/>
+          <g stroke="#ffffff" stroke-linecap="round">
+            <line x1="283" y1="30" x2="299" y2="30" stroke-width="2.2" opacity="0.7"/>
+            <line x1="270" y1="20" x2="270" y2="40" stroke-width="1.1" opacity="0.4"/>
+            <line x1="263" y1="23" x2="279" y2="37" stroke-width="0.9" opacity="0.3"/>
+            <line x1="263" y1="37" x2="279" y2="23" stroke-width="0.9" opacity="0.3"/>
+          </g>
+        </svg>
+        <div style="position:absolute;inset:0;background:{{ tintColor }};mix-blend-mode:multiply;"></div>
+      </div>
+      <div style="font-family:monospace;font-size:11px;color:#6b7784;text-align:center;">corporate_laser_bolt_mk1</div>
+    </div>
+
+    <!-- MK2 -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="position:relative;width:340px;height:130px;background:#05070a;border-radius:6px;overflow:hidden;isolation:isolate;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);">
+        <svg viewBox="0 0 320 100" width="320" height="100">
+          <defs>
+            <radialGradient id="g2" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+              <stop offset="60%" stop-color="#ffffff" stop-opacity="0.22"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="gc2" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+              <stop offset="35%" stop-color="#ffffff" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+            </linearGradient>
+            <g id="shaft">
+              <ellipse cx="210" cy="0" rx="112" ry="17" fill="url(#g2)" opacity="0.36"/>
+              <path d="M8,0 C55,-2.3 108,-3 152,-2.6 C188,-2.3 210,-2.8 228,-4.6 L242,0 L228,4.6 C210,2.8 188,2.3 152,2.6 C108,3 55,2.1 8,0 Z" fill="url(#gc2)"/>
+              <g stroke="#04060a" stroke-width="1.8" fill="none" opacity="0.32" stroke-linecap="round">
+                <path d="M118,-6 Q121,0 118,6"/>
+                <path d="M148,-6.4 Q151,0 148,6.4"/>
+              </g>
+              <circle cx="242" cy="0" r="11" fill="url(#g2)"/>
+              <circle cx="248" cy="0" r="4.8" fill="#ffffff"/>
+            </g>
+          </defs>
+          <use href="#shaft" y="32"/>
+          <use href="#shaft" y="68"/>
+          <path d="M172,32 Q182,50 172,68" fill="none" stroke="#ffffff" stroke-width="1.3" opacity="0.28"/>
+          <ellipse cx="252" cy="50" rx="20" ry="27" fill="url(#g2)" opacity="0.28"/>
+          <g stroke="#ffffff" stroke-linecap="round" opacity="0.55">
+            <line x1="256" y1="30" x2="256" y2="70" stroke-width="1"/>
+          </g>
+        </svg>
+        <div style="position:absolute;inset:0;background:{{ tintColor }};mix-blend-mode:multiply;"></div>
+      </div>
+      <div style="font-family:monospace;font-size:11px;color:#6b7784;text-align:center;">corporate_laser_bolt_mk2 · twin barrel</div>
+    </div>
+
+    <!-- MK3 -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="position:relative;width:340px;height:130px;background:#05070a;border-radius:6px;overflow:hidden;isolation:isolate;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);">
+        <svg viewBox="0 0 360 120" width="340" height="113">
+          <defs>
+            <radialGradient id="g3" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+              <stop offset="55%" stop-color="#ffffff" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="gc3" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+              <stop offset="35%" stop-color="#ffffff" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="220" cy="60" rx="152" ry="34" fill="url(#g3)" opacity="0.42"/>
+          <path d="M8,60 C70,55 150,52 210,53 C250,53.6 280,51 300,46 L320,60 L300,74 C280,69 250,66.4 210,67 C150,68 70,65 8,60 Z" fill="url(#gc3)"/>
+          <g stroke="#04060a" stroke-width="3" fill="none" opacity="0.4" stroke-linecap="round">
+            <path d="M148,44 Q152,60 148,76"/>
+            <path d="M188,42 Q192,60 188,78"/>
+          </g>
+          <g fill="#ffffff" opacity="0.5">
+            <path d="M150,40 L162,60 L150,80 L156,60 Z"/>
+            <path d="M190,38 L204,60 L190,82 L197,60 Z"/>
+          </g>
+          <circle cx="318" cy="60" r="18" fill="url(#g3)"/>
+          <circle cx="326" cy="60" r="8" fill="#ffffff"/>
+          <g stroke="#ffffff" stroke-linecap="round" opacity="0.5">
+            <line x1="336" y1="60" x2="358" y2="60" stroke-width="3"/>
+            <line x1="318" y1="42" x2="318" y2="78" stroke-width="1.6"/>
+            <line x1="306" y1="48" x2="330" y2="72" stroke-width="1.2"/>
+            <line x1="306" y1="72" x2="330" y2="48" stroke-width="1.2"/>
+          </g>
+        </svg>
+        <div style="position:absolute;inset:0;background:{{ tintColor }};mix-blend-mode:multiply;"></div>
+      </div>
+      <div style="font-family:monospace;font-size:11px;color:#6b7784;text-align:center;">corporate_laser_bolt_mk3 · heavy mount</div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;gap:40px;max-width:1000px;border-top:1px solid #1a222a;padding-top:18px;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">WHY GREYSCALE</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.55;">Every shape is drawn in white/grey with no hue baked in. Sprite2D.modulate multiplies each pixel by a colour, so white becomes exactly that colour and the dark capacitor rings become a darker shade of it — one texture, any faction tint, no shader needed.</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">SIZE PROGRESSION</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.55;">Mk1 is a thin single needle bolt for the agile single-barrel mount. Mk2 pairs two of it for the twin-barrel mount, linked by a short arc. Mk3 is one thick heavy-cored bolt with layered capacitor rings and a star-flare head for the 3-hex heaviest mount.</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">GODOT SETUP</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.55;">Export each at 2–4× this scale on transparent PNG. Anchor the origin at the tail (bolt travels toward the head). Set the enemy's projectile Sprite2D.modulate to its faction colour — cyan for Corporate, amber/orange for Pirate, teal for Ancient — same texture throughout.</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px;max-width:1000px;border-top:1px solid #1a222a;padding-top:18px;">
+    <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">IMPLEMENTATION GUIDE — GETTING THE MOST OUT OF THESE SPRITES</div>
+
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="color:#c7d0d8;font-size:13px;font-weight:600;">1. Blend mode &amp; bloom</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.6;">Draw the sprite on a CanvasItemMaterial with blend_mode = Add (or a light-weight self-illuminating shader). Enable WorldEnvironment → Glow with a threshold around 0.8–1.0 so only the white core and head-flare pixels bloom, not the dimmer grey rib shading. Bloom intensity 0.6–1.0, blend "Screen". This is what turns the flat white core into a hot laser look instead of a printed decal.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="color:#c7d0d8;font-size:13px;font-weight:600;">2. Motion streak</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.6;">The sprite is a static bolt, so give it a short stretch on spawn: scale.x from 0.4 → 1 over ~0.05s (an "ease out" pop), then hold. For fast projectiles, add a trailing Line2D or a second half-opacity copy of the same texture offset behind it and fading — cheaper than a particle trail and reads as continuous fire.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="color:#c7d0d8;font-size:13px;font-weight:600;">3. Muzzle flash &amp; impact</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.6;">Pair each bolt with a one-shot AnimatedSprite2D at the turret barrel (small radial burst, 3–4 frames, same modulate colour) that plays on fire and fades over ~0.08s. On impact, spawn a brighter, larger copy of the head-flare circle (scale ×2.5, modulate to full white, tween opacity/scale down over 0.15s) plus 4–6 small spark rects flung outward — reuse the existing rib/spark shapes at tiny scale rather than new art.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="color:#c7d0d8;font-size:13px;font-weight:600;">4. Flicker &amp; pulse</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.6;">A subtle sine-driven modulate.a wobble (±8%, 20–30Hz) on the core sells "energy" without needing a shader. For the mk3 heavy bolt, pulse scale.y ±5% at a slower 6–8Hz to read as a charged, heavier round.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="color:#c7d0d8;font-size:13px;font-weight:600;">5. Light2D</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.6;">Attach a small PointLight2D at the head-flare position with the same tint and a short energy falloff — it casts the tint onto nearby hull plating as the bolt passes, which sells scale far better than the sprite alone, especially in dark corridor scenes.</div>
+    </div>
+  </div>
+
+</section>
+
+
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { tint: '#8fe9f2' };
+  SWATCHES = ['#8fe9f2', '#ffb35c', '#6fe3d6', '#ffffff'];
+  renderVals(){
+    const st = this.state;
+    return {
+      tintColor: st.tint,
+      swatches: this.SWATCHES.map(c => ({
+        color: c,
+        ring: c === st.tint ? '0 0 0 2px #0a0d12, 0 0 0 4px '+c : 'none',
+        pick: () => this.setState({ tint: c })
+      }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>

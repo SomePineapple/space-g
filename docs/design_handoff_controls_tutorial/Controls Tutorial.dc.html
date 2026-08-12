@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body{margin:0;background:#0a0d12;}
+  @keyframes ctFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes ctPulse{0%,100%{box-shadow:0 0 0 0 rgba(85,214,232,0.35)}50%{box-shadow:0 0 0 6px rgba(85,214,232,0)}}
+</style>
+</helmet>
+
+<section style="position:relative;width:1280px;height:720px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#05070b;overflow:hidden;box-sizing:border-box;">
+
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#0a0d12 0 14px,#0d1119 14px 28px);display:flex;align-items:center;justify-content:center;">
+    <span style="font-family:monospace;font-size:12px;letter-spacing:0.14em;color:#3a4652;">gameplay viewport — placeholder</span>
+  </div>
+
+  <sc-if value="{{ visible }}" hint-placeholder-val="{{ true }}">
+    <div style="position:absolute;top:24px;right:24px;">
+      <div style="width:380px;background:rgba(20,26,33,0.82);backdrop-filter:blur(6px);border:1px solid rgba(85,214,232,0.28);border-radius:6px;padding:22px 24px 20px;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:ctFade 0.25s ease;" key="{{ stepIndex }}">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <span style="font-family:monospace;font-size:11px;letter-spacing:0.16em;color:#f2c14e;">NEW CONTROL</span>
+          <span onClick="{{ skip }}" style="font-family:monospace;font-size:11px;letter-spacing:0.1em;color:#5c6b78;cursor:pointer;" style-hover="color:#c7d0d8;">SKIP ✕</span>
+        </div>
+
+        <div style="color:#dfe7ec;font-size:16px;line-height:1.5;margin-bottom:18px;min-height:24px;">{{ instructionText }}</div>
+
+        <sc-if value="{{ isMove }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:56px 56px 56px;grid-template-rows:56px 56px;gap:6px;justify-content:center;margin-bottom:20px;">
+            <div style="grid-column:2;grid-row:1;{{ wStyle }}">
+              <span>W</span>
+              <sc-if value="{{ wDone }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-6px;right:-6px;font-size:12px;">✓</span></sc-if>
+            </div>
+            <div style="grid-column:1;grid-row:2;{{ aStyle }}">
+              <span>A</span>
+              <sc-if value="{{ aDone }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-6px;right:-6px;font-size:12px;">✓</span></sc-if>
+            </div>
+            <div style="grid-column:2;grid-row:2;{{ sStyle }}">
+              <span>S</span>
+              <sc-if value="{{ sDone }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-6px;right:-6px;font-size:12px;">✓</span></sc-if>
+            </div>
+            <div style="grid-column:3;grid-row:2;{{ dStyle }}">
+              <span>D</span>
+              <sc-if value="{{ dDone }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-6px;right:-6px;font-size:12px;">✓</span></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFire }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;justify-content:center;margin-bottom:20px;">
+            <div style="{{ spaceStyle }}">
+              <span>SPACE</span>
+              <sc-if value="{{ spaceDone }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-6px;right:-6px;font-size:12px;">✓</span></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isInteract }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;justify-content:center;margin-bottom:20px;">
+            <div style="{{ eStyle }}">
+              <span>E</span>
+              <sc-if value="{{ eDone }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-6px;right:-6px;font-size:12px;">✓</span></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-family:monospace;font-size:10px;letter-spacing:0.08em;color:#5c6b78;">{{ hintText }}</span>
+          <div style="display:flex;gap:6px;">
+            <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+              <span style="width:6px;height:6px;border-radius:50%;{{ d.style }}"></span>
+            </sc-for>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </sc-if>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:720},&quot;forceShow&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Preview&quot;}}">
+const STEPS = [
+  { id:'move', keys:['W','A','S','D'], text:'To move and rotate, use WASD.' },
+  { id:'fire', keys:['SPACE'], text:'Hold SPACE to fire your primary weapon.' },
+  { id:'interact', keys:['E'], text:'Press E to interact with nearby objects.' }
+];
+const STORAGE_KEY = 'controlsTutorialSeen_v1';
+
+const BASE = 'width:56px;height:56px;border-radius:8px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:700;font-size:19px;transition:all .15s;position:relative;';
+const UNPRESSED = 'border:1px solid rgba(85,214,232,0.3);background:rgba(85,214,232,0.06);color:#8fa0ab;animation:ctPulse 1.8s ease-in-out infinite;';
+const PRESSED = 'border:1px solid #55d6e8;background:rgba(85,214,232,0.2);color:#8fe9f2;box-shadow:0 0 10px rgba(85,214,232,0.3);animation:none;';
+const WIDE_BASE = 'width:200px;height:56px;border-radius:8px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:700;font-size:15px;letter-spacing:0.1em;transition:all .15s;position:relative;';
+
+class Component extends DCLogic {
+  state = { stepIndex: 0, pressed: {}, dismissed: false, checkedStorage: false };
+
+  componentDidMount() {
+    let seen = false;
+    try { seen = localStorage.getItem(STORAGE_KEY) === '1'; } catch(e) {}
+    this.setState({ dismissed: seen, checkedStorage: true });
+    this._onKey = (e) => this.handleKey(e);
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._onKey);
+    if (this._advanceTimer) clearTimeout(this._advanceTimer);
+  }
+
+  handleKey(e) {
+    if (this.state.dismissed) return;
+    const step = STEPS[this.state.stepIndex];
+    if (!step) return;
+    const key = e.key === ' ' ? 'SPACE' : e.key.toUpperCase();
+    if (!step.keys.includes(key)) return;
+    if (this.state.pressed[key]) return;
+    const pressed = { ...this.state.pressed, [key]: true };
+    this.setState({ pressed });
+    const allDone = step.keys.every(k => pressed[k]);
+    if (allDone) {
+      this._advanceTimer = setTimeout(() => this.advance(), 550);
+    }
+  }
+
+  advance() {
+    const next = this.state.stepIndex + 1;
+    if (next >= STEPS.length) {
+      try { localStorage.setItem(STORAGE_KEY, '1'); } catch(e) {}
+      this.setState({ dismissed: true });
+    } else {
+      this.setState({ stepIndex: next, pressed: {} });
+    }
+  }
+
+  skip() {
+    if (this._advanceTimer) clearTimeout(this._advanceTimer);
+    try { localStorage.setItem(STORAGE_KEY, '1'); } catch(e) {}
+    this.setState({ dismissed: true });
+  }
+
+  keyStyle(base, key) {
+    return base + (this.state.pressed[key] ? PRESSED : UNPRESSED);
+  }
+
+  renderVals() {
+    const forceShow = this.props.forceShow ?? true;
+    const visible = (forceShow || !this.state.dismissed) && this.state.checkedStorage;
+    const stepIndex = Math.min(this.state.stepIndex, STEPS.length - 1);
+    const step = STEPS[stepIndex];
+    const remaining = step.keys.filter(k => !this.state.pressed[k]).length;
+
+    return {
+      visible,
+      stepIndex,
+      instructionText: step.text,
+      hintText: remaining > 0 ? 'PRESS THE HIGHLIGHTED KEY' + (step.keys.length > 1 ? 'S' : '') + ' TO CONTINUE' : 'GOT IT ▸',
+      isMove: step.id === 'move',
+      isFire: step.id === 'fire',
+      isInteract: step.id === 'interact',
+      wStyle: this.keyStyle(BASE, 'W'), aStyle: this.keyStyle(BASE, 'A'),
+      sStyle: this.keyStyle(BASE, 'S'), dStyle: this.keyStyle(BASE, 'D'),
+      spaceStyle: this.keyStyle(WIDE_BASE, 'SPACE'), eStyle: this.keyStyle(BASE, 'E'),
+      wDone: !!this.state.pressed.W, aDone: !!this.state.pressed.A,
+      sDone: !!this.state.pressed.S, dDone: !!this.state.pressed.D,
+      spaceDone: !!this.state.pressed.SPACE, eDone: !!this.state.pressed.E,
+      dots: STEPS.map((s, i) => ({
+        style: i === stepIndex ? 'background:#55d6e8;' : (i < stepIndex ? 'background:rgba(85,214,232,0.5);' : 'background:rgba(85,214,232,0.15);')
+      })),
+      skip: () => this.skip()
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -12,6 +12,8 @@ extends Node2D
 ## tractor beam stops moving and stops ageing) and by tuning lifetime/
 ## fade_duration in the editor.
 
+## Zero or less means the piece never ages out: it drifts, and it stays there
+## until something collects it. See CapturedTechPart.make_permanent.
 @export var lifetime: float = 8.0
 @export var fade_duration: float = 1.5
 
@@ -83,6 +85,8 @@ func _process(delta: float) -> void:
 	position += _velocity * delta
 	rotation += _spin * delta
 
+	if lifetime <= 0.0:
+		return
 	if _age >= lifetime - fade_duration:
 		modulate.a = clampf((lifetime - _age) / fade_duration, 0.0, 1.0)
 	if _age >= lifetime:

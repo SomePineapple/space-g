@@ -1,0 +1,15 @@
+{
+  "categories_order": ["Core", "Structure", "Propulsion", "Weapons", "Utility", "Storage"],
+  "modules": [
+    { "key": "core", "name": "Command Core", "glyph": "CC", "owned": 1, "cost": "10 Iron, 20 Copper", "category": "Core", "gradient": ["#2a5f6b", "#173238"], "glyphColor": "#8fe9f2" },
+    { "key": "hull", "name": "Hull", "glyph": "HL", "owned": 2, "cost": "2 Metal Sheets, 1 Reinforced Steel", "category": "Structure", "gradient": ["#4a5763", "#2b3542"], "glyphColor": "#c7d0d8" },
+    { "key": "heavyhull", "name": "Heavy Hull", "glyph": "HH", "owned": 0, "cost": "20 Iron", "category": "Structure", "gradient": ["#333f4d", "#1c2329"], "glyphColor": "#8b98a3" },
+    { "key": "strut", "name": "Strut", "glyph": "ST", "owned": 0, "cost": "4 Metal Sheets", "category": "Structure", "gradient": ["#5a6b7a", "#333f4d"], "glyphColor": "#c7d0d8" },
+    { "key": "engine", "name": "Engine", "glyph": "EN", "owned": 1, "cost": "1 Metal Sheets, 2 Wiring, 1 Motor", "category": "Propulsion", "gradient": ["#a3822f", "#5c4718"], "glyphColor": "#ffe6a8" },
+    { "key": "weapon", "name": "Weapon Mount", "glyph": "WM", "owned": 0, "cost": "6 Iron, 2 Wiring", "category": "Weapons", "gradient": ["#a35a3a", "#5c2e18"], "glyphColor": "#ffcbb0" },
+    { "key": "sensor", "name": "Sensor Array", "glyph": "SA", "owned": 0, "cost": "4 Copper, 2 Wiring", "category": "Utility", "gradient": ["#3a6b7a", "#1c3742"], "glyphColor": "#a8d9e8" },
+    { "key": "cargo", "name": "Cargo Bay", "glyph": "CB", "owned": 0, "cost": "8 Metal Sheets", "category": "Storage", "gradient": ["#2a8fa3", "#173a42"], "glyphColor": "#8fe9f2" }
+  ],
+  "filter_tabs": ["All", "Structure", "Weapons", "Utility", "Owned"],
+  "presets": ["BattleCruiser_", "Interceptor_MkII", "browse_test", "Goofball", "LargeMissileCarrier"]
+}
