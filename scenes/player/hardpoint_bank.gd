@@ -151,21 +151,13 @@ func fire_secondary() -> void:
 			launcher.fire()
 
 
-## Called on fire_winch's just-pressed edge (see ship_input.gd) — starts a cast
-## on every mounted, still-intact winch hardpoint (usually just one).
-func fire_winch() -> void:
+## Called on fire_winch's just-pressed edge (see ship_input.gd). One press does
+## whatever the grapple's current state calls for — cast, wind in, stop — so this
+## is the only thing the bank forwards (see HardpointWinch.press).
+func press_winch() -> void:
 	for winch in _winches:
 		if not _ship.is_module_destroyed(winch.source_placement_id):
-			winch.fire()
-
-
-## Called every physics frame with fire_winch's current held state — only has an
-## effect on a winch that's already ATTACHED to a part (see
-## HardpointWinch.set_reel_input).
-func set_winch_reel_input(is_held: bool) -> void:
-	for winch in _winches:
-		if not _ship.is_module_destroyed(winch.source_placement_id):
-			winch.set_reel_input(is_held)
+			winch.press()
 
 
 ## Guns and launchers track a world-space aim point; every other kind has either

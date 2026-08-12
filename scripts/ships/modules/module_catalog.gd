@@ -75,7 +75,7 @@ static func get_all() -> Array[ModuleType]:
 	# fight in one lucky hit to the cockpit.
 	var core_type: ModuleType = _make(CORE_TYPE_ID, "Command Core", Color(0.9, 0.85, 0.2), SINGLE_CELL, 0.4, 140.0, 0.0, COCKPIT_TEXTURE,
 		"", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20})
-	core_type.faction_hex_textures = FactionArtImporter.load_faction_textures("command_core")
+	FactionArtImporter.apply_hex_art(core_type, "command_core")
 	types.append(core_type)
 
 	# --- The bundled build set ----------------------------------------------
@@ -90,7 +90,7 @@ static func get_all() -> Array[ModuleType]:
 	var hull_spar: ModuleType = _make(HULL_SPAR_TYPE_ID, "Hull Spar", Color(0.5, 0.55, 0.6), LINE_3_CELLS,
 		0.75, 150.0, 0.0, HULL_TEXTURE, "", 1, {MaterialCatalog.IRON: 12},
 		0.0, 0.0, null, true)
-	hull_spar.faction_hex_textures = FactionArtImporter.load_faction_textures("hull_mk1")
+	FactionArtImporter.apply_hex_art(hull_spar, "hull_mk1")
 	types.append(hull_spar)
 
 	# The armour block: compact rather than long, so it actually shields what
@@ -98,7 +98,7 @@ static func get_all() -> Array[ModuleType]:
 	var hull_wedge: ModuleType = _make(HULL_WEDGE_TYPE_ID, "Hull Wedge", Color(0.45, 0.3, 0.55), TRIANGLE_3_CELLS,
 		1.0, 220.0, 0.0, null, "", 1, {MaterialCatalog.IRON: 20},
 		0.0, 0.0, null, true)
-	hull_wedge.faction_hex_textures = FactionArtImporter.load_faction_textures("armour_module")
+	FactionArtImporter.apply_hex_art(hull_wedge, "armour_module")
 	types.append(hull_wedge)
 
 	# Mount hex plus barrel hex. Uses the two-piece laser plate art (see
@@ -109,10 +109,7 @@ static func get_all() -> Array[ModuleType]:
 		0.5, 40.0, 0.0, null, "weapon", 1,
 		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 6},
 		0.0, 0.0, null, true)
-	gun_mk1.faction_hex_textures = FactionArtImporter.load_faction_textures("laser_cannon_mk2")
-	gun_mk1.faction_hex_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
-		"laser_cannon_mk2", LINE_2_CELLS)
-	gun_mk1.faction_hex_overlay_textures = FactionArtImporter.load_faction_textures("turret_360")
+	FactionArtImporter.apply_hex_art(gun_mk1, "laser_cannon_mk2", "turret_360")
 	types.append(gun_mk1)
 
 	# Carries a little capacity of its own as well as generation, so a ship with
@@ -121,7 +118,7 @@ static func get_all() -> Array[ModuleType]:
 		0.7, 50.0, 0.0, null, "", 1,
 		{MaterialCatalog.IRON: 12, MaterialCatalog.COPPER: 14, MaterialCatalog.NICKEL: 6},
 		30.0, 40.0, null, true)
-	reactor_pair.faction_hex_textures = FactionArtImporter.load_faction_textures("reactor_mk1")
+	FactionArtImporter.apply_hex_art(reactor_pair, "reactor_mk1")
 	types.append(reactor_pair)
 
 	# The only source of thrust in the build set, so losing one is the
@@ -130,7 +127,7 @@ static func get_all() -> Array[ModuleType]:
 		0.5, 45.0, 800.0, null, "", 1,
 		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 8},
 		0.0, 0.0, null, true)
-	thruster_block.faction_hex_textures = FactionArtImporter.load_faction_textures("thruster_mk1")
+	FactionArtImporter.apply_hex_art(thruster_block, "thruster_mk1")
 	types.append(thruster_block)
 
 	# --- Legacy single-hex types --------------------------------------------
@@ -148,14 +145,14 @@ static func get_all() -> Array[ModuleType]:
 	# see ShipBuilderPanel._on_build_pressed).
 	var hull_type: ModuleType = _make("hull", "Hull", Color(0.5, 0.55, 0.6), SINGLE_CELL, 0.3, 50.0, 0.0, HULL_TEXTURE,
 		"", 1, {ComponentCatalog.METAL_SHEETS: 2, ComponentCatalog.REINFORCED_STEEL: 1})
-	hull_type.faction_hex_textures = FactionArtImporter.load_faction_textures("hull_mk1")
+	FactionArtImporter.apply_hex_art(hull_type, "hull_mk1")
 	types.append(hull_type)
 
 	# Phase 5.2 example cost ("Thruster" in the spec) — Metal Sheets for the
 	# housing, Wiring + a crafted Motor for the actual drive.
 	var engine_type: ModuleType = _make("engine", "Engine", Color(0.3, 0.7, 1.0), SINGLE_CELL, 0.25, 20.0, 500.0, null,
 		"", 1, {ComponentCatalog.METAL_SHEETS: 1, ComponentCatalog.WIRING: 2, ComponentCatalog.MOTOR: 1})
-	engine_type.faction_hex_textures = FactionArtImporter.load_faction_textures("engine_mk1")
+	FactionArtImporter.apply_hex_art(engine_type, "engine_mk1")
 	engine_type.is_capturable_tech = true
 	types.append(engine_type)
 
@@ -164,7 +161,7 @@ static func get_all() -> Array[ModuleType]:
 	# a few seconds, even from several guns at once.
 	var heavy_hull_type: ModuleType = _make("heavy_hull", "Heavy Hull", Color(0.45, 0.3, 0.55), LINE_3_CELLS, 0.9, 240.0, 0.0, null,
 		"", 1, {MaterialCatalog.IRON: 20})
-	heavy_hull_type.faction_hex_textures = FactionArtImporter.load_faction_textures("armour_module")
+	FactionArtImporter.apply_hex_art(heavy_hull_type, "armour_module")
 	types.append(heavy_hull_type)
 
 	# Deliberately cheaper, lighter and far more fragile than Hull: a strut's
@@ -174,7 +171,7 @@ static func get_all() -> Array[ModuleType]:
 	# faction only (see ShipLayoutRenderer/HexGridControl).
 	var strut_type: ModuleType = _make("strut", "Strut", Color(0.55, 0.58, 0.5), SINGLE_CELL, 0.15, 25.0, 0.0, null,
 		"", 1, {MaterialCatalog.IRON: 3})
-	strut_type.faction_hex_textures = FactionArtImporter.load_faction_textures("strut")
+	FactionArtImporter.apply_hex_art(strut_type, "strut")
 	types.append(strut_type)
 
 	# Every weapon-hardpoint tier's base plate is exported as one image PER
@@ -192,60 +189,44 @@ static func get_all() -> Array[ModuleType]:
 	# see ModuleType.faction_hex_overlay_textures and HardpointGun's rotating
 	# turret sprite, which draws them as one centered icon, not per-cell.
 	#
-	# Also load the old unsuffixed single-image name for each tier as a
-	# fallback (faction_hex_textures, via get_hex_texture_for_cell's built-in
-	# fallback) — factions that haven't re-exported a tier with the new
-	# per-cell pieces yet (Ancient/Pirates only have "laser_cannon_mk1.png"
-	# so far) keep showing their existing art instead of going blank.
-	var laser_t1_per_cell: Array[Dictionary] = FactionArtImporter.load_faction_textures_per_cell("laser_cannon_mk1", SINGLE_CELL)
-	var laser_t2_per_cell: Array[Dictionary] = FactionArtImporter.load_faction_textures_per_cell("laser_cannon_mk2", LINE_2_CELLS)
-	var laser_t3_per_cell: Array[Dictionary] = FactionArtImporter.load_faction_textures_per_cell("laser_cannon_mk3", TRIANGLE_3_CELLS)
-	var laser_t1_fallback: Dictionary = FactionArtImporter.load_faction_textures("laser_cannon_mk1")
-	var laser_t2_fallback: Dictionary = FactionArtImporter.load_faction_textures("laser_cannon_mk2")
-	var laser_t3_fallback: Dictionary = FactionArtImporter.load_faction_textures("laser_cannon_mk3")
-	var turret_t1_textures: Dictionary = FactionArtImporter.load_faction_textures("turret_360")
-	var turret_t2_textures: Dictionary = FactionArtImporter.load_faction_textures("turret_360_mk2")
-	var turret_t3_textures: Dictionary = FactionArtImporter.load_faction_textures("turret_360_mk3")
-
+	# apply_hex_art also claims the old unsuffixed single-image name for each
+	# tier as a fallback (via get_hex_texture_for_cell's built-in fallback) —
+	# factions that haven't re-exported a tier with the new per-cell pieces yet
+	# (Ancient/Pirates only have "laser_cannon_mk1.png" so far) keep showing
+	# their existing art instead of going blank — and picks up a "_lights" layer
+	# for either shape the day one is exported.
 	var weapon_t1: ModuleType = _make(WEAPON_HARDPOINT_TYPE_ID, "Weapon Hardpoint I", Color(0.9, 0.35, 0.3), SINGLE_CELL,
 		0.2, 15.0, 0.0, null, "weapon", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 4})
-	weapon_t1.faction_hex_textures = laser_t1_fallback
-	weapon_t1.faction_hex_textures_per_cell = laser_t1_per_cell
-	weapon_t1.faction_hex_overlay_textures = turret_t1_textures
+	FactionArtImporter.apply_hex_art(weapon_t1, "laser_cannon_mk1", "turret_360")
 	weapon_t1.is_capturable_tech = true
 	types.append(weapon_t1)
 	var weapon_t2: ModuleType = _make("weapon_hardpoint_t2", "Weapon Hardpoint II", Color(0.8, 0.25, 0.2), LINE_2_CELLS,
 		0.5, 35.0, 0.0, null, "weapon", 2, {MaterialCatalog.IRON: 18, MaterialCatalog.COPPER: 10})
-	weapon_t2.faction_hex_textures = laser_t2_fallback
-	weapon_t2.faction_hex_textures_per_cell = laser_t2_per_cell
-	weapon_t2.faction_hex_overlay_textures = turret_t2_textures
+	FactionArtImporter.apply_hex_art(weapon_t2, "laser_cannon_mk2", "turret_360_mk2")
 	weapon_t2.is_capturable_tech = true
 	types.append(weapon_t2)
 	var weapon_t3: ModuleType = _make("weapon_hardpoint_t3", "Weapon Hardpoint III", Color(0.65, 0.15, 0.1), TRIANGLE_3_CELLS,
 		0.9, 60.0, 0.0, null, "weapon", 3,
 		{MaterialCatalog.IRON: 32, MaterialCatalog.COPPER: 20, MaterialCatalog.TITANIUM: 5})
-	weapon_t3.faction_hex_textures = laser_t3_fallback
-	weapon_t3.faction_hex_textures_per_cell = laser_t3_per_cell
-	weapon_t3.faction_hex_overlay_textures = turret_t3_textures
+	FactionArtImporter.apply_hex_art(weapon_t3, "laser_cannon_mk3", "turret_360_mk3")
 	weapon_t3.is_capturable_tech = true
 	types.append(weapon_t3)
 
 	# Same reuse-across-tiers reasoning as the laser cannon above.
-	var missile_textures: Dictionary = FactionArtImporter.load_faction_textures("missile_launcher_mk1")
 	var missile_t1: ModuleType = _make(MISSILE_HARDPOINT_TYPE_ID, "Missile Rack I", Color(1.0, 0.6, 0.15), SINGLE_CELL,
 		0.3, 20.0, 0.0, MISSILE_HARDPOINT_TEXTURE, "missile", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 8})
-	missile_t1.faction_hex_textures = missile_textures
+	FactionArtImporter.apply_hex_art(missile_t1, "missile_launcher_mk1")
 	missile_t1.is_capturable_tech = true
 	types.append(missile_t1)
 	var missile_t2: ModuleType = _make("missile_hardpoint_t2", "Missile Rack II", Color(0.9, 0.5, 0.1), LINE_2_CELLS,
 		0.7, 45.0, 0.0, null, "missile", 2, {MaterialCatalog.IRON: 22, MaterialCatalog.COPPER: 16})
-	missile_t2.faction_hex_textures = missile_textures
+	FactionArtImporter.apply_hex_art(missile_t2, "missile_launcher_mk1")
 	missile_t2.is_capturable_tech = true
 	types.append(missile_t2)
 	var missile_t3: ModuleType = _make("missile_hardpoint_t3", "Missile Rack III", Color(0.75, 0.4, 0.05), LINE_3_CELLS,
 		1.2, 75.0, 0.0, null, "missile", 3,
 		{MaterialCatalog.IRON: 38, MaterialCatalog.COPPER: 26, MaterialCatalog.NICKEL: 10})
-	missile_t3.faction_hex_textures = missile_textures
+	FactionArtImporter.apply_hex_art(missile_t3, "missile_launcher_mk1")
 	missile_t3.is_capturable_tech = true
 	types.append(missile_t3)
 
@@ -253,7 +234,7 @@ static func get_all() -> Array[ModuleType]:
 		0.35, 25.0, 0.0, null, "", 1,
 		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 15, MaterialCatalog.NICKEL: 10},
 		15.0, 0.0)
-	reactor_type.faction_hex_textures = FactionArtImporter.load_faction_textures("reactor_mk1")
+	FactionArtImporter.apply_hex_art(reactor_type, "reactor_mk1")
 	reactor_type.is_capturable_tech = true
 	types.append(reactor_type)
 
@@ -261,7 +242,7 @@ static func get_all() -> Array[ModuleType]:
 		0.3, 20.0, 0.0, null, "", 1,
 		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20},
 		0.0, 80.0)
-	battery_type.faction_hex_textures = FactionArtImporter.load_faction_textures("battery_mk1")
+	FactionArtImporter.apply_hex_art(battery_type, "battery_mk1")
 	battery_type.is_capturable_tech = true
 	types.append(battery_type)
 
@@ -279,7 +260,7 @@ static func get_all() -> Array[ModuleType]:
 		# here to reach cargo_capacity_contribution, and a Cargo Container is not
 		# capturable tech in any case.
 		0.0, 0.0, null, false, -1.0, -1.0, 60.0)
-	storage_type.faction_hex_textures = FactionArtImporter.load_faction_textures("cargo_container")
+	FactionArtImporter.apply_hex_art(storage_type, "cargo_container")
 	types.append(storage_type)
 
 	# Corporate Alliance: standardised, industrial kinetic weapon. Tougher
@@ -304,7 +285,7 @@ static func get_all() -> Array[ModuleType]:
 	# Tractor beam hardpoint (see HardpointTractorBeam/HardpointBank._mount_tractor_beam).
 	var tractor_type: ModuleType = _make(TRACTOR_HARDPOINT_TYPE_ID, "Tractor Beam", Color(0.4, 0.75, 0.85), SINGLE_CELL,
 		0.2, 30.0, 0.0, null, "tractor", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 8})
-	tractor_type.faction_hex_textures = FactionArtImporter.load_faction_textures("tractor_beam")
+	FactionArtImporter.apply_hex_art(tractor_type, "tractor_beam")
 	types.append(tractor_type)
 
 	# Radar hardpoint (see RadarDisplay.has_radar/Ship.has_radar) — a pure
@@ -317,7 +298,7 @@ static func get_all() -> Array[ModuleType]:
 	# next to it in the same blue family.
 	var radar_type: ModuleType = _make(RADAR_HARDPOINT_TYPE_ID, "Radar", Color(0.3, 1.0, 0.55), SINGLE_CELL,
 		0.2, 25.0, 0.0, null, "radar", 1, {MaterialCatalog.IRON: 6, MaterialCatalog.COPPER: 10})
-	radar_type.faction_hex_textures = FactionArtImporter.load_faction_textures("radar")
+	FactionArtImporter.apply_hex_art(radar_type, "radar")
 	types.append(radar_type)
 
 	# Scanner hardpoint (see Scanner.has_scanner/Ship.has_scanner) — same
@@ -331,7 +312,7 @@ static func get_all() -> Array[ModuleType]:
 	var scanner_type: ModuleType = _make(SCANNER_HARDPOINT_TYPE_ID, "Scanner", Color(0.9, 0.35, 0.75), SINGLE_CELL,
 		0.2, 25.0, 0.0, null, "scanner", 1,
 		{ComponentCatalog.CIRCUIT_BOARD: 1, ComponentCatalog.WIRING: 1, MaterialCatalog.GLASS: 2})
-	scanner_type.faction_hex_textures = FactionArtImporter.load_faction_textures("scanner")
+	FactionArtImporter.apply_hex_art(scanner_type, "scanner")
 	types.append(scanner_type)
 
 	# Hull Slicer (see HardpointSlicer) — the tool the salvage loop runs on. Two
@@ -350,7 +331,7 @@ static func get_all() -> Array[ModuleType]:
 	# the module had when they were drawn (resources/exports/*/…_mining_grinder.png).
 	# Renaming them is an art-pipeline job (re-export, re-import, mipmap check —
 	# see CLAUDE.md) rather than part of this rename.
-	slicer_type.faction_hex_textures = FactionArtImporter.load_faction_textures("mining_grinder")
+	FactionArtImporter.apply_hex_art(slicer_type, "mining_grinder")
 	types.append(slicer_type)
 
 	types.append_array(_grapple_types())
@@ -368,9 +349,9 @@ static func get_all() -> Array[ModuleType]:
 ## never stuck — it is gone rather than kept as a retired id, since nothing
 ## persists a player's parts between runs yet and the one ship layout that
 ## mounted it (custodian.tres) now carries a Mk2, which has the identical
-## two-cell footprint. The scene and rope it spawns are still named for the
-## winch (HardpointWinch, WinchRope); that is internal and renaming it is a
-## mechanical job of its own.
+## two-cell footprint. The scene it spawns is still named for the winch
+## (HardpointWinch); that is internal and renaming it is a mechanical job of its
+## own — the line it casts is already GrappleRope.
 ##
 ## Each mark is physically bigger than the last, and its aperture — the hole
 ## the chain actually pays out of — sits
@@ -397,8 +378,7 @@ static func _grapple_types() -> Array[ModuleType]:
 		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 4},
 		0.0, 0.0, winch_scene, true)
 	mk1.muzzle_offset_cells = Vector2(0.0, -0.518)
-	mk1.faction_hex_textures = FactionArtImporter.load_faction_textures("grapple_mk1")
-	mk1.faction_hex_glow_textures = FactionArtImporter.load_faction_textures("grapple_mk1_lights")
+	FactionArtImporter.apply_hex_art(mk1, "grapple_mk1")
 	grapples.append(mk1)
 
 	var mk2: ModuleType = _make(GRAPPLE_MK2_TYPE_ID, "Grapple Mk2", plate, LINE_2_CELLS,
@@ -406,10 +386,7 @@ static func _grapple_types() -> Array[ModuleType]:
 		{MaterialCatalog.IRON: 16, MaterialCatalog.COPPER: 8},
 		0.0, 0.0, winch_scene, true)
 	mk2.muzzle_offset_cells = Vector2(0.0, -0.064)
-	mk2.faction_hex_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
-		"grapple_mk2", LINE_2_CELLS)
-	mk2.faction_hex_glow_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
-		"grapple_mk2", LINE_2_CELLS, "_lights")
+	FactionArtImporter.apply_hex_art(mk2, "grapple_mk2")
 	grapples.append(mk2)
 
 	var mk3: ModuleType = _make(GRAPPLE_MK3_TYPE_ID, "Grapple Mk3", plate, TRIANGLE_3_CELLS,
@@ -417,10 +394,7 @@ static func _grapple_types() -> Array[ModuleType]:
 		{MaterialCatalog.IRON: 24, MaterialCatalog.COPPER: 12},
 		0.0, 0.0, winch_scene, true)
 	mk3.muzzle_offset_cells = Vector2(0.0, -0.361)
-	mk3.faction_hex_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
-		"grapple_mk3", TRIANGLE_3_CELLS)
-	mk3.faction_hex_glow_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
-		"grapple_mk3", TRIANGLE_3_CELLS, "_lights")
+	FactionArtImporter.apply_hex_art(mk3, "grapple_mk3")
 	grapples.append(mk3)
 
 	return grapples

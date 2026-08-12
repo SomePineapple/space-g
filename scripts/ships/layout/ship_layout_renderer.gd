@@ -50,12 +50,11 @@ const WELD_BOLT_WIDTH: float = 1.0
 ## hex_texture/color entirely so "this module is dead" reads at a glance.
 const DESTROYED_COLOR: Color = Color(0.12, 0.1, 0.1, 1.0)
 
-## What a module's emissive layer is multiplied by. Past 1.0 on purpose: the 2D
-## buffer is HDR (rendering/viewport/hdr_2d) and the region's WorldEnvironment
-## blooms whatever comes out brighter than its glow threshold, so this is the
-## difference between a lamp that is painted on and one that actually throws
-## light. White rather than a colour, so the art keeps its own hue.
-const GLOW_GAIN: Color = Color(1.7, 1.7, 1.7, 1.0)
+## Emissive layers are drawn white here and pushed past the glow threshold by
+## HullGlowLayer's shader instead. They cannot be brightened at this point: a
+## mesh's vertex colour is 8-bit, so a Color above 1.0 clamps back to white on
+## the way in — which is what the gain that used to live here was quietly doing.
+const GLOW_TINT: Color = Color.WHITE
 
 ## placement_id -> true. Owned by whoever calls set_module_destroyed() (Ship,
 ## once a module's per-placement condition hits zero — see
@@ -72,12 +71,23 @@ var _detached_placement_ids: Dictionary = {}
 ## outlive _draw() — dropping them frees the mesh out from under the renderer
 ## and it spams "Parameter mesh is null" every frame.
 var _hull_meshes: Array[ArrayMesh] = []
+## The child that draws this hull's lit layers (see _glow_layer).
+var _glow: HullGlowLayer = null
 
 
 func _ready() -> void:
 	# Hex art is authored at a much higher resolution than it renders at in
 	# game, so mipmapped filtering is needed to avoid minification aliasing.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+
+## Created on first use rather than in _ready, because _draw can run before
+## _ready on a hull built during a layout apply.
+func _glow_layer() -> HullGlowLayer:
+	if _glow == null or not is_instance_valid(_glow):
+		_glow = HullGlowLayer.new()
+		add_child(_glow)
+	return _glow
 
 
 func set_layout(new_layout: ShipLayout) -> void:
@@ -186,7 +196,7 @@ func _draw() -> void:
 				if glow != null:
 					if not glow_fills_by_texture.has(glow):
 						glow_fills_by_texture[glow] = []
-					glow_fills_by_texture[glow].append([corners, uvs, GLOW_GAIN])
+					glow_fills_by_texture[glow].append([corners, uvs, GLOW_TINT])
 				# Weapon-hardpoint overlay art (turret_360/etc) is drawn by the
 				# rotating HardpointGun itself during gameplay (see
 				# HardpointGun.set_turret_texture), not here — drawing it a
@@ -213,12 +223,14 @@ func _draw() -> void:
 		_hull_meshes.append(mesh)
 		draw_mesh(mesh, texture)
 
-	# Lights over the plating they belong to, but under the panel lines and
-	# silhouette below — a lamp is set into the hull, not floating over its edges.
+	# Lights are handed to the child glow layer rather than drawn here, because
+	# they need a shader this item cannot switch to mid-draw (see HullGlowLayer).
+	# Not kept in _hull_meshes: these are drawn by the child, so it is the child
+	# that has to hold them alive.
+	var glow_meshes: Dictionary = {}
 	for glow_texture: Texture2D in glow_fills_by_texture:
-		var glow_mesh: ArrayMesh = _build_hex_mesh(glow_fills_by_texture[glow_texture])
-		_hull_meshes.append(glow_mesh)
-		draw_mesh(glow_mesh, glow_texture)
+		glow_meshes[glow_texture] = _build_hex_mesh(glow_fills_by_texture[glow_texture])
+	_glow_layer().set_glow_meshes(glow_meshes)
 
 	# Bolts over their own weld dashes, and the silhouette over everything, so a
 	# joint reaching the hull's edge never looks like a hole.

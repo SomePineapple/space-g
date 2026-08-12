@@ -76,7 +76,6 @@ func _read_weapons() -> void:
 
 func _read_operations() -> void:
 	_intent.fire_winch = Input.is_action_just_pressed("fire_winch")
-	_intent.winch_reel = Input.is_action_pressed("fire_winch")
 	_intent.toggle_scan = Input.is_action_just_pressed("scan")
 	_read_system_toggles()
 

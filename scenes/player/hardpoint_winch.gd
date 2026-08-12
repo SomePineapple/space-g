@@ -1,60 +1,61 @@
 class_name HardpointWinch
 extends Node2D
 
-## A hardpoint that casts a physical rope (see WinchRope) instead of firing
-## a projectile: press fire_winch (see Ship.fire_winch) to shoot the rope
-## out in this hardpoint's own facing direction (its placement's
-## rotation_steps — see HardpointBank._mount_winch — not aimed at the
-## mouse like a gun).
+## The Grapple hardpoint (Mk1/Mk2/Mk3 — see ModuleCatalog._grapple_types): the
+## recovery half of the salvage loop. The Slicer frees a part, this drags it
+## home.
 ##
-## The rope always stays paid out until the player reels it back in by
-## holding fire_winch — it does NOT auto-retract on a miss, only on a
-## completed tech-part capture (nothing left to interact with there).
+## One key runs the whole tool, a press at a time: cast, wind in, stop (see
+## press()). The line is cast along this hardpoint's own facing, not at the
+## mouse — a grapple is bolted to the hull pointing one way, and which way that
+## is, is the placement decision the builder screen is for.
 ##
-## It catches severed parts and nothing else (see _reel_in_tech_part: always
-## pulled to the ship, captured on arrival).
+## It catches severed parts and nothing else, and a caught part is always hauled
+## to the ship and captured on arrival.
+##
+## **All the motion belongs to GrappleRope.** This script owns intent and
+## consequences — when to cast, when to wind in, what energy that costs, what
+## happens to a part that arrives — and nothing else. It used to own a tip
+## position it advanced by hand along a straight line, with WinchRope drawn
+## between that tip and the muzzle as decoration; the states that needed
+## (FIRING/ATTACHED/EXTENDED/RETRACTING) were all restatements of things the
+## simulation now knows for itself. Casting, biting, wrapping, hauling and
+## running out of chain are all consequences of the rope sim
+## (docs/design_handoff_grapple/grapple-line-Godot-spec.md), which is why the
+## line overshoots the bow when the ship stops instead of snapping rigid.
 ##
 ## It used to also grapple ships and asteroids, hauling the two ends together
 ## with equal-and-opposite impulses — a genuinely interesting toy, but one that
-## made the winch fire off in unpredictable directions in ordinary combat and
-## turned the salvage tool into a movement tool. This is the recovery half of the
-## cut-and-take loop, so it now only ever grabs what the Slicer freed. Nothing of
-## the grapple remains: reinstating it means writing it again deliberately, with
-## its own button, rather than having it fall out of the salvage winch by
-## accident.
+## made the tool fire off in unpredictable directions in ordinary combat and
+## turned the salvage tool into a movement tool. Nothing of that remains:
+## reinstating it means writing it again deliberately, with its own button.
 
-enum State { IDLE, FIRING, ATTACHED, EXTENDED, RETRACTING }
-
-## Fallback touch radius for a part that somehow reports no extent of its own
-## (see DriftingHexPiece.get_winch_radius).
-const DEFAULT_TARGET_RADIUS: float = 24.0
-
-@export var winch_rope_scene: PackedScene = preload("res://scenes/player/winch_rope.tscn")
-@export var max_range: float = 320.0
-@export var fire_speed: float = 900.0
-## Reel speed for a CapturedTechPart (direct position pull) and for
-## retrieving an empty rope after a miss — deliberately slow, a hand-cranked
-## winch rather than an instant snap.
-@export var reel_speed: float = 140.0
-## Only used for the automatic snap-back after a completed tech-part
-## capture — see State.RETRACTING.
-@export var retract_speed: float = 700.0
-## How close the rope tip must get to a target to attach/arrive.
-@export var attach_radius: float = 20.0
+## Chain capacity, in world units. The spec's line is 64 nodes at 13px rest
+## length, so 832 is the whole drum — reeling this in is the tool's reach, and
+## the knob to turn if the grapple should out-range or under-range the Slicer's
+## 420.
+@export var max_range: float = 832.0
+## How fast the winch closes the line, in world units per second. The spec's
+## secured beat winds ~700px down to ~178px over 2.1s; that rate is this. Each
+## pull is issued as a GrappleRope.reel_to over a duration derived from it, so
+## the ease-in-out of the spec's winch is kept while the player still controls
+## the reel by holding the button.
+@export var reel_speed: float = 250.0
 @export var energy_cost_per_second: float = 6.0
+## Camera kick when a slack line comes taut, from the spec's ±2.4px jolt.
+@export var jolt_shake: float = 2.4
 
 ## Which ModulePlacement (on the shooter's ShipLayout) this hardpoint was
 ## spawned from — set by Ship right after instancing, same convention as
 ## HardpointGun.source_placement_id.
 var source_placement_id: String = ""
 
-var _state: State = State.IDLE
 var _shooter: Ship
-var _rope: WinchRope = null
-var _tip_position: Vector2 = Vector2.ZERO
-var _paid_out_length: float = 0.0
-var _attached_target: Node2D = null
-var _reel_input_held: bool = false
+var _rope: GrappleRope = null
+## Whether the player has the winch switched on. Latched by press(), not held —
+## a brownout pauses the drum without clearing this, so the haul resumes on its
+## own once the reactor catches up rather than needing another press.
+var _winching: bool = false
 
 @onready var _muzzle: Marker2D = $Muzzle
 
@@ -67,213 +68,136 @@ func set_muzzle_offset(offset: Vector2) -> void:
 	_muzzle.position = offset
 
 
+## Which way the chain pays out: straight out of the aperture, along this
+## hardpoint's own facing.
+##
+## Local -y rather than +x, because that is the direction the module art calls
+## "forward". A hardpoint is mounted with the hull renderer's fixed 90° built
+## into its rotation (HardpointBank._fixed_facing), so local -y is the ship's
+## nose at rotation_steps 0 — the same convention muzzle_offset_cells is measured
+## in and the Slicer's muzzle uses. Firing along +x sent the chain out of the
+## ship's right flank while the aperture pointed forward.
+func _fire_direction() -> Vector2:
+	return Vector2.UP.rotated(global_rotation)
+
+
 func setup(shooter: Ship) -> void:
 	_shooter = shooter
 
 
-## The rope is parented to the current scene (not to this hardpoint) so it can
-## span from the muzzle to a world-space tip. That means it does NOT get freed
-## along with this node — a ship destroyed, or a module severed, mid-cast used
-## to leave its rope in the scene forever.
+## The rope is parented to the world (not to this hardpoint) so it can hold its
+## tip in space while the ship flies away from it. That means it does NOT get
+## freed along with this node — a ship destroyed, or a module severed, mid-cast
+## used to leave its rope in the scene forever.
 func _exit_tree() -> void:
 	if _rope != null and is_instance_valid(_rope):
 		_rope.queue_free()
 	_rope = null
 
 
-## Called once on the fire_winch action's just-pressed edge (see
-## Ship.fire_winch) — starts casting if idle, otherwise does nothing (an
-## attached/firing/extended rope has to resolve on its own first).
-func fire() -> void:
-	if _state == State.IDLE:
-		_start_firing()
+## One press of the grapple key, and the whole of its control (see
+## Ship.press_winch). What it does depends on what the grapple is doing:
+##
+##   drum empty      cast the line
+##   line out, idle  start the winch
+##   winching        stop the winch, leaving the line where it is
+##
+## Deliberately not hold-to-reel. Held reeling meant a press and a hold were the
+## same gesture, so anything but a flick of the key cast the line and immediately
+## began winding it back in — you could not throw the grapple and leave it out.
+## Casting and hauling are two decisions, so they are two presses.
+func press() -> void:
+	if _shooter == null:
+		return
+	_forget_dead_rope()
+	if _rope == null:
+		_cast()
+		return
+	_winching = not _winching
 
 
-## Called every physics frame with the fire_winch action's current held
-## state (see ShipIntent.winch_reel) — matters while ATTACHED (reels the
-## target in) or EXTENDED (reels an empty rope back home).
-func set_reel_input(is_held: bool) -> void:
-	_reel_input_held = is_held
+func _cast() -> void:
+	_rope = GrappleRope.new()
+	_rope.hooked.connect(_on_hooked)
+	_rope.secured.connect(_on_secured)
+	_rope.snapped_taut.connect(_on_snapped_taut)
+	_rope.stowed.connect(_on_stowed)
+	WorldSpawn.attach(_rope)
+	_rope.setup(_muzzle, max_range)
+	_rope.fire(_fire_direction())
+	_winching = false
+
+
+## A rope can be taken out from under this hardpoint without _on_stowed ever
+## running — it lives in the world, so a region change or anything else that
+## clears the scene frees it. The reference left behind is non-null but dead, and
+## treating that as "a line is still out" wedged the grapple permanently: every
+## later press was read as a winch toggle for a rope that no longer existed, and
+## the key appeared to stop working.
+func _forget_dead_rope() -> void:
+	if _rope != null and not is_instance_valid(_rope):
+		_rope = null
+		_winching = false
 
 
 func _physics_process(delta: float) -> void:
-	match _state:
-		State.FIRING:
-			_advance_firing(delta)
-		State.ATTACHED:
-			_advance_attached(delta)
-		State.EXTENDED:
-			_advance_extended(delta)
-		State.RETRACTING:
-			_advance_retracting(delta)
-		State.IDLE:
-			pass
-
-
-func _start_firing() -> void:
-	if _shooter == null:
-		return
-	_state = State.FIRING
-	_tip_position = _muzzle.global_position
-	_paid_out_length = 0.0
-	_rope = winch_rope_scene.instantiate()
-	WorldSpawn.attach(_rope)
-
-
-func _advance_firing(delta: float) -> void:
-	var direction: Vector2 = Vector2.RIGHT.rotated(global_rotation)
-	_tip_position += direction * fire_speed * delta
-	_paid_out_length += fire_speed * delta
-	_rope.update_rope(_muzzle.global_position, _tip_position, _paid_out_length)
-
-	var hit: Node2D = _find_touching_target(_tip_position)
-	if hit != null:
-		_attach_to(hit)
+	_forget_dead_rope()
+	if _rope == null:
 		return
 
-	# Fully extended without hitting anything: stop paying out rope, but stay
-	# out — see State.EXTENDED — rather than auto-retracting.
-	if _paid_out_length >= max_range:
-		_paid_out_length = max_range
-		_tip_position = _muzzle.global_position + direction * max_range
-		_state = State.EXTENDED
-
-
-func _find_touching_target(point: Vector2) -> Node2D:
-	return _find_capturable_part_at(point)
-
-
-## Catches on the part's actual extent, the same way a ship or asteroid is
-## caught. Testing against attach_radius alone meant a 20-unit window on
-## something ~80 units across, with a rope tip covering 15 units per frame — so
-## the rope routinely passed straight through a part it visibly hit.
-func _find_capturable_part_at(point: Vector2) -> Node2D:
-	for node in get_tree().get_nodes_in_group("capturable_tech"):
-		var part: CapturedTechPart = node
-		if point.distance_to(part.global_position) <= attach_radius + _effective_radius(part):
-			return part
-	return null
-
-
-func _effective_radius(node: Node2D) -> float:
-	if node.has_method("get_winch_radius"):
-		return node.get_winch_radius()
-	return DEFAULT_TARGET_RADIUS
-
-
-func _attach_to(target: Node2D) -> void:
-	_state = State.ATTACHED
-	_attached_target = target
-	if target.has_method("begin_reel_in"):
-		target.call("begin_reel_in")
-
-
-func _advance_attached(delta: float) -> void:
-	if not is_instance_valid(_attached_target):
-		_release()
+	if not _winching:
+		if _rope.is_reeling():
+			_rope.stop_reel()
 		return
 
-	if _reel_input_held:
-		_reel_in(delta)
-	else:
-		# Not reeling: the rope just holds its current length. A caught part has
-		# already stopped drifting under its own momentum (see
-		# CapturedTechPart.begin_reel_in), so it simply hangs there.
-		_hold_rope_to_target()
-
-
-## Keeps the tracked tip on the target as well as drawing the rope there.
-##
-## _tip_position is otherwise only written while the rope is paying out, so an
-## attached rope's tracked tip stayed frozen at wherever it first caught. Any
-## retract then started from that stale point — the rope visibly flung itself
-## back out to the original attach distance before reeling in.
-func _hold_rope_to_target() -> void:
-	_tip_position = _attached_target.global_position
-	_paid_out_length = _muzzle.global_position.distance_to(_tip_position) + 1.0
-	_rope.update_rope(_muzzle.global_position, _tip_position, _paid_out_length)
-
-
-## Only one kind of thing can ever be attached now, so this forwards straight to
-## the part reel instead of branching on the target's type.
-func _reel_in(delta: float) -> void:
-	_reel_in_tech_part(delta)
-
-
-func _reel_in_tech_part(delta: float) -> void:
-	if _shooter == null or not _shooter.spend_energy(energy_cost_per_second * delta):
-		_hold_rope_to_target()
+	# Hauling costs power; drawing an empty line back in does not. Losing power
+	# mid-haul stops the winch where it is rather than dropping the part, so the
+	# line stays on it and the pull resumes as soon as the reactor catches up.
+	if _rope.is_hooked() and not _shooter.spend_energy(energy_cost_per_second * delta):
+		_rope.stop_reel()
 		return
 
-	var to_muzzle: Vector2 = _muzzle.global_position - _attached_target.global_position
-	var distance: float = to_muzzle.length()
-	var travel: float = minf(reel_speed * delta, distance)
-	if distance > 0.001:
-		_attached_target.global_position += to_muzzle.normalized() * travel
+	if not _rope.is_reeling():
+		_start_reel()
 
-	if distance - travel <= attach_radius:
-		_complete_capture()
+
+func _start_reel() -> void:
+	var target: float = _rope.secured_line_length()
+	var distance: float = _rope.line_length() - target
+	if distance <= 1.0:
 		return
-
-	# Tracked as well as drawn, for the same reason as _hold_rope_to_target.
-	_tip_position = _attached_target.global_position
-	_paid_out_length = distance - travel + 1.0
-	_rope.update_rope(_muzzle.global_position, _tip_position, _paid_out_length)
+	_rope.reel_to(target, maxf(distance / maxf(reel_speed, 1.0), 0.15))
 
 
-func _complete_capture() -> void:
-	_shooter.capture_tech_part(_attached_target.release_instance())
-	_attached_target.collect()
-	_attached_target = null
-	# The part arrived at the muzzle, so the rope is already home — there is no
-	# length left to wind in. Saying so explicitly means RETRACTING finishes on
-	# its next tick instead of playing a retract of whatever length the rope
-	# happened to be cast at.
-	_tip_position = _muzzle.global_position
-	_paid_out_length = 0.0
-	_state = State.RETRACTING
+## Freezes the part's drift and lifetime the instant the hook lands, so the rope
+## has sole control of where it goes from here (see
+## CapturedTechPart.begin_reel_in) and a long haul cannot expire halfway home.
+func _on_hooked(body: Node2D) -> void:
+	if body.has_method("begin_reel_in"):
+		body.call("begin_reel_in")
 
 
-## Lets go without capturing anything, leaving the rope paid out for a manual
-## reel (see State.EXTENDED). Only reachable now when the attached part is freed
-## from under the winch — it drifted out its lifetime, or something else took
-## it — since a part that arrives is captured instead.
-##
-## Previously this was also the normal end of a grapple, firing once a ship or
-## asteroid had been hauled close enough.
-func _release() -> void:
-	_attached_target = null
-	_state = State.EXTENDED
+## The part reached the maw. It hands over the very ModuleInstance it was carrying
+## rather than a description of one, which is what keeps a salvaged part
+## non-fungible.
+func _on_secured(body: Node2D) -> void:
+	if _shooter != null and body.has_method("release_instance"):
+		_shooter.capture_tech_part(body.release_instance())
+	if body.has_method("collect"):
+		body.call("collect")
+	_rope.release()
 
 
-func _advance_extended(delta: float) -> void:
-	if _reel_input_held:
-		_paid_out_length = maxf(_paid_out_length - reel_speed * delta, 0.0)
-
-	# Unattached, the tip isn't holding onto anything in the world — it just
-	# rides along with the ship at whatever length it stopped paying out at
-	# (shrinking while reeling), rigidly in the hardpoint's fixed facing
-	# direction, rather than being left behind as a dead point in space.
-	var direction: Vector2 = Vector2.RIGHT.rotated(global_rotation)
-	_tip_position = _muzzle.global_position + direction * _paid_out_length
-	_rope.update_rope(_muzzle.global_position, _tip_position, maxf(_paid_out_length, 1.0))
-
-	if _paid_out_length <= 0.0:
-		_finish_retract()
+func _on_snapped_taut(_at_global: Vector2) -> void:
+	if jolt_shake <= 0.0 or _shooter == null:
+		return
+	var camera: Node = _shooter.get_node_or_null("ShipCamera")
+	if camera != null and camera.has_method("add_shake"):
+		camera.add_shake(jolt_shake)
 
 
-func _advance_retracting(delta: float) -> void:
-	_paid_out_length = maxf(_paid_out_length - retract_speed * delta, 0.0)
-	_tip_position = _tip_position.move_toward(_muzzle.global_position, retract_speed * delta)
-	if _rope != null:
-		_rope.update_rope(_muzzle.global_position, _tip_position, maxf(_paid_out_length, 1.0))
-
-	if _paid_out_length <= 0.0:
-		_finish_retract()
-
-
-func _finish_retract() -> void:
-	if _rope != null:
+func _on_stowed() -> void:
+	if _rope != null and is_instance_valid(_rope):
 		_rope.queue_free()
-		_rope = null
-	_state = State.IDLE
+	_rope = null
+	_winching = false

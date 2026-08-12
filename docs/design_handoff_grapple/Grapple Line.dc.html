@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body{margin:0;background:#0a0d12;}
+  a{color:#8fe9f2;text-decoration:none;} a:hover{color:#c9f6fa;}
+  input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;background:#1c242c;border-radius:2px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#8fe9f2;cursor:pointer;}
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:16px;padding:44px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0a0d12;min-height:100vh;box-sizing:border-box;">
+
+  <div style="display:flex;align-items:baseline;gap:14px;">
+    <div style="color:#c7d0d8;font-size:22px;font-weight:600;letter-spacing:0.02em;">Grapple line — 10s cast &amp; recover</div>
+    <div style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#0a0d12;background:#f2c14e;padding:2px 7px;border-radius:3px;">VFX 2A</div>
+  </div>
+  <div style="color:#6b7784;font-size:13px;max-width:920px;line-height:1.5;">The chain is a real verlet rope — 48 links, distance-constrained, no gravity. It is flung, it unfurls, it wraps the hunk the cutter freed, and it carries its own momentum: when the ship kills thrust at T+6.2 the line keeps travelling and flops past the bow before it comes taut again.</div>
+
+  <div style="position:relative;width:1000px;border:1px solid rgba(85,214,232,0.14);border-radius:8px;overflow:hidden;background:#070a0e;">
+    <canvas data-grap="canvas" onPointerDown="{{ down }}" onPointerMove="{{ move }}" onPointerUp="{{ up }}" style="width:1000px;height:600px;display:block;cursor:grab;touch-action:none;"></canvas>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:16px;width:1000px;">
+    <div onClick="{{ toggle }}" style="font-family:monospace;font-size:11px;letter-spacing:0.14em;color:#0a0d12;background:#8fe9f2;padding:8px 16px;border-radius:3px;cursor:pointer;user-select:none;min-width:76px;text-align:center;">{{ playLabel }}</div>
+    <div data-grap="time" style="font-family:monospace;font-size:12px;color:#55d6e8;min-width:74px;">0.00 s</div>
+    <input data-grap="scrub" type="range" min="0" max="1000" step="1" onInput="{{ scrub }}" style="flex:1;height:14px;cursor:pointer;">
+    <div onClick="{{ cycleSpeed }}" style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#6b7784;border:1px solid #232c35;padding:7px 12px;border-radius:3px;cursor:pointer;user-select:none;min-width:52px;text-align:center;">{{ speedLabel }}</div>
+    <div onClick="{{ restart }}" style="font-family:monospace;font-size:11px;letter-spacing:0.12em;color:#8fe9f2;border:1px solid #24404a;padding:7px 12px;border-radius:3px;cursor:pointer;user-select:none;">RESTART</div>
+  </div>
+
+  <div style="color:#4c5a66;font-size:12px;width:1000px;margin-top:-6px;">Drag the ship anywhere in the canvas to tug the line by hand — let go mid-swing and watch the slack carry on without it.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;width:1000px;">
+    <sc-for list="{{ phases }}" as="p" hint-placeholder-count="7">
+      <div onClick="{{ p.go }}" style="display:flex;flex-direction:column;gap:5px;padding:9px 10px;border-radius:4px;cursor:pointer;background:{{ p.bg }};border-top:2px solid {{ p.bar }};">
+        <div style="font-family:monospace;font-size:9px;letter-spacing:0.1em;color:{{ p.tc }};">{{ p.time }}</div>
+        <div style="font-size:12px;font-weight:600;color:{{ p.nc }};">{{ p.name }}</div>
+        <div style="font-size:10px;line-height:1.4;color:#6b7784;">{{ p.desc }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;gap:40px;width:1000px;margin-top:6px;border-top:1px solid #1a222a;padding-top:18px;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">THE ROPE</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.55;">48 verlet nodes, 13px rest length, 12 constraint passes at 120Hz, damping 0.997. Zero gravity, so the only thing shaping it is tension and whatever momentum it was given. The winch node is pinned to the muzzle; everything else is free.</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">THE WRAP</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.55;">On contact the hook bites and the next ten nodes are drawn onto a tightening spiral around the hunk over 0.9s — a turn and a half, radius closing to the tile edge. After that the hunk is just another mass on the end of the chain.</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:7px;">
+      <div style="font-family:monospace;font-size:10px;letter-spacing:0.14em;color:#4c5a66;">SLACK &amp; SNAP</div>
+      <div style="color:#8b98a5;font-size:12px;line-height:1.55;">Tension is read from the constraint correction each step. Above 70% the chain brightens and the anchor strains; when it crosses from slack to taut the line cracks straight and both bodies jolt. That readout is the whole feel of the tool.</div>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Corporate&quot;,&quot;Ancient&quot;,&quot;Pirate&quot;],&quot;default&quot;:&quot;Corporate&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;ropeStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Chain&quot;,&quot;Cable&quot;],&quot;default&quot;:&quot;Chain&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Look&quot;}}">
+const DUR = 10, H = 1/120, N = 64, SEG = 13, HUNK_VMAX = 105;
+const PH = [
+  { a:0.0, b:0.7,  name:'Wind-up',   desc:'Launcher tracks, hook spins up in the cradle.' },
+  { a:0.7, b:2.0,  name:'Cast',      desc:'Hook flung; chain unfurls out of the winch.' },
+  { a:2.0, b:2.5,  name:'Bite',      desc:'Claw strikes the tile, sparks, prongs close.' },
+  { a:2.5, b:3.6,  name:'Wrap',      desc:'Line coils a turn and a half, cinches tight.' },
+  { a:3.6, b:6.2,  name:'Tug',       desc:'Ship burns back; slack snaps out, hunk moves.' },
+  { a:6.2, b:7.6,  name:'Coast',     desc:'Thrust cut. Chain keeps flying, flops past the bow.' },
+  { a:7.6, b:10.0, name:'Winch in',  desc:'Links shorten, haul closes, collector takes it.' }
+];
+const PAL = {
+  Corporate: { line:'#8fe9f2', hot:'#fff6dc', chain:'#8a99a8', chainDark:'#3b4753', node:'#f2c14e', hull:'#2b3542', plate:'#333f4d', edge:'#10141a', bg:'#070a0e' },
+  Ancient:   { line:'#6fe3d6', hot:'#fff6dc', chain:'#9a8fb8', chainDark:'#443a63', node:'#d9b25a', hull:'#241b3e', plate:'#3a2f5c', edge:'#100a1c', bg:'#0d0f1a' },
+  Pirate:    { line:'#ffb35c', hot:'#fff2d8', chain:'#a8927a', chainDark:'#4d4034', node:'#f2c14e', hull:'#332a22', plate:'#463b31', edge:'#1a140f', bg:'#120e0b' }
+};
+const SHIP0 = [176, 322], HUNK0 = [724, 232], HR = 46;
+
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function cl(v,a,b){return v<a?a:v>b?b:v;}
+function lp(a,b,t){return a+(b-a)*t;}
+function ss(t){t=cl(t,0,1);return t*t*(3-2*t);}
+
+class Component extends DCLogic {
+  state = { playing:true, speed:1, phase:0 };
+  time = 0; els = {}; manual = null; drag = false;
+
+  componentDidMount(){
+    this.reset();
+    this.last = performance.now();
+    this.loop = this.loop.bind(this);
+    this.paint();
+    this.raf = requestAnimationFrame(this.loop);
+    this.lastRaf = performance.now();
+    this.fallback = setInterval(()=>{
+      if(document.hidden) return;
+      if(performance.now() - this.lastRaf > 300){ try { this.tick(performance.now()); } catch(err) { console.error(err); } }
+    }, 60);
+  }
+  componentWillUnmount(){ cancelAnimationFrame(this.raf); clearInterval(this.fallback); }
+
+  reset(){
+    const rnd = mul(90210);
+    this.rnd = mul(4242);
+    this.stars = Array.from({length:110},()=>({x:rnd()*1000,y:rnd()*600,r:rnd()*1.1+0.2,a:rnd()*0.5+0.12,p:rnd()*6.28}));
+    const m = this.muzzle(0);
+    this.pts = Array.from({length:N},()=>({ x:m[0], y:m[1], px:m[0], py:m[1] }));
+    this.hunk = { x:HUNK0[0], y:HUNK0[1], px:HUNK0[0]-0.10, py:HUNK0[1]+0.05, rot:0.2, w:0.13 };
+    this.fx = [];
+    this.simT = 0; this.hit = 0; this.wrapN = 0; this.tension = 0; this.taut = 0; this.jolt = 0;
+    this.lineLen = 0; this.lineLen0 = undefined; this.k = 3; this.prevK = 3; this.fired = false; this.docked = false; this.tookUp = false;
+    this.shipPrev = SHIP0.slice();
+  }
+
+  pal(){ return PAL[this.props.accent] || PAL.Corporate; }
+  hookOn(){ return this.hit > 0; }
+
+  ship(t){
+    if(this.manual) return this.manual.slice();
+    let x = SHIP0[0], y = SHIP0[1] + Math.sin(t*1.1)*3;
+    if(t > 3.6){
+      const d = Math.min(t, 6.2) - 3.6;
+      x -= 58 * ss(cl(d/1.5,0,1));
+      y -= 12 * ss(cl(d/1.6,0,1));
+    }
+    if(t > 7.6) x += 10 * ss(cl((t-7.6)/1.6,0,1));
+    return [x,y];
+  }
+  muzzle(t){ const s = this.ship(t); return [s[0]+52, s[1]-4]; }
+
+  spawn(n, x, y, spread, speed, life, warm){
+    for(let i=0;i<n;i++){
+      const a = this.rnd()*6.2832, sp = speed*(0.25+this.rnd());
+      this.fx.push({ x, y, vx:Math.cos(a)*sp+spread[0], vy:Math.sin(a)*sp+spread[1], t:0, life:life*(0.5+this.rnd()), sz:0.8+this.rnd()*1.8, warm });
+    }
+  }
+
+  step(){
+    const t = this.simT, P = this.pts;
+    const m = this.muzzle(t);
+    const cast = t >= 0.7;
+
+    // fire impulse — node 0 is the hook, node N-1 is spooled at the winch
+    if(!this.fired && cast){
+      this.fired = true;
+      const dx = HUNK0[0]-m[0], dy = HUNK0[1]-m[1], L = Math.hypot(dx,dy);
+      const v = 820;
+      const h = P[0];
+      h.px = h.x - dx/L*v*H; h.py = h.y - dy/L*v*H;
+      this.spawn(26, m[0], m[1], [dx/L*90, dy/L*90], 90, 0.5, true);
+    }
+
+    const rest = SEG;
+
+    // payout: line spools out to follow the hook, winch reels it back in
+    const hookD = Math.hypot(P[0].x-m[0], P[0].y-m[1]);
+    if(cast && t < 7.6) this.lineLen = Math.max(this.lineLen, hookD + 60);
+    // once the wrap is set the winch takes up the slack so the tug can load it
+    if(this.hit > 0 && t > 3.2 && t < 7.6 && !this.tookUp){
+      this.lineLen = Math.max(hookD + 8, this.lineLen - 300*H);
+      if(this.lineLen <= hookD + 9) this.tookUp = true;
+    }
+    if(t >= 7.6){
+      if(this.lineLen0 === undefined) this.lineLen0 = this.lineLen;
+      this.lineLen = lp(this.lineLen0, 178, ss(cl((t-7.6)/2.1,0,1)));
+    }
+    const k = Math.round(cl(this.lineLen/rest + 2, 3, N));
+    // a link leaving the drum inherits the speed of the line, otherwise the
+    // spool acts as a brake and the hook stalls halfway out
+    if(k > this.prevK){
+      const h = P[0], hvx = (h.x-h.px), hvy = (h.y-h.py);
+      for(let i=Math.max(0,this.prevK-1); i<=k-2; i++){
+        const p = P[i];
+        p.x = m[0]; p.y = m[1];
+        p.px = p.x - hvx*0.98; p.py = p.y - hvy*0.98;
+      }
+    }
+    this.prevK = k;
+    this.k = k;
+
+    // integrate
+    const damp = 0.997;
+    for(let i=0;i<N;i++){
+      const p = P[i];
+      if(!cast || i >= k-1){ p.px = p.x = m[0]; p.py = p.y = m[1]; continue; }
+      const vx = (p.x-p.px)*damp, vy = (p.y-p.py)*damp;
+      p.px = p.x; p.py = p.y;
+      p.x += vx; p.y += vy;
+    }
+    // hunk drift
+    if(this.hit === 0){
+      const hvx = (this.hunk.x-this.hunk.px), hvy = (this.hunk.y-this.hunk.py);
+      this.hunk.px = this.hunk.x; this.hunk.py = this.hunk.y;
+      this.hunk.x += hvx; this.hunk.y += hvy;
+    } else {
+      const hvx = (this.hunk.x-this.hunk.px)*0.999, hvy = (this.hunk.y-this.hunk.py)*0.999;
+      this.hunk.px = this.hunk.x; this.hunk.py = this.hunk.y;
+      this.hunk.x += hvx; this.hunk.y += hvy;
+    }
+    this.hunk.rot += this.hunk.w * H;
+
+    // impact
+    if(cast && this.hit === 0){
+      const h = P[0];
+      if(Math.hypot(h.x-this.hunk.x, h.y-this.hunk.y) < HR + 4){
+        this.hit = t;
+        const a = Math.atan2(h.y-this.hunk.y, h.x-this.hunk.x);
+        this.bite = a - this.hunk.rot;
+        this.spawn(46, h.x, h.y, [0,0], 210, 0.55, true);
+        this.spawn(16, h.x, h.y, [0,0], 70, 1.1, false);
+        this.hunk.w = 0.55; this.jolt = 1;
+      }
+    }
+
+    // wrap: pin the tail nodes onto a closing spiral
+    if(this.hit > 0){
+      const w = cl((t - this.hit)/0.9, 0, 1);
+      this.wrapN = Math.round(lp(1, 10, ss(w)));
+      for(let i=0;i<this.wrapN;i++){
+        const f = i/10;
+        const ang = this.hunk.rot + this.bite + f*5.4;
+        const rad = lp(HR+3, HR-9, ss(w)) - f*2.4;
+        P[i].x = this.hunk.x + Math.cos(ang)*rad;
+        P[i].y = this.hunk.y + Math.sin(ang)*rad;
+        P[i].px = P[i].x; P[i].py = P[i].y;
+      }
+    }
+
+    // constraints
+    let corr = 0;
+    const wrapped = this.hit > 0 ? this.wrapN : 0;
+    for(let it=0; it<12; it++){
+      for(let i=0;i<k-1;i++){
+        const a = P[i], b = P[i+1];
+        const dx = b.x-a.x, dy = b.y-a.y;
+        const d = Math.hypot(dx,dy) || 1e-6;
+        if(d <= rest) continue;
+        const diff = (d - rest)/d;
+        const aPin = i < wrapped, bPin = (i+1 >= k-1) || (i+1 < wrapped);
+        if(aPin && bPin) continue;
+        let wa = aPin ? 0 : 0.5, wb = bPin ? 0 : 0.5;
+        if(aPin) wb = 1; if(bPin) wa = 1;
+        if(it === 0) corr += (d-rest);
+        a.x += dx*diff*wa; a.y += dy*diff*wa;
+        b.x -= dx*diff*wb; b.y -= dy*diff*wb;
+        // a wrapped link can't stretch — it drags the hunk instead
+        // only the outermost wrapped link transfers load, and it does so with
+        // the hunk's mass — the whole coil pulling at once hauls it like paper
+        if(aPin && i === wrapped-1){ this.hunk.x += dx*diff*0.055; this.hunk.y += dy*diff*0.055; }
+      }
+    }
+    // the hunk is a few tonnes of hull — the line can pull it, never fling it
+    {
+      const hvx = (this.hunk.x-this.hunk.px)/H, hvy = (this.hunk.y-this.hunk.py)/H;
+      const sp = Math.hypot(hvx,hvy);
+      const vmax = t < 7.6 ? 52 : HUNK_VMAX;
+      if(sp > vmax){
+        this.hunk.x = this.hunk.px + hvx/sp*vmax*H;
+        this.hunk.y = this.hunk.py + hvy/sp*vmax*H;
+      }
+    }
+
+    const prevTaut = this.taut;
+    this.tension = cl(corr/22, 0, 1);
+    this.taut = this.tension > 0.35 ? 1 : 0;
+    if(this.taut && !prevTaut && t > 3.0){
+      this.jolt = 1;
+      const j = P[Math.min(k-2, wrapped+4)];
+      this.spawn(10, j.x, j.y, [0,0], 60, 0.35, true);
+    }
+    this.jolt *= 0.90;
+
+    // collector
+    if(t > 9.0 && this.hit > 0 && Math.hypot(this.hunk.x-m[0], this.hunk.y-m[1]) < 88 && !this.docked){
+      this.docked = true; this.spawn(30, this.hunk.x, this.hunk.y, [0,0], 90, 0.6, false);
+    }
+
+    // particles
+    for(let i=this.fx.length-1;i>=0;i--){
+      const f = this.fx[i]; f.t += H;
+      if(f.t > f.life){ this.fx.splice(i,1); continue; }
+      f.x += f.vx*H; f.y += f.vy*H; f.vx *= 0.985; f.vy *= 0.985;
+    }
+    this.simT += H;
+  }
+
+  seekTo(target){
+    this.reset(); this.fired = false; this.docked = false;
+    const n = Math.min(1400, Math.round(target/H));
+    for(let i=0;i<n;i++) this.step();
+    this.time = this.simT;
+  }
+
+  loop(now){
+    this.lastRaf = now;
+    try { this.tick(now); } catch(err) { console.error(err); }
+    this.raf = requestAnimationFrame(this.loop);
+  }
+
+  tick(now){
+    const dt = Math.min(0.12,(now-this.last)/1000); this.last = now;
+    if(this.state.playing || this.drag){
+      let adv = dt*this.state.speed;
+      if(this.time + adv >= DUR){ this.time = 0; this.seekTo(0); }
+      else {
+        this.acc = (this.acc||0) + adv;
+        let guard = 0;
+        while(this.acc >= H && guard++ < 20){ this.step(); this.acc -= H; }
+        this.time = this.simT;
+      }
+    }
+    this.paint();
+  }
+
+  paint(){
+    const c = document.querySelector('[data-grap=canvas]'); if(!c) return;
+    this.els.time = document.querySelector('[data-grap=time]');
+    this.els.scrub = document.querySelector('[data-grap=scrub]');
+    const dpr = Math.min(2, window.devicePixelRatio||1);
+    if(c.width !== 1000*dpr){ c.width = 1000*dpr; c.height = 600*dpr; }
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    this.draw(ctx, this.time);
+    if(this.els.time) this.els.time.textContent = this.time.toFixed(2)+' s';
+    if(this.els.scrub && document.activeElement !== this.els.scrub) this.els.scrub.value = Math.round(this.time/DUR*1000);
+    let idx = 0; for(let i=0;i<PH.length;i++) if(this.time >= PH[i].a) idx = i;
+    if(idx !== this.state.phase) this.setState({ phase: idx });
+  }
+
+  drawShip(ctx, s, P){
+    ctx.save(); ctx.translate(s[0], s[1]);
+    ctx.fillStyle = P.hull; ctx.strokeStyle = P.edge; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-58,-24); ctx.lineTo(26,-30); ctx.lineTo(58,-8); ctx.lineTo(58,10); ctx.lineTo(20,32); ctx.lineTo(-58,26); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.plate; ctx.fillRect(-30,-14,44,26);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.strokeRect(-30,-14,44,26);
+    ctx.fillStyle = P.line; ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.ellipse(4,-16,13,7,0,0,6.2832); ctx.fill(); ctx.globalAlpha = 1;
+    // winch drum
+    ctx.fillStyle = '#1c242c'; ctx.fillRect(24,-14,26,20);
+    ctx.strokeStyle = P.edge; ctx.strokeRect(24,-14,26,20);
+    ctx.strokeStyle = P.chainDark; ctx.lineWidth = 1.4;
+    for(let i=0;i<4;i++){ ctx.beginPath(); ctx.moveTo(27+i*6,-13); ctx.lineTo(27+i*6,5); ctx.stroke(); }
+    // collector maw
+    ctx.fillStyle = 'rgba(143,233,242,0.10)';
+    ctx.beginPath(); ctx.moveTo(50,-26); ctx.lineTo(84,-40); ctx.lineTo(84,40); ctx.lineTo(50,22); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(143,233,242,0.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+    // thruster
+    ctx.restore();
+  }
+
+  drawThrust(ctx, s, t, P){
+    const on = t > 3.6 && t < 6.2 ? cl((t-3.6)/0.35,0,1) * (t > 6.0 ? (6.2-t)/0.2 : 1) : 0;
+    if(on <= 0) return;
+    ctx.save(); ctx.translate(s[0]-58, s[1]+1);
+    ctx.globalCompositeOperation = 'lighter';
+    const L = (34 + 10*Math.sin(t*40))*on;
+    const g = ctx.createLinearGradient(0,0,-L,0);
+    g.addColorStop(0, P.hot); g.addColorStop(0.4, P.line); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(0,-11); ctx.lineTo(-L,0); ctx.lineTo(0,11); ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over'; ctx.restore();
+  }
+
+  drawHunk(ctx, P){
+    const h = this.hunk;
+    ctx.save(); ctx.translate(h.x, h.y); ctx.rotate(h.rot);
+    const pts = [];
+    for(let i=0;i<6;i++){ const a=(-90+60*i)*Math.PI/180; pts.push([HR*Math.cos(a), HR*Math.sin(a)]); }
+    ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+    ctx.fillStyle = P.hull; ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = P.plate; ctx.fillRect(-HR*0.62,-HR*0.5, HR*1.24, HR*1.0);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-HR*0.6,-HR*0.16); ctx.lineTo(HR*0.6,-HR*0.16);
+    ctx.moveTo(-HR*0.6,HR*0.22); ctx.lineTo(HR*0.6,HR*0.22); ctx.stroke();
+    ctx.strokeStyle = '#5e2b14'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = P.edge; ctx.lineWidth = 1.8;
+    ctx.beginPath(); pts.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.stroke();
+    [[26,-30],[24,32]].forEach((o,i)=>{
+      ctx.save(); ctx.translate(o[0],o[1]); ctx.rotate(i?0.4:-0.3);
+      ctx.fillStyle = P.hull; ctx.fillRect(-14,-10,28,20);
+      ctx.strokeStyle = P.edge; ctx.lineWidth = 1.5; ctx.strokeRect(-14,-10,28,20);
+      ctx.fillStyle = P.node; ctx.globalAlpha = 0.7; ctx.fillRect(5,-5,5,10); ctx.globalAlpha = 1;
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  drawChain(ctx, t, P){
+    const cast = t >= 0.7;
+    if(!cast) return;
+    const Pt = this.pts.slice(0, Math.max(3, this.k));
+    const M = Pt.length;
+    const heat = this.tension;
+    const style = this.props.ropeStyle || 'Chain';
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // shadow pass
+    ctx.strokeStyle = P.edge; ctx.lineWidth = 6;
+    ctx.beginPath(); Pt.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+    // body
+    ctx.strokeStyle = P.chainDark; ctx.lineWidth = 4.2;
+    ctx.beginPath(); Pt.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+    ctx.strokeStyle = P.chain; ctx.lineWidth = 1.8; ctx.globalAlpha = 0.75 + 0.25*heat;
+    ctx.beginPath(); Pt.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+    ctx.globalAlpha = 1;
+    if(style === 'Chain'){
+      for(let i=0;i<M-1;i++){
+        const a = Pt[i], b = Pt[i+1];
+        const mx = (a.x+b.x)/2, my = (a.y+b.y)/2, ang = Math.atan2(b.y-a.y, b.x-a.x);
+        ctx.save(); ctx.translate(mx,my); ctx.rotate(ang);
+        ctx.strokeStyle = P.chain; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(0,0, 6.2, i%2 ? 3.4 : 1.5, 0, 0, 6.2832); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    if(heat > 0.55){
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = P.line; ctx.globalAlpha = (heat-0.55)*0.9; ctx.lineWidth = 2.2;
+      ctx.beginPath(); Pt.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+    // hook
+    {
+      const h = Pt[0], q = Pt[Math.min(2, M-1)];
+      const ang = Math.atan2(h.y-q.y, h.x-q.x) + Math.PI;
+      ctx.save(); ctx.translate(h.x,h.y); ctx.rotate(ang);
+      ctx.strokeStyle = P.chain; ctx.lineWidth = 2.6; ctx.fillStyle = P.hull;
+      ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(6,0); ctx.stroke();
+      [-1,0,1].forEach(k=>{
+        ctx.beginPath(); ctx.moveTo(6,0);
+        ctx.quadraticCurveTo(14, k*7, 10, k*12);
+        ctx.stroke();
+      });
+      ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.5;
+      ctx.beginPath(); ctx.arc(8,0,9,0,6.2832); ctx.fillStyle = P.line; ctx.globalAlpha=0.16; ctx.fill();
+      ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+      ctx.restore();
+    }
+  }
+
+  draw(ctx, t){
+    const P = this.pal(), ann = this.props.showAnnotations !== false;
+    ctx.fillStyle = P.bg; ctx.fillRect(0,0,1000,600);
+    ctx.globalCompositeOperation = 'lighter';
+    this.stars.forEach(s=>{ ctx.globalAlpha = s.a*(0.7+0.3*Math.sin(t*1.6+s.p)); ctx.fillStyle='#9fb4c4'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.2832); ctx.fill(); });
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+
+    const s = this.ship(t);
+    const j = this.jolt > 0.05 ? this.jolt*2.4 : 0;
+    ctx.save(); ctx.translate(Math.sin(t*63)*j, Math.cos(t*77)*j);
+
+    this.drawThrust(ctx, s, t, P);
+    this.drawHunk(ctx, P);
+    this.drawChain(ctx, t, P);
+    this.drawShip(ctx, s, P);
+
+    // aim reticle before the cast
+    if(t < 1.0){
+      const k = ss(cl(t/0.6,0,1)), a = t < 0.75 ? 1 : 1-(t-0.75)/0.25;
+      ctx.strokeStyle = P.line; ctx.globalAlpha = 0.7*a; ctx.lineWidth = 1.4;
+      ctx.setLineDash([5,6]); ctx.lineDashOffset = -t*30;
+      ctx.beginPath(); ctx.arc(HUNK0[0], HUNK0[1], lp(90,58,k), 0, 6.2832); ctx.stroke();
+      ctx.setLineDash([]);
+      const m = this.muzzle(t);
+      ctx.globalAlpha = 0.25*a;
+      ctx.beginPath(); ctx.moveTo(m[0],m[1]); ctx.lineTo(HUNK0[0],HUNK0[1]); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.globalCompositeOperation = 'lighter';
+    this.fx.forEach(f=>{
+      const a = 1-f.t/f.life;
+      ctx.globalAlpha = f.warm ? a : a*0.3;
+      ctx.fillStyle = f.warm ? (a>0.6 ? P.hot : '#ff8a3c') : '#b9cdd8';
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.sz*(f.warm ? a : (1+f.t*2.4)), 0, 6.2832); ctx.fill();
+    });
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+
+    if(ann){
+      const ph = PH.reduce((a,p)=> t>=p.a ? p : a, PH[0]);
+      ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.fillStyle = P.line; ctx.fillText(ph.name.toUpperCase(), 28, 40);
+      ctx.fillStyle = '#4c5a66'; ctx.fillText('T+'+t.toFixed(2), 28, 60);
+      ctx.fillStyle = '#4c5a66'; ctx.fillText('TENSION', 28, 88);
+      ctx.strokeStyle = '#232c35'; ctx.lineWidth = 1; ctx.strokeRect(28, 96, 120, 7);
+      ctx.fillStyle = this.tension > 0.7 ? '#ff8a3c' : P.line;
+      ctx.fillRect(28, 96, 120*this.tension, 7);
+      if(this.hit === 0 && t > 0.7){ ctx.fillStyle = '#4c5a66'; ctx.fillText('LINE OUT', 28, 124); }
+      else if(this.hit > 0){ ctx.fillStyle = P.node; ctx.fillText(this.docked ? 'HAUL SECURED' : 'HOOKED', 28, 124); }
+    }
+  }
+
+  renderVals(){
+    const st = this.state;
+    const canvasPt = (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      return [ (e.clientX-r.left)/r.width*1000, (e.clientY-r.top)/r.height*600 ];
+    };
+    return {
+      playLabel: st.playing ? 'PAUSE' : 'PLAY',
+      speedLabel: st.speed === 1 ? '1×' : (st.speed === 0.5 ? '0.5×' : '0.25×'),
+      toggle: () => this.setState(s=>({playing:!s.playing})),
+      cycleSpeed: () => this.setState(s=>({speed: s.speed===1?0.5:(s.speed===0.5?0.25:1)})),
+      restart: () => { this.manual = null; this.seekTo(0); },
+      scrub: (e) => { this.manual = null; this.seekTo((+e.target.value/1000)*DUR); this.paint(); },
+      down: (e) => { this.drag = true; this.manual = canvasPt(e); e.currentTarget.setPointerCapture(e.pointerId); },
+      move: (e) => { if(this.drag) this.manual = canvasPt(e); },
+      up: () => { this.drag = false; },
+      phases: PH.map((p,i)=>({
+        time: p.a.toFixed(1)+'–'+p.b.toFixed(1)+'s',
+        name: p.name, desc: p.desc,
+        bg: i===st.phase ? 'rgba(85,214,232,0.07)' : 'rgba(255,255,255,0.02)',
+        bar: i===st.phase ? '#8fe9f2' : '#232c35',
+        tc: i===st.phase ? '#8fe9f2' : '#4c5a66',
+        nc: i===st.phase ? '#dbe4ec' : '#8b98a5',
+        go: () => { this.manual = null; this.seekTo(p.a); }
+      }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>

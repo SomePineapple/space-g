@@ -8,8 +8,56 @@ extends RefCounted
 ## faction (a new folder of correctly-named PNGs) or a new per-faction sprite
 ## needs no code changes here — see ModuleCatalog for which base_name each
 ## module type asks for.
+##
+## apply_hex_art() is the entry point ModuleCatalog uses: one call claims every
+## layer a module could have, and each layer is simply whatever files happen to
+## be on disk. Dropping a new light map into an exports folder lights that module
+## up with no code change at all.
 
 const EXPORTS_ROOT: String = "res://resources/exports/"
+
+## What a light map is called: the base art name with this on the end, after the
+## cell coordinates for per-cell art. "corporate_grapple_mk1_lights.png",
+## "corporate_grapple_mk3_1_0_lights.png".
+##
+## These are the emissive layers the world's glow catches (see
+## ModuleType.faction_hex_glow_textures and ShipLayoutRenderer's glow pass) —
+## lit windows, indicator strips, emitter rings, authored over transparency and
+## drawn additively over the plate so they can be blown past white.
+const LIGHTS_SUFFIX: String = "_lights"
+
+
+## Claims every art layer for one module type, in one call.
+##
+## Each layer is optional and independent: whichever files exist get used, and
+## the ones that do not simply leave their dictionary empty, which every consumer
+## already treats as "draw nothing extra". For `base_name` "grapple_mk3" on a
+## three-cell module this looks for, per faction:
+##
+##   <faction>_grapple_mk3.png                 whole-footprint plate (fallback)
+##   <faction>_grapple_mk3_<q>_<r>.png         one plate per cell
+##   <faction>_grapple_mk3_lights.png          whole-footprint light map
+##   <faction>_grapple_mk3_<q>_<r>_lights.png  one light map per cell
+##
+## The per-cell footprint is read off the module type rather than passed in.
+## Call sites used to repeat the footprint constant they had just built the
+## module with, which is a second place for it to be wrong.
+##
+## `overlay_name` is the separate sprite some modules draw over their plate (a
+## weapon tier's turret — see ModuleType.faction_hex_overlay_textures). It is a
+## different image, not a layer of the base one, so it is named independently.
+## Overlays have no light map: nothing has needed one, and adding the field
+## before there is art for it would be guessing at the shape.
+static func apply_hex_art(module_type: ModuleType, base_name: String,
+		overlay_name: String = "") -> void:
+	var cells: Array[Vector2i] = module_type.footprint_cells
+	module_type.faction_hex_textures = load_faction_textures(base_name)
+	module_type.faction_hex_textures_per_cell = load_faction_textures_per_cell(base_name, cells)
+	module_type.faction_hex_glow_textures = load_faction_textures(base_name + LIGHTS_SUFFIX)
+	module_type.faction_hex_glow_textures_per_cell = load_faction_textures_per_cell(
+		base_name, cells, LIGHTS_SUFFIX)
+	if not overlay_name.is_empty():
+		module_type.faction_hex_overlay_textures = load_faction_textures(overlay_name)
 
 ## folder_name -> faction_id. Kept separate because they diverge for
 ## "pirates": the folder is plural, but its files are prefixed "pirate_"

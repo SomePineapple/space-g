@@ -53,8 +53,10 @@ var set_lock: bool = false
 var locked_target: Node2D = null
 
 # --- OPERATIONS ---
+## One press of the grapple key. Edge-triggered and nothing else: casting the
+## line, starting the winch and stopping it again are all the same press, told
+## apart by what the grapple is currently doing (see HardpointWinch.press).
 var fire_winch: bool = false
-var winch_reel: bool = false
 var toggle_scan: bool = false
 ## ShipSystems ids whose power switch should flip this frame (see
 ## ShipSystems.TOGGLEABLE). An array rather than one flag per system so adding
@@ -81,7 +83,6 @@ func merge_from(other: ShipIntent, roles: int) -> void:
 
 	if roles & Role.OPERATIONS:
 		fire_winch = other.fire_winch
-		winch_reel = other.winch_reel
 		toggle_scan = other.toggle_scan
 		toggled_systems = other.toggled_systems.duplicate()
 
@@ -107,7 +108,6 @@ func clear_roles(roles: int) -> void:
 
 	if roles & Role.OPERATIONS:
 		fire_winch = false
-		winch_reel = false
 		toggle_scan = false
 		toggled_systems.clear()
 
@@ -118,7 +118,7 @@ func clear() -> void:
 
 ## The edge-triggered commands only, cleared by the ship after it consumes them
 ## so a single key press doesn't repeat every frame until the next submission.
-## Held states (thrust, turn, boost, winch_reel) deliberately survive.
+## Held states (thrust, turn, boost) deliberately survive.
 func clear_one_shots() -> void:
 	fire_primary = false
 	fire_secondary = false

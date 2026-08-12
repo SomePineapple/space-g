@@ -39,7 +39,11 @@ extends Resource
 ##
 ## Same shape as the two above: one Dictionary for a single-hex module, one per
 ## footprint cell for a multi-hex one. Both empty means "this module has no lit
-## parts", which is every module that predates the layer.
+## parts", which is most of them.
+##
+## Never assigned by hand — FactionArtImporter.apply_hex_art fills these in from
+## whatever "<base_name>_lights" files exist, so lighting a module up is an art
+## job with no code in it. See FactionArtImporter.LIGHTS_SUFFIX for the naming.
 @export var faction_hex_glow_textures: Dictionary = {}
 @export var faction_hex_glow_textures_per_cell: Array[Dictionary] = []
 @export var mass_contribution: float = 0.0

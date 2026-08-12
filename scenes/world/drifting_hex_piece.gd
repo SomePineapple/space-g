@@ -55,11 +55,12 @@ func setup(cells: Array[Vector2i], colors: Array[Color], textures: Array[Texture
 	queue_redraw()
 
 
-## How far this piece physically extends from its own origin, so a winch aiming
+## How far this piece physically extends from its own origin, so a grapple aiming
 ## at it can use the size it looks rather than a fixed guess (see
-## HardpointWinch._effective_radius). A two-hex part is ~80 units across; the
-## winch's 20-unit attach radius alone made catching one a matter of threading a
-## hole smaller than the thing you are aiming at.
+## GrappleRope._body_radius, which uses this for the bite test, the wrap radius
+## and how close the part has to get to count as delivered). A two-hex part is
+## ~80 units across; a fixed 20-unit catch radius made hooking one a matter of
+## threading a hole smaller than the thing you are aiming at.
 func get_winch_radius() -> float:
 	var farthest: float = 0.0
 	for cell in _cells:

@@ -799,14 +799,13 @@ func _consume_intent() -> void:
 	if _pending_intent.fire_secondary and weapons_online:
 		_hardpoints.fire_secondary()
 	if _pending_intent.fire_winch:
-		_hardpoints.fire_winch()
-	_hardpoints.set_winch_reel_input(_pending_intent.winch_reel)
+		_hardpoints.press_winch()
 	if _pending_intent.toggle_scan:
 		_scanner.fire_ping()
 	for system_id in _pending_intent.toggled_systems:
 		_systems.toggle(system_id)
 
-	# Edge commands are consumed once; held states (thrust, turn, boost, reel)
+	# Edge commands are consumed once; held states (thrust, turn, boost)
 	# persist until the next submission overwrites them.
 	_pending_intent.clear_one_shots()
 
