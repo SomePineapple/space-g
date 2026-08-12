@@ -19,11 +19,13 @@ shader_type canvas_item;
 // redefinition error, and a shader that fails to compile falls back silently to
 // unlit drawing rather than announcing itself in-game.
 
-uniform float gain : hint_range(1.0, 16.0) = 1.0;
-// How far the lamp dims at the bottom of its cycle, as a fraction of gain. The
-// trough still has to clear the glow threshold of 1.0 or the lights stop being
-// lights for half of every cycle.
-uniform float pulse_depth : hint_range(0.0, 1.0) = 0.0;
+// The two ends of the breath, as outright levels rather than a peak and a
+// fraction of it. They are tuned against different things — the peak against how
+// hot a lit lamp should look, the trough against how far it should fall — so
+// expressing the trough as a proportion of the peak meant retuning either one
+// moved the other.
+uniform float glow_max : hint_range(0.0, 16.0) = 1.0;
+uniform float glow_min : hint_range(0.0, 16.0) = 1.0;
 uniform float pulse_period = 5.0;
 // Per-hull offset so ships nearby do not breathe in lockstep, which reads as the
 // whole scene blinking rather than as each ship idling.
@@ -32,7 +34,7 @@ uniform float phase = 0.0;
 void fragment() {
 	vec4 source = texture(TEXTURE, UV);
 	float wave = 0.5 + 0.5 * sin(TIME * TAU / pulse_period + phase);
-	float level = gain * (1.0 - pulse_depth * (1.0 - wave));
+	float level = mix(glow_min, glow_max, wave);
 	// Alpha is left alone: it decides where the lamp is, and scaling it would
 	// spread the lamp rather than brighten it.
 	COLOR = vec4(source.rgb * level, source.a);

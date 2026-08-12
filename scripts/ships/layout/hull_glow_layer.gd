@@ -14,27 +14,26 @@ extends Node2D
 ## and hull silhouette rather than under them. Lamps are small and live inside a
 ## hex while seams run along hex borders, so in practice they barely meet.
 
-## How far past white a lamp is pushed at the top of its cycle. The glow
-## threshold is 1.0 and the art's lit pixels top out around 0.95, so anything at
-## or below 1.0 leaves them just under the line and they read as pale paint
-## rather than as light.
-const GLOW_GAIN: float = 3.4
-## How far it falls at the bottom, as a fraction of GLOW_GAIN.
+## The top of the breath: how far past white a lit lamp is pushed. The glow
+## threshold is 1.0 and the art's lit pixels top out around 0.95, so this has to
+## clear 1.0 by a fair margin or a lamp reads as pale paint rather than as light.
+const GLOW_MAX: float = 2.2
+## The bottom of the breath.
 ##
-## The trough has to cross BELOW the glow threshold of 1.0, which is the
-## opposite of what it looks like it should do. A lamp's lit pixels are already
-## near white, so at any level above about 1.05 they display as pure white no
-## matter how much higher the level goes — the whole cycle sat between 1.53 and
-## 3.4 at first, every lamp core stayed white end to end, and the only thing that
-## actually moved was the width of the bloom halo. That is invisible on the small
-## lamps, which have barely any halo: measured against what the eye sees, the
-## Battery swung 0.8% and the Thruster 1.2% while the Command Core managed 24%.
+## Deliberately BELOW the glow threshold, which is the opposite of what it looks
+## like it should be. A lamp's lit pixels are already near white, so at any level
+## above about 1.05 they display as pure white however much higher the level
+## goes — the cycle first ran 1.53 to 3.4, every lamp core stayed white end to
+## end, and the only thing that moved was the width of the bloom halo. That is
+## invisible on the small lamps, which have barely any halo: measured against
+## what the eye actually sees, the Battery swung 0.8% and the Thruster 1.2% while
+## the Command Core managed 24%.
 ##
-## At 0.75 the trough is 0.85 and the lamps themselves darken rather than just
-## their halos — the amber strips drop to a dull orange, the teal indicators
-## fade, the reactor rings shed their glow. They still read as lit, because the
-## art is coloured rather than white, so this does not look like a failure.
-const PULSE_DEPTH: float = 0.75
+## Under 1.0 the lamps themselves darken instead of just their halos — the amber
+## strips drop to a dull orange, the teal indicators fade, the reactor rings shed
+## their glow. They still read as lit, because the art is coloured rather than
+## white, so this does not look like a failure.
+const GLOW_MIN: float = 0.85
 ## Seconds per breath. Slow enough to read as idling machinery rather than as a
 ## blinking indicator.
 const PULSE_PERIOD: float = 5.0
@@ -58,8 +57,8 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_material = ShaderMaterial.new()
 	_material.shader = GLOW_SHADER
-	_material.set_shader_parameter("gain", GLOW_GAIN)
-	_material.set_shader_parameter("pulse_depth", PULSE_DEPTH)
+	_material.set_shader_parameter("glow_max", GLOW_MAX)
+	_material.set_shader_parameter("glow_min", GLOW_MIN)
 	_material.set_shader_parameter("pulse_period", PULSE_PERIOD)
 	# Drawn from the session RNG rather than the clock or the instance id, so two
 	# machines running the same session light their ships identically

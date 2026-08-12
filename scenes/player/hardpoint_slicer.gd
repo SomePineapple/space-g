@@ -69,6 +69,20 @@ extends Node2D
 ## when switched off, and slides in and out as the cursor moves nearer and
 ## further. Roughly a quarter-second to cover its full 10-hex reach.
 @export var extend_speed: float = 1600.0
+## How fast the beam draws back in once a cut has actually completed, as opposed
+## to the snap-back of switching off or losing the target. Deliberately slower
+## than extend_speed: finishing a cut is the tool's one moment of success and it
+## should be watchable, not a single frame of blur.
+@export var cut_retract_speed: float = 700.0
+## How long the beam stays stowed after a completed cut before it will reach out
+## again.
+##
+## Without this the collapse was technically happening and effectively invisible:
+## measured, the beam went from 243 units to home in 0.13s and was back at full
+## extension 0.07s later, because the Salvager is still switched on and the cursor
+## is still on the wreck. The pause is what turns that into a completed action —
+## the part comes off, the tool draws in, and only then does it look for more.
+@export var post_cut_hold: float = 0.8
 ## What the beam is modulated toward as a cut progresses, from cold white at the
 ## first touch to a hot working colour as the part comes apart — so how far
 ## through a ten-second cut you are is legible on the beam itself, not only on
@@ -122,6 +136,8 @@ var _finishing_cut: bool = false
 ## Seconds the beam has been locked on the current cell, driving the lock/spool/
 ## pilot ramp. Reset whenever the lock is lost.
 var _lock_elapsed: float = 0.0
+## Counts down post_cut_hold once a finished cut has fully drawn in.
+var _hold_remaining: float = 0.0
 ## The cell currently being cut, as reported by Ship.get_cut_cell.
 var _cell: Dictionary = {}
 ## The ship and hex the beam has committed to for this cut.
@@ -199,6 +215,12 @@ func _physics_process(delta: float) -> void:
 	# A finished cut retracts before anything else is considered, so it completes
 	# even with the beam still switched on and the cursor still on the target.
 	if _finishing_cut:
+		_retract(delta)
+		return
+
+	# ...and then stays in for a beat, for the same reason.
+	if _hold_remaining > 0.0:
+		_hold_remaining -= delta
 		_retract(delta)
 		return
 
@@ -410,8 +432,11 @@ func _retract(delta: float) -> void:
 		_last_result = "miss"
 		_last_progress = 0.0
 		_lose_lock()
-	_current_length = move_toward(_current_length, 0.0, extend_speed * delta)
+	var speed: float = cut_retract_speed if _finishing_cut else extend_speed
+	_current_length = move_toward(_current_length, 0.0, speed * delta)
 	if _current_length <= 0.01:
+		if _finishing_cut:
+			_hold_remaining = post_cut_hold
 		_finishing_cut = false
 		_last_result = "miss"
 		_last_progress = 0.0

@@ -83,18 +83,14 @@ const TAUT_THRESHOLD: float = 0.35
 ## Slack around a part's own extent (DriftingHexPiece.get_winch_radius) that
 ## still counts as a bite.
 @export var bite_margin: float = 6.0
+## Surface gap at which the winch stops relying on the chain and simply hauls the
+## part in against the drum (see _draw_in).
+@export var dock_distance: float = 55.0
 ## How close a hauled part's own *surface* has to get to the muzzle to count as
 ## delivered — measured off the surface because a two-hex part is some 80 units
 ## across, and asking its centre to reach the maw would mean driving its middle
 ## into the hull first.
-##
-## Cannot usefully be tightened much below four links. The last stretch of chain
-## between the wrap and the drum can never be wound away — the solver needs some
-## un-pinned line to pull the body with — so a part physically cannot be drawn
-## nearer than about three rest lengths plus its own radius. The spec's numbers
-## work out the same way: it reels a 46-radius hunk down to a 178px line and
-## calls that the collector maw.
-@export var secure_radius: float = 48.0
+@export var secure_radius: float = 8.0
 
 var tension: float = 0.0
 
@@ -394,6 +390,7 @@ func _solve(step: float) -> void:
 				_hooked_body.global_position += span * excess * load_transfer
 
 	if is_hooked():
+		_draw_in(step)
 		_cap_body_speed(step)
 
 	var was_taut: bool = _taut
@@ -403,6 +400,29 @@ func _solve(step: float) -> void:
 		var at: int = clampi(mini(_deployed - 2, _wrapped + 4), 0, _pos.size() - 1)
 		GrappleFx.burst(_strain_fx, _pos[at])
 		snapped_taut.emit(_pos[at])
+
+
+## The last stretch onto the collector.
+##
+## The solver on its own cannot bring a part any closer than about three free
+## links plus the part's own radius. _advance_wrap caps the turns at
+## `deployed - 3`, so there is always some un-pinned chain left between the wrap
+## and the drum — and that leftover chain is exactly what the haul pulls on, so it
+## cannot be wound away. On a one-hex part that left it hanging some 60 units off
+## the hull at the moment it was collected, visibly short of the maw.
+##
+## Inside dock_distance the winch stops pulling through the chain and hauls the
+## part in against the drum directly, which is what a winch does once its load
+## reaches the fairlead. Still speed-capped like any other haul, and still only
+## while the player is actually winching.
+func _draw_in(step: float) -> void:
+	if not _reeling:
+		return
+	var to_muzzle: Vector2 = _muzzle_position() - _hooked_body.global_position
+	var gap: float = to_muzzle.length() - _body_radius(_hooked_body)
+	if gap > dock_distance or gap <= 0.0:
+		return
+	_hooked_body.global_position += to_muzzle.normalized() 		* minf(body_speed_cap_reeling * step, gap)
 
 
 func _cap_body_speed(step: float) -> void:
