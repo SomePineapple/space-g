@@ -34,13 +34,31 @@ static func hex_corners(center: Vector2, cell_size: float) -> PackedVector2Array
 
 
 ## Normalised (0-1) UV coordinates matching hex_corners' vertex order, for
-## sampling a square hex-tile texture generated with a small margin around
-## the hex silhouette (as produced by art/reference/hex_module.png).
-static func hex_uv_corners(uv_radius: float = 0.49) -> PackedVector2Array:
+## sampling a hex tile whose hexagon exactly fills the image — the sqrt(3)/2
+## aspect every module sprite is exported at (444x512, 888x1024).
+##
+## The two radii differ on purpose. The tile is wider-than-tall in the same
+## ratio as the hexagon it holds, so the corner at angle `a` lands at
+## (0.5 + cos(a)/sqrt(3), 0.5 + sin(a)/2): the flat left and right edges sit
+## exactly on the image border, and so do the top and bottom vertices.
+##
+## This was one circular radius of 0.49, which assumed a *square* tile with a
+## margin around the hex (art/reference/hex_module.png). The art is not authored
+## that way, so the flat edges were sampled at 0.924 instead of 1.0 — every
+## module was magnified ~8% horizontally against ~2% vertically, losing a sliver
+## off each flat edge. Invisible on uniform plating, which is why it stood for so
+## long; fatal for the Grapple marks, which draw their aperture across the seam
+## between two hexes, exactly where the lost sliver is. The hole came out pinched
+## into a lens instead of round.
+const UV_RADIUS_X: float = 0.5773503  # 1/sqrt(3)
+const UV_RADIUS_Y: float = 0.5
+
+
+static func hex_uv_corners() -> PackedVector2Array:
 	var uvs := PackedVector2Array()
 	for i in 6:
 		var angle: float = deg_to_rad(60.0 * i - 30.0)
-		uvs.append(Vector2(0.5, 0.5) + Vector2(cos(angle), sin(angle)) * uv_radius)
+		uvs.append(Vector2(0.5 + cos(angle) * UV_RADIUS_X, 0.5 + sin(angle) * UV_RADIUS_Y))
 	return uvs
 
 
@@ -54,8 +72,8 @@ static func hex_uv_corners(uv_radius: float = 0.49) -> PackedVector2Array:
 ## world corner rotates the sampled image itself by rotation_steps * 60°, so
 ## a multi-piece assembly rotates as one rigid image instead of each piece's
 ## art staying frozen in its original orientation.
-static func hex_uv_corners_for_rotation(rotation_steps: int, uv_radius: float = 0.49) -> PackedVector2Array:
-	var base_uvs: PackedVector2Array = hex_uv_corners(uv_radius)
+static func hex_uv_corners_for_rotation(rotation_steps: int) -> PackedVector2Array:
+	var base_uvs: PackedVector2Array = hex_uv_corners()
 	var rotated := PackedVector2Array()
 	for i in 6:
 		rotated.append(base_uvs[posmod(i - rotation_steps, 6)])

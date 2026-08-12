@@ -50,6 +50,13 @@ const WELD_BOLT_WIDTH: float = 1.0
 ## hex_texture/color entirely so "this module is dead" reads at a glance.
 const DESTROYED_COLOR: Color = Color(0.12, 0.1, 0.1, 1.0)
 
+## What a module's emissive layer is multiplied by. Past 1.0 on purpose: the 2D
+## buffer is HDR (rendering/viewport/hdr_2d) and the region's WorldEnvironment
+## blooms whatever comes out brighter than its glow threshold, so this is the
+## difference between a lamp that is painted on and one that actually throws
+## light. White rather than a colour, so the art keeps its own hue.
+const GLOW_GAIN: Color = Color(1.7, 1.7, 1.7, 1.0)
+
 ## placement_id -> true. Owned by whoever calls set_module_destroyed() (Ship,
 ## once a module's per-placement condition hits zero — see
 ## Ship._on_module_destroyed); this renderer just reflects it visually.
@@ -124,6 +131,9 @@ func _draw() -> void:
 	# call, so mismatched plating costs nothing extra. Shadows batch the same
 	# way, into one untextured mesh drawn under everything.
 	var fills_by_texture: Dictionary = {}
+	# The emissive layer, batched exactly like the base fills and drawn straight
+	# after them (see ModuleType.faction_hex_glow_textures).
+	var glow_fills_by_texture: Dictionary = {}
 	var flat_fills: Array[Array] = []
 	var shadow_fills: Array[Array] = []
 	var shadow_offset: Vector2 = HullPaint.part_shadow_offset(cell_size)
@@ -161,14 +171,22 @@ func _draw() -> void:
 			if destroyed:
 				flat_fills.append([corners, DESTROYED_COLOR])
 			else:
+				var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
 				var texture: Texture2D = module_type.get_hex_texture_for_cell(faction_id, i)
 				if texture != null:
-					var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
 					if not fills_by_texture.has(texture):
 						fills_by_texture[texture] = []
 					fills_by_texture[texture].append([corners, uvs, tint])
 				else:
 					flat_fills.append([corners, module_type.color * tint])
+				# Deliberately not tinted with the part: a scavenged module's
+				# plating takes the colour of wherever it came from, but its
+				# indicator lamps are the same lamps whoever is flying it.
+				var glow: Texture2D = module_type.get_hex_glow_texture_for_cell(faction_id, i)
+				if glow != null:
+					if not glow_fills_by_texture.has(glow):
+						glow_fills_by_texture[glow] = []
+					glow_fills_by_texture[glow].append([corners, uvs, GLOW_GAIN])
 				# Weapon-hardpoint overlay art (turret_360/etc) is drawn by the
 				# rotating HardpointGun itself during gameplay (see
 				# HardpointGun.set_turret_texture), not here — drawing it a
@@ -194,6 +212,13 @@ func _draw() -> void:
 		var mesh: ArrayMesh = _build_hex_mesh(fills_by_texture[texture])
 		_hull_meshes.append(mesh)
 		draw_mesh(mesh, texture)
+
+	# Lights over the plating they belong to, but under the panel lines and
+	# silhouette below — a lamp is set into the hull, not floating over its edges.
+	for glow_texture: Texture2D in glow_fills_by_texture:
+		var glow_mesh: ArrayMesh = _build_hex_mesh(glow_fills_by_texture[glow_texture])
+		_hull_meshes.append(glow_mesh)
+		draw_mesh(glow_mesh, glow_texture)
 
 	# Bolts over their own weld dashes, and the silhouette over everything, so a
 	# joint reaching the hull's edge never looks like a hole.

@@ -305,6 +305,12 @@ func _draw_placements() -> void:
 		if hex_texture != null:
 			var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
 			draw_colored_polygon(corners, tint, uvs, hex_texture)
+			# The module's lit parts, at face value — this panel has no HDR glow
+			# to bloom them, so they read as bright paint rather than light, which
+			# is enough for the hull to look like itself on the build screen.
+			var glow: Texture2D = module_type.get_hex_glow_texture_for_cell(faction_id, occupant[1])
+			if glow != null:
+				draw_colored_polygon(corners, Color.WHITE, uvs, glow)
 		else:
 			draw_colored_polygon(corners,
 				(module_type.color * tint) if module_type != null else BuilderTheme.INPUT_DARK)

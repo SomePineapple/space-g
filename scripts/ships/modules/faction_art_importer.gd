@@ -43,10 +43,15 @@ static func load_faction_textures(base_name: String) -> Dictionary:
 ## footprint_cells (see ModuleType.faction_hex_textures_per_cell). A faction
 ## missing a given piece simply has no entry for that cell, same graceful
 ## fallback as the single-image loader.
-static func load_faction_textures_per_cell(base_name: String, footprint_cells: Array[Vector2i]) -> Array[Dictionary]:
+## `suffix` is appended after the cell coordinates, for a module exported as
+## more than one layer per hex — "grapple_mk2" + "_lights" resolves to
+## "corporate_grapple_mk2_0_0_lights.png". Empty (the default) is the plain base
+## layer every existing caller wants.
+static func load_faction_textures_per_cell(base_name: String, footprint_cells: Array[Vector2i],
+		suffix: String = "") -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for offset in footprint_cells:
-		result.append(load_faction_textures("%s_%d_%d" % [base_name, offset.x, offset.y]))
+		result.append(load_faction_textures("%s_%d_%d%s" % [base_name, offset.x, offset.y, suffix]))
 	return result
 
 

@@ -59,6 +59,14 @@ var _reel_input_held: bool = false
 @onready var _muzzle: Marker2D = $Muzzle
 
 
+## Moves the point the rope leaves from to wherever this module's art draws its
+## aperture (see ModuleType.muzzle_offset_cells) — a hardpoint sits at its
+## footprint's centroid, which on the Grapple marks is not where the hole is.
+## `offset` is already in pixels, in this node's own local space.
+func set_muzzle_offset(offset: Vector2) -> void:
+	_muzzle.position = offset
+
+
 func setup(shooter: Ship) -> void:
 	_shooter = shooter
 

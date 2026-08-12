@@ -62,11 +62,16 @@ signal hull_lost
 ## dial that decides how badly the player needs fresh parts.
 @export var integrity_loss_per_full_hit: float = 0.1
 
-## Whether this hull repairs itself at all. False for a derelict: a wreck that
-## has been adrift for years does not knit itself back together, and — the reason
-## this exists — passive regrowth otherwise heals a deliberately damaged part
-## back above HullPaint.CUTTABLE_CONDITION a few seconds after it spawns, which
-## silently removes the cut-ready marker and makes the part uncuttable.
+## Whether this hull patches up its own chip damage. False for a derelict: a
+## wreck that has been adrift for years does not knit itself back together, and —
+## the reason this exists — passive repair otherwise heals a deliberately damaged
+## part back above HullPaint.CUTTABLE_CONDITION a few seconds after it spawns,
+## which silently removes the cut-ready marker and makes the part uncuttable.
+##
+## Holed-out modules regrow regardless (see _regenerate_modules). This used to
+## gate that too, which meant every stray shot and every slipped cut left a
+## permanent hole in the one hull the player is meant to practise cutting on —
+## a tutorial wreck accumulating damage it can never shed.
 @export var regenerates: bool = true
 
 var _ship: Ship
@@ -317,7 +322,7 @@ func damage_cut(band_fraction: float, impact_point: Vector2, aim_direction: Vect
 	# An immune part reports "intact" rather than silently absorbing the beam, so
 	# the tool gives its usual "this cannot be opened" feedback instead of looking
 	# broken (see HardpointSlicer.INTACT_BEAM_FADE).
-	if not HullPaint.is_cuttable(placement.instance):
+	if not _is_cuttable_cell(placement):
 		return {"result": "intact", "progress": 0.0}
 
 	_clean_cut_active = true
@@ -409,9 +414,24 @@ func _describe_cell(coord: Vector2i) -> Dictionary:
 		# Whether the beam may lock here at all. Matches the cut-ready marker the
 		# renderer draws (destroyed cells are holes, not parts waiting to be cut),
 		# so the tool can only lock onto something the hull is visibly offering.
-		"cuttable": not is_destroyed(placement.placement_id) \
-			and HullPaint.is_cuttable(placement.instance),
+		"cuttable": _is_cuttable_cell(placement),
 	}
+
+
+## Whether the Slicer is allowed to open this part.
+##
+## The Command Core is excluded outright. Losing it emits hull_lost and ends the
+## ship (see _on_module_destroyed), which the Slicer must never be able to cause:
+## it is a dismantling tool, not a weapon, and a cut that destroys the ship also
+## destroys everything still bolted to it — including whatever the player was
+## trying to salvage. Measured before this guard: a Core already shot into the
+## cuttable band could be cut straight through, and the target simply exploded.
+func _is_cuttable_cell(placement: ModulePlacement) -> bool:
+	if placement.placement_id == _layout.core_placement_id:
+		return false
+	if is_destroyed(placement.placement_id):
+		return false
+	return HullPaint.is_cuttable(placement.instance)
 
 
 ## How far through the cuttable band a part is: 0 the moment it becomes
@@ -631,8 +651,13 @@ func _detach_module(placement: ModulePlacement) -> void:
 ## condition, so a multi-hex hole visibly sweeps outward from the healthy edge
 ## inward rather than every hex in it popping back at once. Detached modules are
 ## excluded entirely — a piece that's already flown off has nothing to grow onto.
+##
+## Growing a hole shut is deliberately NOT gated on `regenerates`; only topping
+## up chip damage is. The two are different promises: a hull that never closes its
+## holes accumulates every stray shot forever, while a hull that heals chip damage
+## also heals away the cut-ready marker the Slicer depends on.
 func _regenerate_modules(delta: float) -> void:
-	if not regenerates or _layout == null or _time_since_last_damage < repair_delay:
+	if _layout == null or _time_since_last_damage < repair_delay:
 		return
 
 	for placement in _layout.placements:
@@ -650,7 +675,8 @@ func _regenerate_modules(delta: float) -> void:
 				# enter _regrowing, which would switch it off and respawn a
 				# collision shape it never lost. (Topping these up used to be the
 				# station's paid repair; that screen is frozen — Phase 0a.)
-				_advance_repair(placement, module_type, max_condition, delta, false)
+				if regenerates:
+					_advance_repair(placement, module_type, max_condition, delta, false)
 				continue
 			if not _has_healthy_neighbor(placement):
 				continue # nothing healthy adjacent yet to grow back from

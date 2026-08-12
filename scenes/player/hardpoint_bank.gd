@@ -242,8 +242,14 @@ func _mount_launcher(placement: ModulePlacement) -> HardpointMissileLauncher:
 ## fixed rendering offset, so "the direction the room is facing" is whatever the
 ## player pointed it at in the builder.
 func _mount_winch(placement: ModulePlacement) -> HardpointWinch:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 	var winch: HardpointWinch = _mount(winch_scene, placement)
 	winch.rotation = _fixed_facing(placement)
+	# Only overridden when the module type actually says where its aperture is.
+	# Every Grapple mark does; a module that doesn't keeps the scene's own muzzle
+	# placement rather than collapsing it onto the footprint centre.
+	if module_type.muzzle_offset_cells != Vector2.ZERO:
+		winch.set_muzzle_offset(module_type.muzzle_offset_cells * _renderer.cell_size)
 	winch.setup(_ship)
 	return winch
 

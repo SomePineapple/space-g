@@ -87,6 +87,11 @@ func _draw() -> void:
 		var texture: Texture2D = module_type.get_hex_texture_for_cell(faction_id, i)
 		if texture != null:
 			draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners(), texture)
+			# Lit parts on top, so a module's indicators show in the hold list the
+			# same way they do on the hull (see the same pass in HexGridControl).
+			var glow: Texture2D = module_type.get_hex_glow_texture_for_cell(faction_id, i)
+			if glow != null:
+				draw_colored_polygon(corners, Color.WHITE, HexUtils.hex_uv_corners(), glow)
 		else:
 			_draw_gradient_hex(corners)
 

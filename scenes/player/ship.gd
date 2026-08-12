@@ -256,7 +256,7 @@ const STARTER_PART_TYPE_IDS: Array[String] = [
 	# game's core verb, and it can't be the reward for a loop it is required to
 	# run.
 	ModuleCatalog.SALVAGER_HARDPOINT_TYPE_ID,
-	ModuleCatalog.WINCH_HARDPOINT_TYPE_ID,
+	ModuleCatalog.GRAPPLE_MK1_TYPE_ID,
 ]
 
 

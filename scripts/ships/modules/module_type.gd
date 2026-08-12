@@ -30,6 +30,18 @@ extends Resource
 ## Empty (or an empty entry for a given cell/faction) falls back to
 ## get_hex_texture() for that cell, same texture repeated in every hex.
 @export var faction_hex_textures_per_cell: Array[Dictionary] = []
+## The emissive half of a module's art: the lit windows, indicator strips and
+## emitter rings, authored as a separate layer over a transparent background and
+## drawn additively on top of the base plate (see ShipLayoutRenderer's glow
+## layer). Kept out of the base image so the lights can be blown past white and
+## caught by the world's glow — a lamp painted into the base plate can only ever
+## be as bright as the hull it sits on.
+##
+## Same shape as the two above: one Dictionary for a single-hex module, one per
+## footprint cell for a multi-hex one. Both empty means "this module has no lit
+## parts", which is every module that predates the layer.
+@export var faction_hex_glow_textures: Dictionary = {}
+@export var faction_hex_glow_textures_per_cell: Array[Dictionary] = []
 @export var mass_contribution: float = 0.0
 @export var health_contribution: float = 0.0
 @export var thrust_contribution: float = 0.0
@@ -60,6 +72,18 @@ extends Resource
 ## HardpointGun subclass. Null means "use the ship's default for this
 ## category", which is every existing hardpoint type's behavior unchanged.
 @export var hardpoint_scene: PackedScene = null
+
+## Where this module's business end actually is, as a multiple of cell_size,
+## measured from the footprint's centre in the module's own un-rotated art space
+## (+x right, -y toward the front of the ship). Rope, beam and muzzle flash all
+## leave from here.
+##
+## Needed because a hardpoint is mounted at its footprint centroid, which for
+## most modules is nowhere near the hole the art draws the equipment coming out
+## of: the Grapple Mk1's aperture sits near its front vertex, the Mk2's between
+## its two hexes, the Mk3's at the mouth of its emitter. Zero keeps the old
+## behaviour (straight out of the centre) for everything that predates this.
+@export var muzzle_offset_cells: Vector2 = Vector2.ZERO
 
 ## Whether a severed (not destroyed-outright) instance of this module can be
 ## recovered intact as a research item rather than just flying off as inert
@@ -110,3 +134,13 @@ func get_hex_texture_for_cell(faction_id: String, cell_index: int) -> Texture2D:
 ## see faction_hex_overlay_textures above. Null means nothing to overlay.
 func get_hex_overlay_texture(faction_id: String) -> Texture2D:
 	return faction_hex_overlay_textures.get(faction_id, null)
+
+
+## The emissive layer for one cell, or null if this module has no lit parts —
+## see faction_hex_glow_textures.
+func get_hex_glow_texture_for_cell(faction_id: String, cell_index: int) -> Texture2D:
+	if cell_index < faction_hex_glow_textures_per_cell.size():
+		var texture: Texture2D = faction_hex_glow_textures_per_cell[cell_index].get(faction_id, null)
+		if texture != null:
+			return texture
+	return faction_hex_glow_textures.get(faction_id, null)

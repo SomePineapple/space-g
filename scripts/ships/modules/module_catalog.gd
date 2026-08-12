@@ -10,7 +10,9 @@ const WEAPON_HARDPOINT_TYPE_ID: String = "weapon_hardpoint"
 const MISSILE_HARDPOINT_TYPE_ID: String = "missile_hardpoint"
 const RAILGUN_HARDPOINT_TYPE_ID: String = "railgun_hardpoint"
 const PHASE_LANCE_HARDPOINT_TYPE_ID: String = "phase_lance_hardpoint"
-const WINCH_HARDPOINT_TYPE_ID: String = "winch_hardpoint"
+const GRAPPLE_MK1_TYPE_ID: String = "grapple_mk1"
+const GRAPPLE_MK2_TYPE_ID: String = "grapple_mk2"
+const GRAPPLE_MK3_TYPE_ID: String = "grapple_mk3"
 const TRACTOR_HARDPOINT_TYPE_ID: String = "tractor_beam_hardpoint"
 const RADAR_HARDPOINT_TYPE_ID: String = "radar_hardpoint"
 const SCANNER_HARDPOINT_TYPE_ID: String = "scanner_hardpoint"
@@ -351,21 +353,77 @@ static func get_all() -> Array[ModuleType]:
 	slicer_type.faction_hex_textures = FactionArtImporter.load_faction_textures("mining_grinder")
 	types.append(slicer_type)
 
-	# Salvage Winch (see HardpointWinch/WinchRope) — the other half of the loop:
-	# the Slicer frees a part, this drags it home. Re-enabled and rebuilt as a
-	# two-hex part; it was commented out when the builder was cut back to the
-	# five bundled pieces, which is what made severed parts unrecoverable.
-	var winch_type: ModuleType = _make(WINCH_HARDPOINT_TYPE_ID, "Salvage Winch", Color(0.6, 0.55, 0.4), LINE_2_CELLS,
-		0.45, 40.0, 0.0, null, "winch", 1,
-		{MaterialCatalog.IRON: 12, MaterialCatalog.COPPER: 6},
-		0.0, 0.0, preload("res://scenes/player/hardpoint_winch.tscn"), true)
-	winch_type.faction_hex_textures = FactionArtImporter.load_faction_textures("extractor_beam")
-	types.append(winch_type)
+	types.append_array(_grapple_types())
 
 	_cached_types = types
 	for type in types:
 		_index[type.id] = type
 	return types
+
+
+## The Grapple line: three tiers of the other half of the salvage loop. The
+## Slicer frees a part, a Grapple drags it home.
+##
+## Replaces the "Salvage Winch", which was the same module under a name that
+## never stuck — it is gone rather than kept as a retired id, since nothing
+## persists a player's parts between runs yet and the one ship layout that
+## mounted it (custodian.tres) now carries a Mk2, which has the identical
+## two-cell footprint. The scene and rope it spawns are still named for the
+## winch (HardpointWinch, WinchRope); that is internal and renaming it is a
+## mechanical job of its own.
+##
+## Each mark is physically bigger than the last, and its aperture — the hole
+## the chain actually pays out of — sits
+## somewhere different on the assembly, which is what muzzle_offset_cells
+## records (measured off the art, in cell-size units, -y pointing forward):
+##
+##   Mk1  one hex, aperture near the front vertex — the chain leaves the nose.
+##   Mk2  two hexes abreast, aperture on the seam between them, so with the pair
+##        sitting across the hull the chain fires straight ahead out of the
+##        middle.
+##   Mk3  two hexes abreast with a third behind carrying the reel drum, aperture
+##        at the mouth between the front pair.
+##
+## All three are "winch" category, so ShipLayout's lookup, the Salvager loop and
+## HardpointWinch pick them up with no further plumbing.
+static func _grapple_types() -> Array[ModuleType]:
+	var grapples: Array[ModuleType] = []
+	var winch_scene: PackedScene = preload("res://scenes/player/hardpoint_winch.tscn")
+	# Plate steel, matching the art. Only ever seen if the sprites fail to load.
+	var plate := Color(0.227, 0.275, 0.322)
+
+	var mk1: ModuleType = _make(GRAPPLE_MK1_TYPE_ID, "Grapple Mk1", plate, SINGLE_CELL,
+		0.35, 30.0, 0.0, null, "winch", 1,
+		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 4},
+		0.0, 0.0, winch_scene, true)
+	mk1.muzzle_offset_cells = Vector2(0.0, -0.518)
+	mk1.faction_hex_textures = FactionArtImporter.load_faction_textures("grapple_mk1")
+	mk1.faction_hex_glow_textures = FactionArtImporter.load_faction_textures("grapple_mk1_lights")
+	grapples.append(mk1)
+
+	var mk2: ModuleType = _make(GRAPPLE_MK2_TYPE_ID, "Grapple Mk2", plate, LINE_2_CELLS,
+		0.6, 55.0, 0.0, null, "winch", 2,
+		{MaterialCatalog.IRON: 16, MaterialCatalog.COPPER: 8},
+		0.0, 0.0, winch_scene, true)
+	mk2.muzzle_offset_cells = Vector2(0.0, -0.064)
+	mk2.faction_hex_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
+		"grapple_mk2", LINE_2_CELLS)
+	mk2.faction_hex_glow_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
+		"grapple_mk2", LINE_2_CELLS, "_lights")
+	grapples.append(mk2)
+
+	var mk3: ModuleType = _make(GRAPPLE_MK3_TYPE_ID, "Grapple Mk3", plate, TRIANGLE_3_CELLS,
+		0.85, 80.0, 0.0, null, "winch", 3,
+		{MaterialCatalog.IRON: 24, MaterialCatalog.COPPER: 12},
+		0.0, 0.0, winch_scene, true)
+	mk3.muzzle_offset_cells = Vector2(0.0, -0.361)
+	mk3.faction_hex_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
+		"grapple_mk3", TRIANGLE_3_CELLS)
+	mk3.faction_hex_glow_textures_per_cell = FactionArtImporter.load_faction_textures_per_cell(
+		"grapple_mk3", TRIANGLE_3_CELLS, "_lights")
+	grapples.append(mk3)
+
+	return grapples
 
 
 static func get_by_id(id: String) -> ModuleType:

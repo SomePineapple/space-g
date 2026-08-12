@@ -42,7 +42,7 @@ rotation_steps = 3
 [sub_resource type="Resource" id="Resource_b1mf4"]
 script = ExtResource("1_c8jw0")
 placement_id = "p_31324_31"
-module_type_id = "winch_hardpoint"
+module_type_id = "grapple_mk2"
 hex_coord = Vector2i(2, -1)
 
 [sub_resource type="Resource" id="Resource_okob0"]
