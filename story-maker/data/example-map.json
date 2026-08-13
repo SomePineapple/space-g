@@ -1,0 +1,131 @@
+{
+  "schema": "space-g.story-map",
+  "version": 1,
+  "id": "map_example",
+  "name": "Example — distress call",
+  "updated": "2026-08-13T00:00:00.000Z",
+  "map": {
+    "grid": 250,
+    "background": null,
+    "view": { "x": 640, "y": 360, "zoom": 0.5 }
+  },
+  "events": [
+    {
+      "id": "evt_kestrel",
+      "title": "Distress call — Kestrel",
+      "type": "distress_signal",
+      "x": -900,
+      "y": -200,
+      "radius": 600,
+      "color": "",
+      "once": true,
+      "prereq_mode": "all",
+      "tags": ["example"],
+      "description": "A repeating automated call on an old civilian band. The hull is intact. Nobody is answering.",
+      "options": [
+        {
+          "id": "opt_dock",
+          "label": "Dock and board",
+          "outcome": "The airlock cycles on emergency power. The crew took the lifeboats; they did not take the reactor.",
+          "navos": { "clip_id": "", "text": "Life support reads zero. That is not a good sign, Captain." },
+          "log_text": "Boarded the Kestrel. Empty. Reactor still warm.",
+          "leads_to": "evt_ambush"
+        },
+        {
+          "id": "opt_leave",
+          "label": "Log it and move on",
+          "outcome": "You mark the position and burn away. The signal keeps repeating behind you.",
+          "navos": { "clip_id": "", "text": "Position logged. Whoever they were, they are not our problem." },
+          "log_text": "Left the Kestrel where it lay.",
+          "leads_to": ""
+        }
+      ],
+      "navos": {
+        "approach": [
+          { "id": "vo_k1", "clip_id": "", "text": "Distress beacon ahead. Civilian registry." }
+        ],
+        "inside": [],
+        "depart": [
+          { "id": "vo_k2", "clip_id": "", "text": "The beacon is still transmitting." }
+        ]
+      },
+      "log": {
+        "title": "The Kestrel",
+        "text": "Answered a distress call at the graveyard's edge."
+      },
+      "notes": "First contact with the salvager faction. Keep it quiet — no combat here."
+    },
+    {
+      "id": "evt_ambush",
+      "title": "The bait",
+      "type": "ambush",
+      "x": 400,
+      "y": 250,
+      "radius": 800,
+      "color": "",
+      "once": true,
+      "prereq_mode": "all",
+      "tags": ["example"],
+      "description": "Two hulls detach from the debris field the moment your clamps let go.",
+      "options": [],
+      "navos": {
+        "approach": [],
+        "inside": [
+          { "id": "vo_a1", "clip_id": "", "text": "Two contacts. They were waiting inside the wreck field." }
+        ],
+        "depart": []
+      },
+      "log": {
+        "title": "Bait",
+        "text": "The Kestrel was a lure. Someone is farming this graveyard."
+      },
+      "notes": ""
+    }
+  ],
+  "links": [
+    {
+      "id": "lnk_example",
+      "from": "evt_kestrel",
+      "from_type": "event",
+      "to": "evt_ambush",
+      "to_type": "event",
+      "kind": "choice",
+      "label": "if boarded",
+      "required": true,
+      "color": ""
+    },
+    {
+      "id": "lnk_area_example",
+      "from": "area_graveyard",
+      "from_type": "area",
+      "to": "evt_ambush",
+      "to_type": "event",
+      "kind": "sequence",
+      "label": "inside the field",
+      "required": true,
+      "color": ""
+    }
+  ],
+  "areas": [
+    {
+      "id": "area_graveyard",
+      "name": "Battle graveyard",
+      "points": [[-1600, -900], [900, -1000], [1400, 500], [-300, 900], [-1700, 300]],
+      "closed": true,
+      "fill": "#8d7fd0",
+      "stroke": "#8d7fd0",
+      "opacity": 0.14,
+      "note": "Dense wreckage. Salvage everywhere, line of sight is terrible."
+    }
+  ],
+  "notes": [
+    {
+      "id": "note_start",
+      "x": -1500,
+      "y": -1100,
+      "text": "chapter 1 starts here",
+      "color": "#c8d6e2",
+      "size": 20
+    }
+  ]
+}

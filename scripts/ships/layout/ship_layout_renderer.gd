@@ -73,6 +73,9 @@ var _detached_placement_ids: Dictionary = {}
 var _hull_meshes: Array[ArrayMesh] = []
 ## The child that draws this hull's lit layers (see _glow_layer).
 var _glow: HullGlowLayer = null
+## The child that draws battle damage, between the plating and the lights (see
+## _scar_layer).
+var _scars: HullScarLayer = null
 
 
 func _ready() -> void:
@@ -88,6 +91,26 @@ func _glow_layer() -> HullGlowLayer:
 		_glow = HullGlowLayer.new()
 		add_child(_glow)
 	return _glow
+
+
+## Scars sit above the plating and below the lights, so a lamp on a battered
+## part still reads as lit. Created before the glow layer for exactly that
+## reason — children draw in tree order — and moved under it if the glow layer
+## happened to exist first.
+func _scar_layer() -> HullScarLayer:
+	if _scars == null or not is_instance_valid(_scars):
+		_scars = HullScarLayer.new()
+		add_child(_scars)
+		if _glow != null and is_instance_valid(_glow):
+			move_child(_scars, _glow.get_index())
+	return _scars
+
+
+## Lights the fresh-hit glow on one module. Called by HullDamageModel as damage
+## lands, since that is the only thing that knows a hit happened as opposed to
+## seeing the condition it left behind.
+func flash_module_damage(placement_id: String) -> void:
+	_scar_layer().flash(placement_id)
 
 
 func set_layout(new_layout: ShipLayout) -> void:
@@ -146,6 +169,10 @@ func _draw() -> void:
 	var glow_fills_by_texture: Dictionary = {}
 	var flat_fills: Array[Array] = []
 	var shadow_fills: Array[Array] = []
+	# Battle damage, handed to the scar child once the hull's own geometry is
+	# known — the scars are clipped to these same jittered hexes, so they have to
+	# be the drawn outlines rather than the grid cells underneath.
+	var scar_parts: Array = []
 	var shadow_offset: Vector2 = HullPaint.part_shadow_offset(cell_size)
 
 	# Which part owns each drawn cell, so an edge can tell "inside one part" from
@@ -167,6 +194,12 @@ func _draw() -> void:
 		var centroid: Vector2 = HullPaint.part_centroid(ship_layout, placement, cell_size)
 		var offset: Vector2 = HullPaint.part_offset(placement.instance, cell_size)
 		var rotation: float = HullPaint.part_rotation(placement.instance)
+
+		# A destroyed module is already drawn as scorched wreckage, so scarring it
+		# further would only muddy the one state that has to read instantly.
+		var scar_tier: int = 0 if destroyed else HullPaint.scar_tier(placement.instance)
+		var scar_polys: Array[PackedVector2Array] = []
+		var scar_tiles: Array[Vector2] = []
 
 		var occupied_cells: Array[Vector2i] = ship_layout.get_occupied_cells(placement)
 		for i in occupied_cells.size():
@@ -203,9 +236,22 @@ func _draw() -> void:
 				# second time on this static, non-rotating hull layer would
 				# leave a ghost turret showing through whenever the gun aims
 				# away from its neutral orientation.
+			if scar_tier > 0:
+				scar_polys.append(corners)
+				scar_tiles.append(_polygon_centre(corners))
+
 			_collect_edges(cell, corners, placement, owner_by_cell,
 				outline_points, seam_points, weld_points, weld_bolt_points,
 				cut_ready_points)
+
+		if scar_tier > 0:
+			scar_parts.append({
+				"id": placement.placement_id,
+				"seed": _scar_seed(placement),
+				"tier": scar_tier,
+				"tiles": scar_tiles,
+				"polys": scar_polys,
+			})
 
 	# Shadows first, under every fill: a part's shadow falls across its
 	# neighbour's cells, and only the slivers that land in the gaps the jitter
@@ -230,6 +276,7 @@ func _draw() -> void:
 	var glow_meshes: Dictionary = {}
 	for glow_texture: Texture2D in glow_fills_by_texture:
 		glow_meshes[glow_texture] = _build_hex_mesh(glow_fills_by_texture[glow_texture])
+	_scar_layer().set_parts(scar_parts, cell_size)
 	_glow_layer().set_glow_meshes(glow_meshes)
 
 	# Bolts over their own weld dashes, and the silhouette over everything, so a
@@ -246,6 +293,22 @@ func _draw() -> void:
 	# hull, which is exactly where a severable limb usually is.
 	if not cut_ready_points.is_empty():
 		draw_multiline(cut_ready_points, HullPaint.CUT_READY_COLOR, HullPaint.CUT_READY_WIDTH)
+
+
+## The scar seed. Keyed to the mounted part, not to where it is bolted: a gun
+## cut off a wreck arrives wearing the damage it took there, and unbolting it
+## and putting it back must not re-roll the marks.
+func _scar_seed(placement: ModulePlacement) -> String:
+	if placement.instance != null and not placement.instance.instance_id.is_empty():
+		return placement.instance.instance_id
+	return placement.placement_id
+
+
+func _polygon_centre(corners: PackedVector2Array) -> Vector2:
+	var total := Vector2.ZERO
+	for corner in corners:
+		total += corner
+	return total / maxf(float(corners.size()), 1.0)
 
 
 func _translated(corners: PackedVector2Array, offset: Vector2) -> PackedVector2Array:

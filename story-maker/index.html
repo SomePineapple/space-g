@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SpaceG Story Maker</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <aside id="left">
+    <header class="panel-head">
+      <h1>Story Maker</h1>
+      <span id="dirty-dot" title="Unsaved changes">&#9679;</span>
+    </header>
+
+    <div class="pad">
+      <label class="field">
+        <span>Map name</span>
+        <input id="doc-name" type="text" spellcheck="false">
+      </label>
+      <div class="btn-row">
+        <button id="btn-new" title="Start an empty map">New</button>
+        <button id="btn-open" title="Open a .json map from disk">Open</button>
+        <button id="btn-save" title="Ctrl+S">Save</button>
+        <button id="btn-saveas" title="Save to a new file">Save as</button>
+      </div>
+      <div id="storage-status" class="status"></div>
+    </div>
+
+    <div class="pad tools">
+      <div class="section-label">Tools</div>
+      <div class="tool-grid">
+        <button class="tool" data-tool="select" title="Select / move  (V)">Select<em>V</em></button>
+        <button class="tool" data-tool="event"  title="Place an event  (E)">Event<em>E</em></button>
+        <button class="tool" data-tool="link"   title="Link two events  (L)">Link<em>L</em></button>
+        <button class="tool" data-tool="pen"    title="Draw an area  (P)">Pen<em>P</em></button>
+        <button class="tool" data-tool="note"   title="Place a note  (N)">Note<em>N</em></button>
+      </div>
+      <div id="tool-hint" class="hint"></div>
+    </div>
+
+    <div class="pad grow">
+      <div class="section-label">
+        Events <span id="event-count" class="muted"></span>
+      </div>
+      <input id="event-search" type="search" placeholder="Filter by title, type or tag" spellcheck="false">
+      <ul id="event-list"></ul>
+    </div>
+
+    <div class="pad">
+      <div class="section-label">Checks <span id="issue-count" class="muted"></span></div>
+      <ul id="issue-list"></ul>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="canvas"></canvas>
+    <div id="hud">
+      <span id="hud-coords">0, 0</span>
+      <span id="hud-zoom">100%</span>
+      <button id="btn-fit" title="Frame everything  (F)">Fit</button>
+      <button id="btn-reset-zoom" title="Reset zoom to 100%">1:1</button>
+    </div>
+    <div id="toast"></div>
+  </main>
+
+  <aside id="right">
+    <div id="inspector"></div>
+  </aside>
+
+</div>
+
+<input id="file-input" type="file" accept="application/json,.json" hidden>
+<input id="image-input" type="file" accept="image/*" hidden>
+
+<script src="js/state.js"></script>
+<script src="js/view.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/inspector.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

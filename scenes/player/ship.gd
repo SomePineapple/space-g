@@ -60,8 +60,17 @@ signal destroyed
 ## How far mass is allowed to move the turn rate. Without a floor, a large hull
 ## becomes unplayable rather than merely ponderous; without a ceiling, a nearly
 ## stripped hull spins fast enough to make aiming trivial.
-@export var handling_factor_min: float = 0.45
+@export var handling_factor_min: float = 0.38
 @export var handling_factor_max: float = 1.6
+## How sharply the turn rate falls away once a hull is heavier than
+## `handling_reference_mass`. 1.0 is the plain inverse; above it, each extra
+## tonne costs more than the last, so a big hull is worse than proportionally
+## slow to come round.
+##
+## Applied only above the reference mass. A light hull's bonus stays a plain
+## inverse, because this exists to price up bulk, not to pay out for flying a
+## stripped frame.
+@export var handling_mass_falloff: float = 1.3
 @export var drag: float = 0.6
 @export var mass: float = 1.0
 @export var explosion_scene: PackedScene = preload("res://scenes/world/explosion.tscn")
@@ -1009,7 +1018,10 @@ func _apply_turn(delta: float) -> void:
 func _mass_handling_factor() -> float:
 	if mass <= 0.0:
 		return handling_factor_max
-	return clampf(handling_reference_mass / mass, handling_factor_min, handling_factor_max)
+	var ratio: float = handling_reference_mass / mass
+	if ratio < 1.0:
+		ratio = pow(ratio, handling_mass_falloff)
+	return clampf(ratio, handling_factor_min, handling_factor_max)
 
 
 ## Pulls speed down to `cap` gradually instead of snapping to it.

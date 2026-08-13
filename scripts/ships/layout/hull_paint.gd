@@ -63,6 +63,29 @@ const CUT_READY_WIDTH: float = 2.4
 const CUT_READY_DASH_SPANS: Array[float] = [0.06, 0.30, 0.40, 0.60, 0.70, 0.94]
 
 
+## Condition at or below which a part shows each scar tier
+## (HullScarPattern.Tier). Above the first entry a part is unmarked: a graze
+## should not scar a hull, or every ship in the game arrives pre-weathered and
+## the marks stop meaning anything.
+##
+## The last two tiers sit either side of CUTTABLE_CONDITION deliberately, so a
+## part crossing into cuttable territory is already visibly welded together —
+## the cut-ready dashes confirm what the plating has been saying.
+const SCAR_TIER_CONDITIONS: Array[float] = [0.85, 0.6, 0.35, 0.15]
+
+
+## Which scar tier a mounted part is showing, 0 for none. Derived from condition
+## rather than stored, so it cannot disagree with the damage model.
+static func scar_tier(instance: ModuleInstance) -> int:
+	if instance == null:
+		return 0
+	var tier: int = 0
+	for threshold in SCAR_TIER_CONDITIONS:
+		if instance.condition_fraction <= threshold:
+			tier += 1
+	return tier
+
+
 static func is_cuttable(instance: ModuleInstance) -> bool:
 	if instance == null or instance.damage_immune:
 		return false

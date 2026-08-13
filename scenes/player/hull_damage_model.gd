@@ -192,6 +192,7 @@ func _set_condition(placement: ModulePlacement, value: float) -> void:
 	if placement.instance == null:
 		return
 	var was_cuttable: bool = HullPaint.is_cuttable(placement.instance)
+	var previous_scar_tier: int = HullPaint.scar_tier(placement.instance)
 	var previous_efficiency_step: int = _efficiency_step(placement)
 	var max_condition: float = _max_condition_of(placement)
 	# Clamped to integrity rather than to 1.0, in the one place condition is
@@ -200,11 +201,12 @@ func _set_condition(placement: ModulePlacement, value: float) -> void:
 	placement.instance.condition_fraction = clampf(value / max_condition, 0.0,
 		placement.instance.integrity) if max_condition > 0.0 else 0.0
 
-	# The hull only redraws when its layout changes, but the cut-ready marker
-	# depends on condition — without this it would not appear until something
-	# else happened to force a redraw, which for a part shot down mid-fight could
-	# be never.
-	if _renderer != null and was_cuttable != HullPaint.is_cuttable(placement.instance):
+	# The hull only redraws when its layout changes, but the cut-ready marker and
+	# the scar tier both depend on condition — without this they would not appear
+	# until something else happened to force a redraw, which for a part shot down
+	# mid-fight could be never.
+	if _renderer != null and (was_cuttable != HullPaint.is_cuttable(placement.instance)
+			or previous_scar_tier != HullPaint.scar_tier(placement.instance)):
 		_renderer.queue_redraw()
 
 	# Thrust and the energy pool are derived from how well each part is working
@@ -525,6 +527,11 @@ func _apply(placement: ModulePlacement, amount: float) -> void:
 	# ten-second cut rate the regrowth is faster than the cutting, so a part could
 	# never be severed at all no matter how long the beam was held.
 	note_damage_taken()
+	# Fresh hits glow (see HullScarLayer). Lit here rather than off the condition
+	# change, because this is the only place that knows a hit landed at all — a
+	# graze that barely moves condition still leaves hot metal.
+	if _renderer != null:
+		_renderer.flash_module_damage(placement.placement_id)
 	var current: float = _condition_of(placement)
 	var remaining: float = maxf(current - amount, 0.0)
 	# Charged on what the part actually absorbed, not on what was aimed at it: an
