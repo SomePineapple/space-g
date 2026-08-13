@@ -105,7 +105,7 @@ static func generate(seed_text: String, tile_centres: Array[Vector2],
 	_add_pocks(decals, rng, tile_centres, angle, unit, 2, Tier.SCUFFED)
 
 	var severity: float = rng.randf_range(1.2, 1.8)
-	var radius: float = (30.0 + 20.0 * severity) * unit
+	var radius: float = (44.0 + 30.0 * severity) * unit
 	_add_breach(decals, rng, tile_centres, impact_tile, impact, radius, unit, Tier.BREACHED)
 	_add_streaks(decals, rng, impact, angle, unit, 3, Tier.BREACHED)
 	_add_pocks(decals, rng, tile_centres, angle, unit, 1, Tier.BREACHED)

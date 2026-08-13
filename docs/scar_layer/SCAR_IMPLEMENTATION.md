@@ -68,7 +68,7 @@ Footprint tiles are hex centres in module-local pixels. For a pointy-top 222×25
 
 1. Pick the impact tile from the footprint, then jitter the impact point up to ±35 x, ±40 y off its centre.
 2. Impact angle comes from the upper-left (the hull's light direction): `-2.5 + rng.randf() * 0.5` radians. Streaks and pock rotation follow it.
-3. Crater radius: `30 + 20 * severity` px at 1× tile scale (severity ~1.5 gives a ~60 px crater, i.e. `crater_core` at scale 1.0).
+3. Crater radius: `44 + 30 * severity` px at 1× tile scale (severity ~1.5 gives a ~90 px crater, i.e. `crater_core` at scale 1.0). Outlines are near-black and heavier-weight throughout so the scar reads as a silhouette at thumbnail/zoomed-out camera distances.
 4. Crack runs: from the crater edge toward each other tile centre, jittered ±0.15 rad, length 0.75–1.15× the distance. Lay `crack_segment` end to end along that path with ±0.1 rad per link.
 5. Weld plate at 55–75% along each run, rotated to the run angle; three stitch marks perpendicular, spaced 13 px, just beyond it.
 6. Pocks: place within ~88 px of each tile centre, radius 5–17 px, squashed 1.5–2.8× along the impact vector.
