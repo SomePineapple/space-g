@@ -15,24 +15,36 @@ extends RefCounted
 ## tier 3 contains tier 1 and 2 exactly where the player last saw them. Nothing
 ## here may branch on the current tier.
 
-## Atlas regions, in the 576x256 sheet's own pixels.
-const CRATER_CORE: Rect2 = Rect2(0, 0, 96, 96)
-const CRATER_RIM: Rect2 = Rect2(96, 0, 112, 112)
-const HEAT_RIM: Rect2 = Rect2(208, 0, 128, 128)
-const SOOT_BLOB: Rect2 = Rect2(336, 0, 192, 192)
-const CRACK_SEGMENT: Rect2 = Rect2(0, 192, 128, 24)
-const CRACK_BRANCH: Rect2 = Rect2(136, 192, 64, 48)
-const WELD_PLATE: Rect2 = Rect2(208, 192, 64, 32)
-const POCK: Rect2 = Rect2(280, 192, 32, 32)
-const EMBER: Rect2 = Rect2(320, 192, 16, 16)
+## Atlas regions, in the 800x400 sheet's own pixels. Every mark was re-authored
+## ~1.5x larger than the first pass so it reads at zoomed-out camera distances;
+## the sizes below are the art's own, and the marks are drawn at them.
+const CRATER_CORE: Rect2 = Rect2(0, 0, 144, 144)
+const CRATER_RIM: Rect2 = Rect2(144, 0, 168, 168)
+const HEAT_RIM: Rect2 = Rect2(312, 0, 192, 192)
+const SOOT_BLOB: Rect2 = Rect2(504, 0, 288, 288)
+const CRACK_SEGMENT: Rect2 = Rect2(0, 288, 192, 36)
+const CRACK_BRANCH: Rect2 = Rect2(204, 288, 96, 72)
+const WELD_PLATE: Rect2 = Rect2(312, 288, 96, 48)
+const POCK: Rect2 = Rect2(408, 288, 48, 48)
+const EMBER: Rect2 = Rect2(456, 288, 24, 24)
 
-const ATLAS_SIZE: Vector2 = Vector2(576, 256)
+const ATLAS_SIZE: Vector2 = Vector2(800, 400)
 
 ## The atlas is authored against a 222x256 hex tile, so every pixel figure in
 ## the spec is scaled by this before it is used.
 const TILE_HEIGHT: float = 256.0
 
 enum Tier {NONE, SCUFFED, BREACHED, PATCHED, VETERAN}
+
+## Every mark is drawn at the size the atlas authors it. Nothing here scales art
+## up: the re-authored sheet carries its own weight, and an earlier pass that
+## thickened cracks and drew a lit lip beside each one — needed when they were
+## near-black hairlines on near-black plating — went out with the art it propped up.
+
+## How far along its own length each crack segment advances before the next one
+## starts. Slightly less than a full length, so a run reads as one crack rather
+## than as a dotted line of them.
+const CRACK_OVERLAP: float = 0.88
 
 ## One mark. `heat` marks are the additive fresh-hit layer and are drawn by a
 ## separate pass that fades them out; everything else is the cold scar and never
@@ -93,7 +105,7 @@ static func generate(seed_text: String, tile_centres: Array[Vector2],
 	_add_pocks(decals, rng, tile_centres, angle, unit, 2, Tier.SCUFFED)
 
 	var severity: float = rng.randf_range(1.2, 1.8)
-	var radius: float = (19.0 + 14.0 * severity) * unit
+	var radius: float = (30.0 + 20.0 * severity) * unit
 	_add_breach(decals, rng, tile_centres, impact_tile, impact, radius, unit, Tier.BREACHED)
 	_add_streaks(decals, rng, impact, angle, unit, 3, Tier.BREACHED)
 	_add_pocks(decals, rng, tile_centres, angle, unit, 1, Tier.BREACHED)
@@ -188,16 +200,16 @@ static func _add_crack_run(decals: Array, rng: RandomNumberGenerator, impact: Ve
 	while walked < run:
 		heading += rng.randf_range(-0.1, 0.1)
 		var along: Vector2 = Vector2.RIGHT.rotated(heading)
-		decals.append(ScarDecal.new(CRACK_SEGMENT, at + along * step * 0.5, heading,
-			Vector2(step, thickness), 0.9, tier))
+		var centre: Vector2 = at + along * step * 0.5
+		decals.append(ScarDecal.new(CRACK_SEGMENT, centre, heading,
+			Vector2(step, thickness), 1.0, tier))
 		# Hairline forks come a tier later than the run they fork off.
 		if rng.randf() < 0.35:
-			decals.append(ScarDecal.new(CRACK_BRANCH, at + along * step * 0.5,
-				heading + rng.randf_range(-1.2, 1.2),
-				Vector2(CRACK_BRANCH.size.x, CRACK_BRANCH.size.y) * unit, 0.75,
+			decals.append(ScarDecal.new(CRACK_BRANCH, centre,
+				heading + rng.randf_range(-1.2, 1.2), CRACK_BRANCH.size * unit, 0.95,
 				mini(tier + 1, Tier.VETERAN)))
-		at += along * step
-		walked += step
+		at += along * step * CRACK_OVERLAP
+		walked += step * CRACK_OVERLAP
 
 	# The repair: a plate bolted over the run, stitched down either side, and
 	# then — one tier on — split again. That progression is the whole point of
@@ -205,10 +217,14 @@ static func _add_crack_run(decals: Array, rng: RandomNumberGenerator, impact: Ve
 	var patch_at: Vector2 = impact + Vector2.RIGHT.rotated(heading) * run * rng.randf_range(0.55, 0.75)
 	var patch_tier: int = mini(tier + 1, Tier.VETERAN)
 	decals.append(ScarDecal.new(WELD_PLATE, patch_at, heading,
-		Vector2(WELD_PLATE.size.x, WELD_PLATE.size.y) * unit, 0.95, patch_tier))
+		WELD_PLATE.size * unit, 0.95, patch_tier))
+	# Stitches: short crack pieces laid across the plate, spaced by the spec's
+	# 13px, scaled with the re-authored art like everything else.
 	for i in 3:
-		var across: Vector2 = Vector2.UP.rotated(heading) * (i - 1) * 13.0 * unit
+		var across: Vector2 = Vector2.UP.rotated(heading) * (i - 1) * 13.0 * 1.5 * unit
 		decals.append(ScarDecal.new(CRACK_SEGMENT, patch_at + across, heading + PI * 0.5,
-			Vector2(18.0, 5.0) * unit, 0.8, patch_tier))
-	decals.append(ScarDecal.new(CRACK_SEGMENT, patch_at, heading + rng.randf_range(-0.2, 0.2),
-		Vector2(step * 0.8, thickness) * 1.0, 0.9, Tier.VETERAN))
+			Vector2(27.0, 13.5) * unit, 0.9, patch_tier))
+	# The split back through the patch: the mark that says the repair failed.
+	decals.append(ScarDecal.new(CRACK_SEGMENT, patch_at,
+		heading + rng.randf_range(-0.2, 0.2), Vector2(step * 0.8, thickness),
+		1.0, Tier.VETERAN))

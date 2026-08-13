@@ -4,7 +4,7 @@
 
 | File | What it is |
 | --- | --- |
-| `scar_decals.png` | Decal atlas, 576×256, transparent. Authored at 1× tile scale (hex tile = 222×256). |
+| `scar_decals.png` | Decal atlas, 800×400, transparent. Authored at 1× tile scale (hex tile = 222×256), sized up ~1.5× over the original pass for readability at zoomed-out camera distances. |
 | `scar_decals-2x.png` | Same atlas at 2×, for cameras that zoom past 1:1. |
 | `scar_decals.svg` | Vector source of the atlas, if you need to re-export at another scale. |
 
@@ -14,15 +14,15 @@ Region rects are in 1× pixels; double them for the 2× sheet.
 
 | Region | x, y, w, h | Blend | Use |
 | --- | --- | --- | --- |
-| `crater_core` | 0, 0, 96, 96 | alpha | The breach. One per breach, scale 0.6–1.2. |
-| `crater_rim` | 96, 0, 112, 112 | alpha | Cooled discolouration ring. Under the core, ~1.15× its scale, free rotation. |
-| `heat_rim` | 208, 0, 128, 128 | add | Fresh-hit glow. Additive layer above the scar. |
-| `soot_blob` | 336, 0, 192, 192 | alpha | Bloom. Full alpha over the impact tile, ~0.5 alpha over each other tile. |
-| `crack_segment` | 0, 192, 128, 24 | alpha | Tileable run. Both ends sit at mid-height, so segments chain nose to tail. |
-| `crack_branch` | 136, 192, 64, 48 | alpha | Hairline fork off a run. |
-| `weld_plate` | 208, 192, 64, 32 | alpha | Repair patch bolted over an old crack. Rotate to the crack angle. |
-| `pock` | 280, 192, 32, 32 | alpha | Grazing hit. Rotate along the incoming vector. |
-| `ember` | 320, 192, 16, 16 | add | Thrown spark, fresh hits only. |
+| `crater_core` | 0, 0, 144, 144 | alpha | The breach. One per breach, scale 0.6–1.2. |
+| `crater_rim` | 144, 0, 168, 168 | alpha | Cooled discolouration ring. Under the core, ~1.15× its scale, free rotation. |
+| `heat_rim` | 312, 0, 192, 192 | add | Fresh-hit glow. Additive layer above the scar. |
+| `soot_blob` | 504, 0, 288, 288 | alpha | Bloom. Full alpha over the impact tile, ~0.5 alpha over each other tile. |
+| `crack_segment` | 0, 288, 192, 36 | alpha | Tileable run. Both ends sit at mid-height, so segments chain nose to tail. |
+| `crack_branch` | 204, 288, 96, 72 | alpha | Hairline fork off a run. |
+| `weld_plate` | 312, 288, 96, 48 | alpha | Repair patch bolted over an old crack. Rotate to the crack angle. |
+| `pock` | 408, 288, 48, 48 | alpha | Grazing hit. Rotate along the incoming vector. |
+| `ember` | 456, 288, 24, 24 | add | Thrown spark, fresh hits only. |
 
 ## Layer order
 
@@ -68,7 +68,7 @@ Footprint tiles are hex centres in module-local pixels. For a pointy-top 222×25
 
 1. Pick the impact tile from the footprint, then jitter the impact point up to ±35 x, ±40 y off its centre.
 2. Impact angle comes from the upper-left (the hull's light direction): `-2.5 + rng.randf() * 0.5` radians. Streaks and pock rotation follow it.
-3. Crater radius: `19 + 14 * severity` px at 1× tile scale (severity ~1.5 gives a ~40 px crater, i.e. `crater_core` at scale 1.0).
+3. Crater radius: `30 + 20 * severity` px at 1× tile scale (severity ~1.5 gives a ~60 px crater, i.e. `crater_core` at scale 1.0).
 4. Crack runs: from the crater edge toward each other tile centre, jittered ±0.15 rad, length 0.75–1.15× the distance. Lay `crack_segment` end to end along that path with ±0.1 rad per link.
 5. Weld plate at 55–75% along each run, rotated to the run angle; three stitch marks perpendicular, spaced 13 px, just beyond it.
 6. Pocks: place within ~88 px of each tile centre, radius 5–17 px, squashed 1.5–2.8× along the impact vector.

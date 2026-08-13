@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bv6itglccngop"
-path="res://.godot/imported/scar_decals.png-c71c405cbbc5ef5bc19d87a645650464.ctex"
+uid="uid://b3i3tju542yxb"
+path="res://.godot/imported/scar_decals.png-21d4284065a9a93969cac71cf1eb1e83.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/scars/scar_decals.png"
-dest_files=["res://.godot/imported/scar_decals.png-c71c405cbbc5ef5bc19d87a645650464.ctex"]
+source_file="res://docs/scar_layer/scar_decals.png"
+dest_files=["res://.godot/imported/scar_decals.png-21d4284065a9a93969cac71cf1eb1e83.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
