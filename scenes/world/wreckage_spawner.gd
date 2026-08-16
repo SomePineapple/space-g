@@ -169,9 +169,8 @@ func _spawn_piece(piece_scene: PackedScene, placement: ModulePlacement, module_t
 
 ## The visual description of a severed placement's hex(es). Uses the same
 ## per-cell, faction-reskinned texture lookup as ShipLayoutRenderer
-## (get_flight_hex_texture_for_cell) so the severed piece keeps showing the exact
-## art it had on the hull, not the type's generic fallback — cover plate included,
-## since a part cut loose is still out in the world.
+## (get_hex_texture_for_cell) so the severed piece keeps showing the exact art it
+## had on the hull, not the type's generic fallback.
 func _visual_data(placement: ModulePlacement, module_type: ModuleType) -> Dictionary:
 	var cells: Array[Vector2i] = _layout.get_occupied_cells(placement)
 	var colors: Array[Color] = []
@@ -179,7 +178,7 @@ func _visual_data(placement: ModulePlacement, module_type: ModuleType) -> Dictio
 	var local_centroid: Vector2 = Vector2.ZERO
 	for i in cells.size():
 		colors.append(module_type.color)
-		textures.append(module_type.get_flight_hex_texture_for_cell(_faction_id, i))
+		textures.append(module_type.get_hex_texture_for_cell(_faction_id, i))
 		local_centroid += HexUtils.axial_to_pixel(cells[i], _renderer.cell_size)
 	local_centroid /= cells.size()
 	return {"cells": cells, "colors": colors, "textures": textures, "rotation_steps": placement.rotation_steps, "centroid": local_centroid}

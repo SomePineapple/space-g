@@ -25,14 +25,13 @@ where present, and the JSON/HTML) before touching
 **`docs/design_handoff_grapple/` and `docs/design_handoff_controls_tutorial/`
 are the same for the grapple line and the first-time control hints** — read
 them before touching `scenes/player/salvage/` or `scenes/ui/tutorial/`.
-**`docs/design_handoff_conduits/` governs the Conduit tile, the reactor's
-grommet ring and how circuit runs are drawn** — read it before touching
-`scripts/ships/layout/power_grid.gd`. Note that it and
-`docs/spaceg-phase-4-spec-rev3.md` **contradict each other**: the spec's §4 and
-§10 say power flows through plain hull and explicitly forbid reintroducing
-"power conduits", and the handoff (which is newer, and which the user then
-asked for) makes conduits the only conductor. The handoff won. One of the two
-documents should be amended; neither has been.
+**Power conduits and adjacency-based power routing were cut** — the design, the
+code (`power_grid.gd`), the Conduit module, its handoff folder and the rev-3
+Phase 4 spec are all gone from the tree. `docs/rejected/power-conduits.md` says
+what it was, why it went, and which commit on `archive/power-conduits` still has
+it. **Do not reintroduce any part of it.** The replacement is reactor circuits:
+one circuit per reactor, membership assigned by the player in the builder, no
+geometry anywhere in the model.
 **`docs/performance.md`
 is required reading before writing or changing any `_draw()` loop, starfield
 or particle emitter** — it records why the 2D canvas renderer's lack of
@@ -56,7 +55,7 @@ describe the game as it is now**; sections there that document a frozen
 system are marked **FROZEN**. If a session log and that section disagree, the
 session log is the old one.
 
-## Most recent session (field-attach mounts, weapon wear made linear, and the Phase 4 power grid + conduits)
+## Most recent session (field-attach mounts, weapon wear made linear, and the power grid that was then cut)
 
 One long session in three parts. The third is much the biggest.
 
@@ -88,88 +87,26 @@ able to look at a number and know what it means. Now `HardpointGun` has
 scaled by whatever is left so that **DPS falls exactly linearly with
 efficiency**. Don't reintroduce a curve here without re-reading that exchange.
 
-### The power grid (`docs/design_handoff_conduits/`, `docs/spaceg-phase-4-spec-rev3.md`)
+### The power grid and conduits — BUILT, THEN CUT
 
-New `scripts/ships/layout/power_grid.gd` (`PowerGrid extends RefCounted`) —
-pure data, no nodes, no drawing, so the builder and anything later read the
-same answer from the same place. `solve(layout)` returns routes, powered ids,
-unpowered ids, reactor ids and per-edge wire segments.
+The bulk of this session went into an adjacency-based power model: a module was
+powered if a structural path ran back to a reactor through occupied hull cells,
+with a new Conduit hex as the only conductor. It shipped as
+`scripts/ships/layout/power_grid.gd`, a `conduit` `ModuleType`, cable rendering
+and a POWER PATHS overlay in the builder, a `_cover` art layer for tiles whose
+builder plate is a cutaway, and a throwaway probe scene.
 
-**The load-bearing idea, and the one thing not to undo:** power and attachment
-are measured over *different* graphs. Attachment is walked from the **core**
-(`ShipLayout.find_unreachable_from_core`); power is walked from the
-**reactors**. If everything conducted, "this gun has one power path" and "this
-gun hangs on by one cell" would be the same sentence, and cutting that cell
-would knock the gun into space rather than leave it dark and attached — which
-is a mechanic the game already has. Prising the two apart is the whole point.
+**All of it was rejected in the following session and deleted.** The builder
+became a routing puzzle instead of a question about what ship you want, the wire
+was illegible at flight zoom, nothing in the flight game ever read the solution,
+and none of the 17 authored layouts contained a conduit. See
+`docs/rejected/power-conduits.md` for the full reasoning, what survived into
+reactor circuits, and the `archive/power-conduits` commit that still holds the
+code.
 
-**Only the Conduit conducts** (`PowerGrid.CONDUCTING_TYPE_IDS`). This was a
-mid-session correction from the user: plating conducting for free meant wiring
-was never a decision, because a hull is made of plating by definition. Armour
-is now inert, and reach costs hexes — a compact ship is cheap to power, a limb
-needs a run out to it, and every cell of that run is a cell not spent on armour
-and a thinner line to cut. New `conduit` module type in `ModuleCatalog`
-(single-cell, mass 0.2, health 35, 4 Iron + 6 Copper): deliberately light
-structure as well as wire, so a run is partial hull rather than a pure tax.
-
-Two traps found while building it, both fixed by rewriting the rule rather
-than patching the symptom:
-- `_draws_power` was originally "isn't a conductor", which was the same test as
-  "is a module" only while plating conducted. The moment it stopped, every hull
-  plate reported itself as an unpowered consumer. It is now derived from what a
-  part *does* (core, hardpoint, thrust, or charge capacity).
-- A reactor carries `energy_capacity_contribution`, so it classed as something
-  needing to be fed and drew a supply line to itself. Reactors are now excluded
-  explicitly.
-
-### Drawing the circuits (builder only)
-
-`HexGridControl` draws two separate things: the hull's **own cabling**, always
-on, and the **POWER PATHS** overlay behind a toggle. The cabling is four
-stacked strokes per run (recessed channel, cable, clamp tick, pulsing
-highlight), per the handoff.
-
-**This is drawn on the build screen only.** An in-flight wire layer
-(`HullWireLayer`) was built and then deleted at the user's request — at flight
-zoom the cables were finer than the hull's own seams and read as speckle across
-the plating. `ShipLayoutRenderer` carries a comment where it used to hook in,
-so "the builder shows wires and the ship doesn't" doesn't read as an oversight.
-
-**The geometry constants were measured off the art programmatically, not
-eyeballed, and the two tiles genuinely disagree.** The reactor's grommet ring
-clamps at reach 0.6765R with lanes ±0.1093R; the conduit's hub is a small
-hexagon whose 18 holes sit on its own six edges at apothem 0.2462R with lanes
-±0.0861R. A single shared lane constant — which is what the handoff's `CD_SLOT`
-amounts to — cannot land in both rings. That is why a run is now **one straight
-stroke from clamp to clamp** rather than two halves meeting at the shared edge:
-each half was straight and they still kinked where they met.
-
-Also here: circuits are fixed by what a part does (weapons red, propulsion and
-the core green, utility blue) with no player assignment step; the lane
-perpendicular is folded to `face % 3` so a colour keeps one physical side of
-the ship across a seam (the art is painted to match); and wire endpoints ride
-each plate's own jitter via the new `HullPaint.jittered_point`, because the
-clamp is a hole painted on the plate.
-
-### Conduit art, and a flight/builder split
-
-`corporate_conduit.png` is an open junction box showing the hub and all 18
-holes — right for the builder, wrong for a hull flying past at speed. So
-`FactionArtImporter` gained a `_cover` layer that works exactly like `_lights`:
-any `<base>_cover.png` is picked up automatically into
-`ModuleType.faction_hex_cover_textures`, and `get_flight_hex_texture_for_cell()`
-prefers it. `ShipLayoutRenderer` and `WreckageSpawner` ask for the flight plate;
-the builder, the parts list and the hold keep the cutaway. No per-module code.
-
-### Verified
-
-Live, in the running game: the flight hull draws the cover and the builder the
-cutaway; a hull forcing the hard case (reactor → two conduits, red/green/blue
-sharing the first run, blue leaving at the first junction and green at the
-second) draws cables that start in the correct coloured grommets, run parallel
-and separate cleanly; the flight renderer's children are scar + glow only.
-`scenes/prototypes/phase4_power_probe.gd`/`.tscn` is a **throwaway** probe for
-the Phase 4 §6 bet — every shortcut in it is marked `CHEAT`.
+Two findings from that work are still live and are recorded below rather than
+lost with it: the editor's stale-`class_name` trap, and the unresolved hex
+shimmer on the flying hull.
 
 ### A tooling trap that cost real time twice
 
@@ -1177,39 +1114,26 @@ Built on top of Phase 1 since:
   field-rigged, and `REFITTED_MOUNT_EFFICIENCY` (0.7) permanently thereafter
   even once re-seated at a station. Stacks on top of wear rather than
   replacing it.
-- **A power grid that is drawn but not yet wired to anything** — see its own
-  subsection below before assuming it does something.
+- **Energy is being reworked into reactor circuits** — see its own subsection
+  below.
 
-### The power grid (conduits) — **COSMETIC ONLY, nothing reads it**
+### Reactor circuits (in progress on `feature/reactor-circuits`)
 
-This is the most likely thing in the repo to be mistaken for a working system.
-It is modelled, drawn and reported on, and **no gameplay depends on it.**
+Replaces the single ship-wide energy pool. Every reactor owns a circuit; every
+powered module is assigned to exactly one, by the player in the ship builder,
+with no relationship to where the module sits on the hull. Lose a reactor and
+only its circuit goes down — its batteries hold it up for a few seconds, then
+the survivors pick up the orphans at an overload penalty. The build decision is
+specialise (split thrust and guns so you can always run or fight) versus
+redundancy (duplicate essentials so nothing is a single point of failure).
 
-- `PowerGrid.solve()` is called from exactly three places, all off to one side:
-  `HexGridControl` (draws the cables and the POWER PATHS overlay),
-  `ShipBuilderPanel._on_power_toggled` (the overlay's status line), and the
-  throwaway probe scene. `Ship`, `HullDamageModel` and `HardpointBank` never
-  mention it. **A gun wired to nothing still fires at full rate.**
-- The one gameplay hook that exists is inert by design.
-  `HullPaint.is_cuttable()` makes an unpowered part cuttable at any condition —
-  the actual Phase 4 bet, "cut the supply line and take a 95% gun instead of
-  shooting it down to 12%". But `ModuleInstance.powered` defaults to `true` and
-  only `scenes/prototypes/phase4_power_probe.gd` ever writes `false`, so the
-  branch never fires in the shipped game. It is marked in-file as a prototype
-  seam; that is deliberate, not an unfinished edit.
-- **There are two disagreeing notions of "power" in the codebase.** The live
-  one is `ShipLayout.total_energy_generation()`: a single pool summing every
-  reactor, scaled per part by `_core_distance_energy_multiplier` — distance
-  from the **core**. That is what feeds the HUD and energy regen today.
-  `PowerGrid` measures connectivity to a **reactor**. Making power load-bearing
-  means reconciling these, not just calling `solve()` in flight.
-- **No authored layout contains a conduit.** Zero references across all 17
-  files in `resources/ships/`, and conduits are now the only conductor, so only
-  parts bolted directly onto a reactor cell are fed. An earlier count this
-  session put it at 58 of 91 consumers dark (worst: `warlord` 7/9; `lancer` and
-  `fang` entirely; `bastion` 6/8), and the starter hull reads 1/1 dark.
-  **Turning power on today would leave almost every ship in the game inert.**
-  Authoring conduit runs is the larger half of this job.
+The Command Core is never on a circuit, is always powered, and generates a
+meagre trickle of its own — so losing every reactor leaves the ship limping
+rather than drifting, and so a hull of Core + thrusters already flies badly
+before a reactor is ever bolted on, which is how the system teaches itself.
+
+The adjacency/conduit model that preceded this was deleted, not disabled — see
+`docs/rejected/power-conduits.md`.
 
 ### What no longer exists (don't go looking for it)
 
@@ -1864,16 +1788,17 @@ The live gaps, in the order they matter:
 - **`FIELD_MOUNT_EFFICIENCY` (0.5) and `REFITTED_MOUNT_EFFICIENCY` (0.7) are
   unplayed numbers**, as is the mass-scaled turn-rate falloff
   (`Ship.handling_mass_falloff`).
-- **Conduit runs on the 17 authored layouts.** None has one, so power cannot be
-  switched on without every enemy going dark. This gates the whole Phase 4 bet
-  and is a content job, not a code one.
-- **Power isn't wired to anything.** See the power-grid subsection above: the
-  flight game never solves the grid, `ModuleInstance.powered` is never written
-  false, and `PowerGrid` disagrees with the pooled `total_energy_generation()`
-  model that is actually live.
-- **The conduit hub's 18 grommet holes don't fill with circuit colour.** The
-  handoff §2 asks for a live hole to take its circuit's colour; the cables are
-  drawn but the holes underneath them are still painted as drilled metal.
+- **`ModuleInstance.powered` is still never written.** `HullPaint.is_cuttable()`
+  already makes an unpowered part cuttable at any condition, and circuits could
+  drive it — knock out their reactor and their guns become harvestable. Held
+  back deliberately: it is a salvage-economy change and wants playing on its own
+  terms, not arriving as a side effect of the energy rework.
+- **Reactor loss happens only by chance.** `ShipAI` aims at a ship's centre with
+  jitter across its silhouette; there is no per-module target preference, so
+  nothing deliberately shoots a reactor. If circuits ship and reactors almost
+  never die in a real fight, the whole failure/grace/overload sequence stays
+  invisible — that is the signal to build AI module targeting, and the right
+  time to build it is after feeling the absence.
 - **The new hexes shimmer in motion on the flying hull and it is unexplained.**
   Mipmaps and filtering were ruled out with runtime evidence; the resolution
   fix could not be shown to help. See the session log for the measurement and
@@ -2001,19 +1926,9 @@ loop is how the upgrade tree happened.
   the Salvager's power-down on a completed cut changes how cutting feels, the
   salvage target is newly invulnerable, and the whole cut → tow → stow → bolt
   chain now runs through the field-attach penalty.
-- **Decide what the power grid is for, before building more of it.** It is
-  fully drawn and reads on nothing (see "The power grid" under "Where things
-  stand"). The two live questions are whether `PowerGrid` replaces or coexists
-  with the pooled `total_energy_generation()` model, and who writes
-  `ModuleInstance.powered` in flight — it has to re-solve when `HullDamageModel`
-  severs a conduit, which is the entire mechanic. Authoring conduit runs across
-  the 17 layouts has to land in the same stretch or every enemy goes dark.
 - **Finish Phase 1 step 3: persistent wrecks.** The one incomplete step of the
   phase, and the thing every "wrecks are world objects" note in
   `direction.md` §2 is written against.
-- **Reconcile the conduits handoff with the Phase 4 spec.** They contradict
-  each other on whether conduits should exist at all (see the top of this
-  file). Cheap, and it will cost a future session real time if left.
 - **Scar the parts that aren't on a hull.** Severed pieces and the builder
   grid draw their own hexes and show no damage, which undercuts the one system
   built specifically to make a part's history visible.

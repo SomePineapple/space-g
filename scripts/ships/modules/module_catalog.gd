@@ -36,7 +36,6 @@ const TRIANGLE_3_CELLS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vecto
 # are what the enemy layouts and any part already in a player's hold reference by
 # id, and deleting them would break every one of those. They simply are not
 # offered for building any more.
-const CONDUIT_TYPE_ID: String = "conduit"
 const HULL_SPAR_TYPE_ID: String = "hull_spar"
 const HULL_WEDGE_TYPE_ID: String = "hull_wedge"
 const GUN_MK1_TYPE_ID: String = "gun_mk1"
@@ -174,20 +173,6 @@ static func get_all() -> Array[ModuleType]:
 		"", 1, {MaterialCatalog.IRON: 3})
 	FactionArtImporter.apply_hex_art(strut_type, "strut")
 	types.append(strut_type)
-
-	# Carries power and nothing else — see docs/design_handoff_conduits/README.md.
-	# An open scaffold hex with a clamped junction hub at its centre: no plating
-	# fill, no module, no stats. What it buys is a power path (PowerGrid), which
-	# makes it the one part whose value is entirely in where it sits.
-	#
-	# Priced between Strut and Hull: lighter than Hull because there is no armour
-	# in it, but tougher than a Strut, because a conduit run that snapped as
-	# easily as a strut would make every powered limb a liability rather than a
-	# decision.
-	var conduit_type: ModuleType = _make(CONDUIT_TYPE_ID, "Conduit", Color(0.42, 0.5, 0.58), SINGLE_CELL,
-		0.2, 35.0, 0.0, null, "", 1, {MaterialCatalog.IRON: 4, MaterialCatalog.COPPER: 6})
-	FactionArtImporter.apply_hex_art(conduit_type, "conduit")
-	types.append(conduit_type)
 
 	# Every weapon-hardpoint tier's base plate is exported as one image PER
 	# HEX it occupies — "laser_cannon_mk1_0_0" for the single-hex tier I,

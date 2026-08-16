@@ -26,11 +26,10 @@ const CATEGORY_ORDER: Array[String] = [CORE, STRUCTURE, PROPULSION, WEAPONS, UTI
 const TAB_ALL: String = "All"
 const FILTER_TABS: Array[String] = [TAB_ALL, STRUCTURE, PROPULSION, WEAPONS, UTILITY]
 
-## The Conduit files under Structure rather than Utility: it is a load-bearing
-## hex you build the hull out of, and the player picks it while thinking about
-## shape, not while thinking about equipment.
+## Parts the player picks while thinking about the hull's shape rather than about
+## equipment.
 const STRUCTURE_TYPE_IDS: Array[String] = [
-	"hull", "heavy_hull", "strut", "hull_spar", "hull_wedge", ModuleCatalog.CONDUIT_TYPE_ID,
+	"hull", "heavy_hull", "strut", "hull_spar", "hull_wedge",
 ]
 
 ## Icon gradient (top, bottom) and glyph colour per category, taken from the

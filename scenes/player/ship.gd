@@ -276,6 +276,14 @@ func _ready() -> void:
 ## there is no currency and no shop, so the honest way to hand the player their
 ## opening kit is to hand them the objects (see docs/direction.md §1). Only ever
 ## called once, on a session's first region (see _ready()).
+##
+## This set is also how the energy system teaches itself, and the ordering of
+## what it makes possible is deliberate: the Command Core generates a meagre
+## trickle of its own (see ModuleCatalog's core entry), so a hull of nothing but
+## Core + Thruster Block already flies — badly, in stutters, running dry every
+## few seconds. Bolting the Reactor Pair on is what makes the same ship feel
+## good. That contrast lands inside the first ninety seconds, with no tutorial
+## text, and it is worth more than any explanation of what a reactor is for.
 const STARTER_PART_TYPE_IDS: Array[String] = [
 	ModuleCatalog.HULL_SPAR_TYPE_ID,
 	ModuleCatalog.HULL_WEDGE_TYPE_ID,
@@ -288,11 +296,6 @@ const STARTER_PART_TYPE_IDS: Array[String] = [
 	# run.
 	ModuleCatalog.SALVAGER_HARDPOINT_TYPE_ID,
 	ModuleCatalog.GRAPPLE_MK1_TYPE_ID,
-	# Two conduits, so the opening hull can actually run a circuit out to
-	# something rather than only ever bolting parts against the reactor. One
-	# would teach nothing — a single conduit is indistinguishable from a plate.
-	ModuleCatalog.CONDUIT_TYPE_ID,
-	ModuleCatalog.CONDUIT_TYPE_ID,
 ]
 
 

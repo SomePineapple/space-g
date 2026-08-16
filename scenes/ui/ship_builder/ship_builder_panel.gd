@@ -69,7 +69,6 @@ var _save_name_edit: LineEdit
 var _cell_count_label: Label
 var _mount_pill: PanelContainer
 var _mount_label: Label
-var _power_button: Button
 
 
 func _init() -> void:
@@ -320,7 +319,6 @@ func _build_bottom_bar(root: Control) -> void:
 		BuilderTheme.WARN_TEXT_HOVER, _on_remove_pressed))
 	bar.add_child(_make_action_button("VALIDATE LAYOUT", BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
 		BuilderTheme.TEXT_BRIGHT, _on_validate_pressed))
-	bar.add_child(_build_power_button())
 
 	_status_label = BuilderTheme.mono_label(StationPrompt.PROMPT_TEXT, 12, BuilderTheme.TEXT_HINT)
 	_status_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -384,39 +382,6 @@ static func _field_percent() -> int:
 
 static func _refitted_percent() -> int:
 	return roundi(ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)
-
-
-## Toggles the supply-line overlay on the hull (see HexGridControl.show_power_paths).
-##
-## A toggle rather than a hold, and a separate button rather than a mode the
-## screen sits in: §5 of the Phase 4 spec asks for an overlay *inside* the build
-## screen, not a second destination, and the player needs both hands free to keep
-## placing parts while it is up.
-func _build_power_button() -> Button:
-	_power_button = Button.new()
-	_power_button.text = "POWER PATHS"
-	_power_button.toggle_mode = true
-	_power_button.focus_mode = Control.FOCUS_NONE
-	_power_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_power_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	BuilderTheme.style_button(_power_button, BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
-		BuilderTheme.TEXT_BRIGHT)
-	_power_button.toggled.connect(_on_power_toggled)
-	return _power_button
-
-
-func _on_power_toggled(pressed: bool) -> void:
-	_grid.show_power_paths = pressed
-	if not pressed:
-		_report("Power paths hidden.")
-		return
-	var solution: Dictionary = PowerGrid.solve(working_layout)
-	var cold: int = solution["unpowered_ids"].size()
-	if cold == 0:
-		_report("Power paths: every part is fed.")
-	else:
-		_report("Power paths: %d %s with no route to a reactor (outlined red)."
-			% [cold, "part" if cold == 1 else "parts"])
 
 
 func _make_action_button(text: String, tint: Color, text_color: Color, hover_color: Color,

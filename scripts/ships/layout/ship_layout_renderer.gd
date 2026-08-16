@@ -106,13 +106,6 @@ func _scar_layer() -> HullScarLayer:
 	return _scars
 
 
-## Deliberately no wiring layer on the hull. Circuit runs are drawn on the ship
-## *builder*'s grid only (HexGridControl._draw_conduit_wires) — at flight zoom
-## the cables were finer than the hull's own seams and read as speckle across the
-## plating rather than as wiring, so they cost legibility on the one screen where
-## legibility matters most. The builder is where a hull is inspected; that is
-## where its loom is worth showing.
-
 
 ## Lights the fresh-hit glow on one module. Called by HullDamageModel as damage
 ## lands, since that is the only thing that knows a hit happened as opposed to
@@ -223,10 +216,7 @@ func _draw() -> void:
 				flat_fills.append([corners, DESTROYED_COLOR])
 			else:
 				var uvs: PackedVector2Array = HexUtils.hex_uv_corners_for_rotation(placement.rotation_steps)
-				# The flight plate, not the builder's: a module whose tile art is a
-				# cutaway (the Conduit's open junction box) shows its cover out here.
-				# See ModuleType.faction_hex_cover_textures.
-				var texture: Texture2D = module_type.get_flight_hex_texture_for_cell(faction_id, i)
+				var texture: Texture2D = module_type.get_hex_texture_for_cell(faction_id, i)
 				if texture != null:
 					if not fills_by_texture.has(texture):
 						fills_by_texture[texture] = []

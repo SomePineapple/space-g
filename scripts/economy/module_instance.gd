@@ -147,15 +147,16 @@ const REFITTED_MOUNT_EFFICIENCY: float = 0.7
 ## the fatal shot — see Ship.record_hardpoint_kill.
 @export var kill_count: int = 0
 
-## Whether this part currently has a power path back to a reactor.
+## Whether this part is currently drawing power. Read by HullPaint.is_cuttable(),
+## which lets an unpowered part be cut at any condition.
 ##
-## **Phase 4 prototype seam.** Nothing in the shipped game writes this — the only
-## writer is `scenes/prototypes/phase4_power_probe.gd`, the throwaway that tests
-## the Phase 4 bet before any of it is built for real (docs/spaceg-phase-4-spec-rev3.md
-## §6). It exists here rather than in the prototype because `is_cuttable` is a
-## static read on this object and the prototype cannot reach inside that.
-##
-## Delete this field with the prototype if the bet does not pay off.
+## **Nothing writes this yet, deliberately.** Reactor circuits (see
+## docs/rejected/power-conduits.md for what this seam used to serve) could drive
+## it directly — a module whose circuit is dark would become harvestable — and
+## that is a genuinely good tactic: knock out their reactor and their guns become
+## salvage rather than targets. It is held back because it is a *salvage-economy*
+## change wearing a power change's clothes, and it wants playtesting on its own
+## terms rather than arriving as a side effect of the energy rework.
 @export var powered: bool = true
 
 ## Nothing the player does can hurt this part: no weapon fire, no splash, and no

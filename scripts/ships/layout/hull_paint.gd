@@ -263,10 +263,9 @@ static func jittered_corners(corners: PackedVector2Array, centroid: Vector2,
 
 
 ## One point carried by a part's nudge, for anything drawn *onto* a plate rather
-## than around it — the circuit clamps the builder's cabling runs between (see
-## PowerGrid.hub_point). A hole painted on the plate moves with the plate, so a
-## cable placed off the un-nudged grid ends a few pixels beside the socket it is
-## supposed to enter, which is exactly the size this jitter is.
+## than around it — a mark painted on the plate has to move with the plate, or it
+## lands a few pixels off whatever it is registered against, which is exactly the
+## size of this jitter.
 static func jittered_point(point: Vector2, centroid: Vector2,
 		offset: Vector2, rotation: float) -> Vector2:
 	return centroid + (point - centroid).rotated(rotation) + offset
