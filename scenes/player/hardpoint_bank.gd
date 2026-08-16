@@ -221,6 +221,10 @@ func _mount_gun(placement: ModulePlacement) -> HardpointGun:
 			LaserPalette.base_color(placement.instance, hull_faction),
 			LaserPalette.bolt_color(placement.instance, hull_faction),
 			LaserPalette.halo_color(placement.instance, hull_faction))
+	# The per-shot cost is the module type's, not the gun scene's — the catalog is
+	# where the energy economy is tuned. apply_tier() then scales it alongside
+	# damage and fire rate, so a bigger gun costs more per shot.
+	gun.energy_cost = module_type.energy_cost_per_use
 	gun.apply_tier(module_type.tier)
 	gun.apply_core_distance_bonus(_layout.distance_from_core(placement))
 	gun.setup(_ship)
@@ -232,6 +236,7 @@ func _mount_launcher(placement: ModulePlacement) -> HardpointMissileLauncher:
 	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 	var launcher: HardpointMissileLauncher = _mount(missile_launcher_scene, placement)
 	launcher.set_cell_size(_renderer.cell_size, HardpointGun.tier_visual_scale(module_type.tier))
+	launcher.energy_cost = module_type.energy_cost_per_use
 	launcher.apply_tier(module_type.tier)
 	launcher.apply_core_distance_bonus(_layout.distance_from_core(placement))
 	launcher.setup(_ship)
@@ -247,6 +252,7 @@ func _mount_launcher(placement: ModulePlacement) -> HardpointMissileLauncher:
 func _mount_winch(placement: ModulePlacement) -> HardpointWinch:
 	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
 	var winch: HardpointWinch = _mount(winch_scene, placement)
+	_apply_energy_draw(winch, placement)
 	winch.rotation = _fixed_facing(placement)
 	# Only overridden when the module type actually says where its aperture is.
 	# Every Grapple mark does; a module that doesn't keeps the scene's own muzzle
@@ -261,6 +267,7 @@ func _mount_winch(placement: ModulePlacement) -> HardpointWinch:
 ## finds, see HardpointTractorBeam) — mounted at the hex center only, no facing.
 func _mount_tractor_beam(placement: ModulePlacement) -> HardpointTractorBeam:
 	var tractor_beam: HardpointTractorBeam = _mount(tractor_beam_scene, placement)
+	_apply_energy_draw(tractor_beam, placement)
 	tractor_beam.setup(_ship)
 	return tractor_beam
 
@@ -269,10 +276,20 @@ func _mount_tractor_beam(placement: ModulePlacement) -> HardpointTractorBeam:
 ## from (see HardpointSlicer) is a specific direction out of the anchor cell.
 func _mount_slicer(placement: ModulePlacement) -> HardpointSlicer:
 	var slicer: HardpointSlicer = _mount(slicer_scene, placement)
+	_apply_energy_draw(slicer, placement)
 	slicer.rotation = _fixed_facing(placement)
 	slicer.set_cell_size(_renderer.cell_size)
 	slicer.setup(_ship)
 	return slicer
+
+
+## Points a held-beam hardpoint (tractor, slicer, grapple) at its module type's
+## own running cost, so the energy economy is tuned in ModuleCatalog rather than
+## once per hardpoint scene. A type with no draw authored keeps the scene's value.
+func _apply_energy_draw(node: Node, placement: ModulePlacement) -> void:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	if module_type != null and module_type.energy_draw > 0.0:
+		node.energy_cost_per_second = module_type.energy_draw
 
 
 func _fixed_facing(placement: ModulePlacement) -> float:

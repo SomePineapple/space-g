@@ -180,7 +180,7 @@ func _physics_process(delta: float) -> void:
 	# Hauling costs power; drawing an empty line back in does not. Losing power
 	# mid-haul stops the winch where it is rather than dropping the part, so the
 	# line stays on it and the pull resumes as soon as the reactor catches up.
-	if _rope.is_hooked() and not _shooter.spend_energy(energy_cost_per_second * delta):
+	if _rope.is_hooked() and not _shooter.spend_energy(energy_cost_per_second * delta, source_placement_id):
 		_rope.stop_reel()
 		return
 

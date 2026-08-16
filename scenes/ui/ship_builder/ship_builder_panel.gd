@@ -64,6 +64,7 @@ var _stat_strip: BuilderStatStrip
 var _grid: HexGridControl
 var _module_list: ModuleListView
 var _part_card: BuilderPartCard
+var _circuit_card: BuilderCircuitCard
 var _presets_card: BuilderPresetsCard
 var _save_name_edit: LineEdit
 var _cell_count_label: Label
@@ -90,6 +91,7 @@ func _init() -> void:
 func _setup() -> void:
 	template_layout = load("res://resources/ships/starter_ship_layout.tres")
 	working_layout = template_layout.duplicate(true)
+	working_layout.ensure_circuits_assigned()
 
 	_build_ui()
 	_rebuild_module_list()
@@ -109,8 +111,12 @@ func _on_opened() -> void:
 	if ship == null or ship.ship_layout == null:
 		return
 	working_layout = ship.ship_layout.duplicate(true)
+	# Layouts authored before circuits existed arrive with none assigned; a
+	# working copy is migrated here for the same reason Ship does it on apply.
+	working_layout.ensure_circuits_assigned()
 	_grid.layout = working_layout
 	_grid.selected_placement_id = ""
+	_grid.circuit_focus_id = ""
 	_sync_build_target()
 	_refresh()
 
@@ -234,6 +240,9 @@ func _build_field(root: Control) -> void:
 	_part_card = BuilderPartCard.new()
 	card_holder.add_child(_part_card)
 
+	_circuit_card = BuilderCircuitCard.new()
+	card_holder.add_child(_circuit_card)
+
 
 func _build_right_column(root: Control) -> void:
 	var column := VBoxContainer.new()
@@ -319,6 +328,8 @@ func _build_bottom_bar(root: Control) -> void:
 		BuilderTheme.WARN_TEXT_HOVER, _on_remove_pressed))
 	bar.add_child(_make_action_button("VALIDATE LAYOUT", BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
 		BuilderTheme.TEXT_BRIGHT, _on_validate_pressed))
+	bar.add_child(_make_action_button("SPLIT BY ROLE", BuilderTheme.AMBER, BuilderTheme.TEXT_MUTED,
+		BuilderTheme.TEXT_BRIGHT, _on_split_by_role_pressed))
 
 	_status_label = BuilderTheme.mono_label(StationPrompt.PROMPT_TEXT, 12, BuilderTheme.TEXT_HINT)
 	_status_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -532,11 +543,14 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 		_sync_build_target()
 		_grid.selected_placement_id = existing.placement_id
 		_part_card.show_instance(existing.instance, existing.module_type_id)
-		# Identity lives on the part card now; the status line stays on what to do
-		# next, which is the one thing the card does not say.
-		_report("R to rotate, or Remove Selected to take it off.")
-		_grid.refresh()
+		_handle_circuit_click(existing)
+		_refresh()
 		return
+
+	# Clicking bare grid drops the circuit being edited: the player has moved on
+	# to placing parts, and leaving a reactor armed would silently rewire the
+	# next module they touched.
+	_grid.circuit_focus_id = ""
 
 	var part: ModuleInstance = _selected_part()
 	if part == null:
@@ -670,20 +684,145 @@ func _on_remove_pressed() -> void:
 	_refresh()
 
 
+# --- Circuits ----------------------------------------------------------------
+
+## The whole circuit-editing interaction, in one place: click a reactor to arm
+## its circuit, then click modules to move them onto it.
+##
+## A mode rather than a drag or a dropdown because the thing being edited is a
+## *grouping*, and grouping is naturally many clicks after one — arming the
+## reactor once and then tapping four guns is how the player would describe what
+## they did, so it is how they do it. Clicking the armed reactor again disarms
+## it, and so does clicking bare grid.
+func _handle_circuit_click(placement: ModulePlacement) -> void:
+	if working_layout.is_circuit_source(placement):
+		if not working_layout.circuit_accepts_members(placement.placement_id):
+			_report("The Command Core has its own circuit. Nothing can be moved onto it.")
+			_grid.circuit_focus_id = ""
+			return
+		if _grid.circuit_focus_id == placement.placement_id:
+			_grid.circuit_focus_id = ""
+			_report("Circuit closed. R to rotate, or Remove Selected to take it off.")
+			return
+		_grid.circuit_focus_id = placement.placement_id
+		_report("Circuit armed — click modules to move them onto this reactor. %s"
+			% _circuit_load_text(placement.placement_id))
+		return
+
+	if _grid.circuit_focus_id.is_empty():
+		# Identity lives on the part card; the status line stays on what to do
+		# next, which is the one thing the card does not say.
+		_report("R to rotate, or Remove Selected to take it off.")
+		return
+
+	if not working_layout.needs_circuit(placement):
+		_report("%s draws no power — it does not sit on a circuit."
+			% _display_name_of(placement))
+		return
+
+	if not working_layout.assign_circuit(placement.placement_id, _grid.circuit_focus_id):
+		_report("%s is already on this circuit." % _display_name_of(placement))
+		return
+
+	_report("%s moved. %s" % [_display_name_of(placement),
+		_circuit_load_text(_grid.circuit_focus_id)])
+
+
+func _circuit_load_text(circuit_id: String) -> String:
+	var draw: float = working_layout.circuit_draw(circuit_id)
+	var generation: float = working_layout.circuit_generation(circuit_id)
+	if draw > generation:
+		return "Load %.0f/%.0f — over-committed." % [draw, generation]
+	return "Load %.0f/%.0f." % [draw, generation]
+
+
+func _display_name_of(placement: ModulePlacement) -> String:
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	return module_type.display_name if module_type != null else placement.module_type_id
+
+
+## Splits every powered module across the reactors by what it does: propulsion on
+## one circuit, weapons on the next, everything else on the one after.
+##
+## The silent auto-assign balances by spare headroom, which produces a sensible
+## build but an unexplainable one — headroom is invisible from the player's side,
+## so they cannot look at the result and see why. Splitting by role produces a
+## grouping they can read off the hull at a glance and, more importantly, one
+## that already *is* the specialise-vs-redundancy decision: engines and guns on
+## separate circuits means losing either one still leaves you able to run or to
+## fight. It is a starting point to disagree with, not an answer.
+func _on_split_by_role_pressed() -> void:
+	var circuit_ids: Array[String] = working_layout.get_assignable_circuit_ids()
+	if circuit_ids.is_empty():
+		_report("No reactor to split across.")
+		return
+
+	var moved: int = 0
+	for placement in working_layout.placements:
+		if not working_layout.needs_circuit(placement):
+			continue
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type == null:
+			continue
+		# Modulo, so a one-reactor hull puts everything on that reactor rather
+		# than failing, and a four-reactor hull leaves the spare ones empty for
+		# the player to fill deliberately.
+		var role: int = _role_index_of(module_type)
+		if working_layout.assign_circuit(placement.placement_id,
+				circuit_ids[role % circuit_ids.size()]):
+			moved += 1
+
+	_report("Split by role: %d %s moved across %d %s."
+		% [moved, "module" if moved == 1 else "modules",
+			circuit_ids.size(), "circuit" if circuit_ids.size() == 1 else "circuits"])
+	_refresh()
+
+
+## 0 propulsion, 1 weapons, 2 everything else. Batteries deliberately land in the
+## third group rather than being spread: a battery is a buffer for whatever it
+## shares a circuit with, and quietly scattering them would undo the player's own
+## choice about which circuit gets the reserve.
+func _role_index_of(module_type: ModuleType) -> int:
+	if module_type.thrust_contribution > 0.0:
+		return 0
+	if module_type.hardpoint_category == "weapon" or module_type.hardpoint_category == "missile":
+		return 1
+	return 2
+
+
 func _on_validate_pressed() -> void:
 	var issues: Array[String] = working_layout.validate_layout()
+	issues.append_array(_circuit_warnings())
 	if issues.is_empty():
 		_report("Layout OK.")
 	else:
 		_report("Issues: %s" % "; ".join(issues))
 
 
+## Circuit problems that don't make a layout *invalid* — the ship will fly, it
+## will just fly badly — but that the player wants told before undocking rather
+## than discovering in a fight.
+func _circuit_warnings() -> Array[String]:
+	var warnings: Array[String] = []
+	var circuit_ids: Array[String] = working_layout.get_circuit_ids()
+	for index in circuit_ids.size():
+		var circuit_id: String = circuit_ids[index]
+		var draw: float = working_layout.circuit_draw(circuit_id)
+		var generation: float = working_layout.circuit_generation(circuit_id)
+		if draw > generation:
+			warnings.append("Circuit %d over-committed (%.0f draw vs %.0f generated)"
+				% [index, draw, generation])
+	if working_layout.get_assignable_circuit_ids().is_empty():
+		warnings.append("No reactor — the hull runs on core power alone")
+	return warnings
+
+
 # --- Stats ------------------------------------------------------------------
 
-## Only used to read base_energy_generation/base_energy_capacity/
-## base_cargo_capacity so the builder's stats match what the ship will
-## actually have once applied — the working layout's own totals don't
-## include that baseline.
+## The ship's own baseline hold capacity plus whatever the working layout adds,
+## so the builder's figure matches what the ship will have once applied. Energy
+## has no such baseline any more — every watt comes from a module now, the
+## Command Core included (see ModuleCatalog.CORE_GENERATION).
 func _current_cargo_capacity() -> float:
 	var base_capacity: float = ship.base_cargo_capacity if ship != null else 0.0
 	return base_capacity + working_layout.total_cargo_capacity()
@@ -692,16 +831,15 @@ func _current_cargo_capacity() -> float:
 func _refresh() -> void:
 	_grid.refresh()
 
-	var base_generation: float = ship.get_base_energy_generation() if ship != null else 0.0
-	var base_capacity: float = ship.get_base_energy_capacity() if ship != null else 0.0
 	var max_health: float = working_layout.total_max_health()
 	var health_fraction: float = ship.get_health_fraction() if ship != null else 1.0
 
 	_stat_strip.set_stats(max_health, health_fraction, working_layout.total_mass(),
-		base_generation + working_layout.total_energy_generation(),
-		base_capacity + working_layout.total_energy_capacity(),
+		working_layout.total_energy_generation(),
+		working_layout.total_energy_capacity(),
 		inventory.get_cargo_used() if inventory != null else 0,
 		_current_cargo_capacity())
+	_circuit_card.refresh(working_layout, _grid.circuit_focus_id)
 
 	_cell_count_label.text = "%d/%d" % [_grid.used_cell_count(), _grid.total_cell_count()]
 	_refresh_hold()
@@ -800,8 +938,10 @@ func _load_current_name() -> void:
 	# is a blueprint (shape only, needs the parts) or a saved ship is an open
 	# design question; see docs/direction.md §6.
 	working_layout = loaded.duplicate(true)
+	working_layout.ensure_circuits_assigned()
 	_grid.layout = working_layout
 	_grid.selected_placement_id = ""
+	_grid.circuit_focus_id = ""
 	_selected_instance_id = ""
 	_module_list.set_selected_key("")
 	_report("Loaded '%s'." % _save_name_edit.text)

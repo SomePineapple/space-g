@@ -23,6 +23,9 @@ signal energy_changed(current: float, max_energy: float)
 ## Relayed from ShipEnergy — how much the ship is drawing per second against
 ## how much it can sustain (see the HUD's load bar).
 signal energy_usage_changed(usage: float, generation: float)
+## Relayed from ShipEnergy — one of this ship's circuits just ran dry, and
+## everything on it has stopped working (see ShipEnergy.circuit_depleted).
+signal circuit_depleted(circuit_index: int)
 ## Relayed from the internal Health component (see its own signals of the same
 ## name) so external systems — ShipAI, the HUD, the trade panel — can react to
 ## this ship being hurt without reaching into its node hierarchy for $Health,
@@ -141,11 +144,6 @@ signal destroyed
 ## or not they have a cell (see Inventory.get_unstowed_instances). By the time
 ## the ship is built the hold is empty and the first salvaged part has room.
 @export var base_hold_cells: int = 4
-## Energy/sec spent thrusting at full non-boosted throttle. Deliberately at
-## or below ShipEnergy.base_generation so cruising is sustainable forever on
-## base power alone — firing weapons or boosting is what actually draws the
-## reserve down without a Reactor installed.
-@export var thrust_energy_cost: float = 8.0
 ## Credits charged per point of overall Health restored by repair_fully.
 @export var repair_cost_per_health: float = 1.0
 
@@ -235,7 +233,7 @@ func _ready() -> void:
 	_hull_damage.hull_lost.connect(_on_hull_lost)
 	_energy.energy_changed.connect(_on_energy_changed)
 	_energy.usage_changed.connect(_on_energy_usage_changed)
-	_systems.configure(_energy)
+	_energy.circuit_depleted.connect(circuit_depleted.emit)
 
 	# A restoring player ship is about to have GameState.apply() push its saved
 	# layout in, which rebuilds everything anyway — building the scene's own
@@ -312,6 +310,10 @@ func apply_layout(new_layout: ShipLayout) -> void:
 func _apply_ship_layout() -> void:
 	if ship_layout == null:
 		return
+	# Before anything reads the layout's energy numbers. Layouts authored before
+	# circuits existed — every .tres in resources/ships/, player and enemy alike —
+	# arrive with no assignments and are migrated here rather than by hand.
+	ship_layout.ensure_circuits_assigned()
 	mass = ship_layout.total_mass()
 	_cached_layout_extent = -1.0
 	_health.configure(ship_layout.total_max_health() * personality.health_multiplier)
@@ -337,7 +339,7 @@ func _apply_ship_layout() -> void:
 ## belongs to the mounted parts and comes in with them (see ModuleInstance).
 func _refresh_layout_stats() -> void:
 	mass = ship_layout.total_mass()
-	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
+	_energy.configure(ship_layout)
 	_inventory.set_cargo_capacity(base_cargo_capacity + ship_layout.total_cargo_capacity())
 	_inventory.rebuild_hold(ship_layout, base_hold_cells)
 	_recompute_thrust_stats()
@@ -359,7 +361,7 @@ func _refresh_layout_stats() -> void:
 func _recompute_energy_stats() -> void:
 	if ship_layout == null:
 		return
-	_energy.configure(ship_layout.total_energy_capacity(), ship_layout.total_energy_generation())
+	_energy.configure(ship_layout)
 
 
 func _recompute_thrust_stats() -> void:
@@ -615,29 +617,45 @@ func _on_health_damaged(amount: float, current: float) -> void:
 # --- Energy ------------------------------------------------------------------
 
 func get_energy() -> float:
-	return _energy.current
+	return _energy.total_charge()
 
 
 func get_max_energy() -> float:
-	return _energy.maximum
+	return _energy.total_buffer()
 
 
-## The ship builder previews a working layout's totals before it's applied, and
-## needs the same baselines the live ship adds on top of them (see ShipEnergy).
-func get_base_energy_generation() -> float:
-	return _energy.base_generation
+## The ship's energy component, for the HUD's per-circuit readout. Exposed whole
+## for the same reason get_systems() is: the readout needs several values per
+## circuit, and reaching in with get_node("Energy") is the thing that isn't
+## allowed.
+func get_energy_component() -> ShipEnergy:
+	return _energy
 
 
-func get_base_energy_capacity() -> float:
-	return _energy.base_capacity
+## Which circuit powers the module mounted at `placement_id` — the pool every
+## spend by that module is settled against. Empty for a module on no circuit,
+## which every energy call below treats as "no power", so an unassigned gun
+## simply does not fire.
+func circuit_of(placement_id: String) -> String:
+	if ship_layout == null:
+		return ""
+	var placement: ModulePlacement = ship_layout.get_placement_by_id(placement_id)
+	return placement.circuit_id if placement != null else ""
 
 
-func has_energy(amount: float) -> bool:
-	return _energy.has(amount)
+func has_energy(amount: float, placement_id: String) -> bool:
+	return _energy.has(amount, circuit_of(placement_id))
 
 
-func spend_energy(amount: float) -> bool:
-	return _energy.spend(amount)
+## All-or-nothing, for a discrete use: a shot, a launch. Returns false if that
+## module's circuit cannot cover it, and the caller must then not act.
+func spend_energy(amount: float, placement_id: String) -> bool:
+	return _energy.spend(amount, circuit_of(placement_id))
+
+
+## Continuous load. Pays what the circuit can and returns the shortfall.
+func drain_energy(amount: float, placement_id: String) -> float:
+	return _energy.drain(amount, circuit_of(placement_id))
 
 
 func _on_energy_changed(current: float, maximum: float) -> void:
@@ -667,12 +685,40 @@ func _refresh_systems() -> void:
 	_systems.refresh(self, ship_layout)
 
 
-## Boosted thrust costs proportionally more, same multiplier as the extra
-## speed/force it grants.
-func _try_spend_thrust_energy(delta: float) -> bool:
+## Charges every live thruster's own draw to its own circuit, and returns the
+## thrust force the ones that could pay actually deliver.
+##
+## Per thruster rather than one ship-wide cost, because that is the point of
+## circuits: engines split across two circuits keep half the ship's thrust when
+## one dies, and engines all on one circuit are a single point of failure the
+## player chose. A thruster whose circuit is dry contributes nothing this frame —
+## no thrust is ever delivered unpaid. (Its flame still draws; the engine
+## particles are driven by throttle, not by per-engine power, and splitting them
+## apart is a legibility job for the Phase 2 HUD pass.)
+##
+## Boosted thrust costs proportionally more, the same multiplier as the extra
+## force it grants, so burning is expensive rather than free speed.
+func _powered_thrust_force(delta: float) -> float:
+	if ship_layout == null:
+		return 0.0
 	var boosting: bool = _boost_active and _thrust_input > 0.0
-	var cost: float = thrust_energy_cost * absf(_thrust_input) * (boost_multiplier if boosting else 1.0) * delta
-	return spend_energy(cost)
+	var rate_scale: float = absf(_thrust_input) * (boost_multiplier if boosting else 1.0) * delta
+	var delivered: float = 0.0
+
+	for placement in ship_layout.get_thruster_placements():
+		if is_module_destroyed(placement.placement_id):
+			continue
+		var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+		if module_type == null:
+			continue
+		var cost: float = module_type.energy_draw * rate_scale
+		# A free thruster (no draw authored) still works — the check is whether
+		# this specific engine could be paid for, not whether it costs anything.
+		if cost > 0.0 and not spend_energy(cost, placement.placement_id):
+			continue
+		delivered += ship_layout.thrust_for(placement)
+
+	return delivered
 
 
 # --- Hardpoints --------------------------------------------------------------
@@ -710,6 +756,23 @@ func has_scanner() -> bool:
 	if ship_layout == null or not is_system_enabled(ShipSystems.SENSORS):
 		return false
 	return _has_live_placement(ship_layout.get_scanner_hardpoint_placements())
+
+
+## Which scanner module a running scan is billed to.
+##
+## The Scanner is a ship-level node rather than one node per hex (its pulse
+## originates from the ship's own position), so unlike every other consumer it
+## has no source_placement_id of its own to resolve a circuit from. The first
+## live scanner is picked: with more than one mounted, the scan runs off that
+## one's circuit, which is a arbitrary-but-stable answer rather than charging a
+## system nothing owns.
+func get_scanner_placement_id() -> String:
+	if ship_layout == null:
+		return ""
+	for placement in ship_layout.get_scanner_hardpoint_placements():
+		if not is_module_destroyed(placement.placement_id):
+			return placement.placement_id
+	return ""
 
 
 func _has_live_placement(placements: Array[ModulePlacement]) -> bool:
@@ -931,14 +994,22 @@ func apply_impulse(impulse: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	_consume_intent()
 	_energy.tick(delta)
-	# Idle load is charged after regeneration, so a ship whose systems out-draw
-	# its reactor spends what it just made and then eats into the reserve.
-	_systems.process(delta)
+	# Idle load is charged after regeneration, so a circuit whose always-on
+	# modules out-draw its reactor spends what it just made and then eats into
+	# whatever battery it has.
+	_systems.process(delta, self, ship_layout)
 	_hull_damage.process(delta)
 	_apply_turn(delta)
 
-	if _thrust_input != 0.0 and _try_spend_thrust_energy(delta):
-		var thrust: float = thrust_force if _thrust_input > 0.0 else reverse_thrust_force
+	# Recomputed per frame rather than read off thrust_force, because how much of
+	# the hull's rated thrust is actually available now depends on which circuits
+	# are still alive. thrust_force stays the *potential*, which is what the stat
+	# readouts and the derived speed caps are measured from.
+	var available_thrust: float = _powered_thrust_force(delta) if _thrust_input != 0.0 else 0.0
+	if available_thrust > 0.0:
+		var thrust: float = available_thrust
+		if _thrust_input < 0.0:
+			thrust *= reverse_thrust_ratio
 		var current_max_speed: float = max_speed
 		if _boost_active and _thrust_input > 0.0:
 			thrust *= boost_multiplier
@@ -963,8 +1034,8 @@ func _physics_process(delta: float) -> void:
 			if forward_speed < -reverse_max_speed:
 				velocity -= transform.x * (forward_speed + reverse_max_speed)
 	else:
-		# No thrust input, or thrust requested but not enough energy for it —
-		# either way the ship just coasts/drags rather than accelerating.
+		# No thrust input, or every engine's circuit is dry — either way the ship
+		# just coasts/drags rather than accelerating.
 		velocity = velocity.move_toward(Vector2.ZERO, drag * max_speed * delta)
 
 	# Generous absolute safety net (not a directional cap) so nothing — e.g.

@@ -42,6 +42,47 @@ const GUN_MK1_TYPE_ID: String = "gun_mk1"
 const REACTOR_PAIR_TYPE_ID: String = "reactor_pair"
 const THRUSTER_BLOCK_TYPE_ID: String = "thruster_block"
 
+# --- Energy tuning -----------------------------------------------------------
+# First pass at the reactor-circuit economy. Every number here is a knob; what
+# each is *trying* to achieve is the part worth preserving when they get retuned.
+
+## The Command Core's own trickle, and the buffer it holds.
+##
+## Deliberately meagre — about a quarter of a Reactor Mk1 — because it is a floor,
+## not a power supply. A hull of Core + Thruster Block must fly badly rather than
+## not at all: that is what makes bolting the first reactor on *feel* like
+## something, and it is why losing every reactor in a fight leaves you limping
+## home with a story instead of drifting in a coffin waiting to be shot.
+##
+## The core is the one module that is never on a circuit and can never go dark
+## (see ShipLayout.core_circuit_id), so this is the ship's guaranteed minimum.
+const CORE_GENERATION: float = 4.0
+## Roughly two laser shots, or three seconds of one thruster block. Enough to
+## stutter forward and get one shot away, never enough to fight.
+const CORE_CAPACITY: float = 12.0
+
+## Thrust draw, per second at full throttle. Boost multiplies this by the same
+## factor it multiplies thrust force, so burning is proportionally expensive
+## rather than free speed (see Ship.boost_multiplier).
+const ENGINE_DRAW: float = 4.0
+const THRUSTER_BLOCK_DRAW: float = 6.0
+
+## Per shot. The tier multipliers on HardpointGun scale these the same way they
+## scale damage, so a tier III laser costs more per shot than a tier I.
+const LASER_SHOT_COST: float = 6.0
+const RAILGUN_SHOT_COST: float = 14.0
+const PHASE_LANCE_SHOT_COST: float = 9.0
+const MISSILE_LAUNCH_COST: float = 10.0
+
+## Per second while held/running.
+const TRACTOR_DRAW: float = 5.0
+const SCANNER_DRAW: float = 3.0
+const SLICER_DRAW: float = 4.0
+const GRAPPLE_DRAW: float = 2.0
+## Per second, always, for as long as the sensor is switched on. The only
+## always-on draw in the catalog — see ModuleType.energy_idle_draw.
+const RADAR_IDLE_DRAW: float = 1.0
+
 const HULL_TEXTURE: Texture2D = preload("res://art/ships/hull_v1.png")
 const MISSILE_HARDPOINT_TEXTURE: Texture2D = preload("res://art/ships/missile_silo_v1.png")
 const COCKPIT_TEXTURE: Texture2D = preload("res://art/ships/cockpit_v1.png")
@@ -74,7 +115,8 @@ static func get_all() -> Array[ModuleType]:
 	# than one of the flimsiest — a heavy weapon shouldn't be able to end a
 	# fight in one lucky hit to the cockpit.
 	var core_type: ModuleType = _make(CORE_TYPE_ID, "Command Core", Color(0.9, 0.85, 0.2), SINGLE_CELL, 0.4, 140.0, 0.0, COCKPIT_TEXTURE,
-		"", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20})
+		"", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 20},
+		CORE_GENERATION, CORE_CAPACITY)
 	FactionArtImporter.apply_hex_art(core_type, "command_core")
 	types.append(core_type)
 
@@ -109,6 +151,7 @@ static func get_all() -> Array[ModuleType]:
 		0.5, 40.0, 0.0, null, "weapon", 1,
 		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 6},
 		0.0, 0.0, null, true)
+	gun_mk1.energy_cost_per_use = LASER_SHOT_COST
 	FactionArtImporter.apply_hex_art(gun_mk1, "laser_cannon_mk2", "turret_360")
 	types.append(gun_mk1)
 
@@ -127,6 +170,7 @@ static func get_all() -> Array[ModuleType]:
 		0.5, 45.0, 800.0, null, "", 1,
 		{MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 8},
 		0.0, 0.0, null, true)
+	thruster_block.energy_draw = THRUSTER_BLOCK_DRAW
 	FactionArtImporter.apply_hex_art(thruster_block, "thruster_mk1")
 	types.append(thruster_block)
 
@@ -153,6 +197,7 @@ static func get_all() -> Array[ModuleType]:
 	var engine_type: ModuleType = _make("engine", "Engine", Color(0.3, 0.7, 1.0), SINGLE_CELL, 0.25, 20.0, 500.0, null,
 		"", 1, {ComponentCatalog.METAL_SHEETS: 1, ComponentCatalog.WIRING: 2, ComponentCatalog.MOTOR: 1})
 	FactionArtImporter.apply_hex_art(engine_type, "engine_mk1")
+	engine_type.energy_draw = ENGINE_DRAW
 	engine_type.is_capturable_tech = true
 	types.append(engine_type)
 
@@ -198,17 +243,20 @@ static func get_all() -> Array[ModuleType]:
 	var weapon_t1: ModuleType = _make(WEAPON_HARDPOINT_TYPE_ID, "Weapon Hardpoint I", Color(0.9, 0.35, 0.3), SINGLE_CELL,
 		0.2, 15.0, 0.0, null, "weapon", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 4})
 	FactionArtImporter.apply_hex_art(weapon_t1, "laser_cannon_mk1", "turret_360")
+	weapon_t1.energy_cost_per_use = LASER_SHOT_COST
 	weapon_t1.is_capturable_tech = true
 	types.append(weapon_t1)
 	var weapon_t2: ModuleType = _make("weapon_hardpoint_t2", "Weapon Hardpoint II", Color(0.8, 0.25, 0.2), LINE_2_CELLS,
 		0.5, 35.0, 0.0, null, "weapon", 2, {MaterialCatalog.IRON: 18, MaterialCatalog.COPPER: 10})
 	FactionArtImporter.apply_hex_art(weapon_t2, "laser_cannon_mk2", "turret_360_mk2")
+	weapon_t2.energy_cost_per_use = LASER_SHOT_COST
 	weapon_t2.is_capturable_tech = true
 	types.append(weapon_t2)
 	var weapon_t3: ModuleType = _make("weapon_hardpoint_t3", "Weapon Hardpoint III", Color(0.65, 0.15, 0.1), TRIANGLE_3_CELLS,
 		0.9, 60.0, 0.0, null, "weapon", 3,
 		{MaterialCatalog.IRON: 32, MaterialCatalog.COPPER: 20, MaterialCatalog.TITANIUM: 5})
 	FactionArtImporter.apply_hex_art(weapon_t3, "laser_cannon_mk3", "turret_360_mk3")
+	weapon_t3.energy_cost_per_use = LASER_SHOT_COST
 	weapon_t3.is_capturable_tech = true
 	types.append(weapon_t3)
 
@@ -216,17 +264,20 @@ static func get_all() -> Array[ModuleType]:
 	var missile_t1: ModuleType = _make(MISSILE_HARDPOINT_TYPE_ID, "Missile Rack I", Color(1.0, 0.6, 0.15), SINGLE_CELL,
 		0.3, 20.0, 0.0, MISSILE_HARDPOINT_TEXTURE, "missile", 1, {MaterialCatalog.IRON: 10, MaterialCatalog.COPPER: 8})
 	FactionArtImporter.apply_hex_art(missile_t1, "missile_launcher_mk1")
+	missile_t1.energy_cost_per_use = MISSILE_LAUNCH_COST
 	missile_t1.is_capturable_tech = true
 	types.append(missile_t1)
 	var missile_t2: ModuleType = _make("missile_hardpoint_t2", "Missile Rack II", Color(0.9, 0.5, 0.1), LINE_2_CELLS,
 		0.7, 45.0, 0.0, null, "missile", 2, {MaterialCatalog.IRON: 22, MaterialCatalog.COPPER: 16})
 	FactionArtImporter.apply_hex_art(missile_t2, "missile_launcher_mk1")
+	missile_t2.energy_cost_per_use = MISSILE_LAUNCH_COST
 	missile_t2.is_capturable_tech = true
 	types.append(missile_t2)
 	var missile_t3: ModuleType = _make("missile_hardpoint_t3", "Missile Rack III", Color(0.75, 0.4, 0.05), LINE_3_CELLS,
 		1.2, 75.0, 0.0, null, "missile", 3,
 		{MaterialCatalog.IRON: 38, MaterialCatalog.COPPER: 26, MaterialCatalog.NICKEL: 10})
 	FactionArtImporter.apply_hex_art(missile_t3, "missile_launcher_mk1")
+	missile_t3.energy_cost_per_use = MISSILE_LAUNCH_COST
 	missile_t3.is_capturable_tech = true
 	types.append(missile_t3)
 
@@ -272,6 +323,7 @@ static func get_all() -> Array[ModuleType]:
 		0.7, 40.0, 0.0, null, "weapon", 1,
 		{MaterialCatalog.IRON: 25, MaterialCatalog.COPPER: 10, MaterialCatalog.TITANIUM: 8},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_railgun.tscn"))
+	railgun_type.energy_cost_per_use = RAILGUN_SHOT_COST
 	railgun_type.is_capturable_tech = true
 	types.append(railgun_type)
 
@@ -281,6 +333,7 @@ static func get_all() -> Array[ModuleType]:
 		0.25, 30.0, 0.0, null, "weapon", 1,
 		{MaterialCatalog.COPPER: 20, MaterialCatalog.TITANIUM: 18},
 		0.0, 0.0, preload("res://scenes/player/hardpoint_phase_lance.tscn"))
+	phase_lance_type.energy_cost_per_use = PHASE_LANCE_SHOT_COST
 	phase_lance_type.is_capturable_tech = true
 	types.append(phase_lance_type)
 
@@ -288,6 +341,7 @@ static func get_all() -> Array[ModuleType]:
 	var tractor_type: ModuleType = _make(TRACTOR_HARDPOINT_TYPE_ID, "Tractor Beam", Color(0.4, 0.75, 0.85), SINGLE_CELL,
 		0.2, 30.0, 0.0, null, "tractor", 1, {MaterialCatalog.IRON: 8, MaterialCatalog.COPPER: 8})
 	FactionArtImporter.apply_hex_art(tractor_type, "tractor_beam")
+	tractor_type.energy_draw = TRACTOR_DRAW
 	types.append(tractor_type)
 
 	# Radar hardpoint (see RadarDisplay.has_radar/Ship.has_radar) — a pure
@@ -301,6 +355,7 @@ static func get_all() -> Array[ModuleType]:
 	var radar_type: ModuleType = _make(RADAR_HARDPOINT_TYPE_ID, "Radar", Color(0.3, 1.0, 0.55), SINGLE_CELL,
 		0.2, 25.0, 0.0, null, "radar", 1, {MaterialCatalog.IRON: 6, MaterialCatalog.COPPER: 10})
 	FactionArtImporter.apply_hex_art(radar_type, "radar")
+	radar_type.energy_idle_draw = RADAR_IDLE_DRAW
 	types.append(radar_type)
 
 	# Scanner hardpoint (see Scanner.has_scanner/Ship.has_scanner) — same
@@ -315,6 +370,7 @@ static func get_all() -> Array[ModuleType]:
 		0.2, 25.0, 0.0, null, "scanner", 1,
 		{ComponentCatalog.CIRCUIT_BOARD: 1, ComponentCatalog.WIRING: 1, MaterialCatalog.GLASS: 2})
 	FactionArtImporter.apply_hex_art(scanner_type, "scanner")
+	scanner_type.energy_draw = SCANNER_DRAW
 	types.append(scanner_type)
 
 	# Hull Slicer (see HardpointSlicer) — the tool the salvage loop runs on. Two
@@ -334,6 +390,7 @@ static func get_all() -> Array[ModuleType]:
 	# Renaming them is an art-pipeline job (re-export, re-import, mipmap check —
 	# see CLAUDE.md) rather than part of this rename.
 	FactionArtImporter.apply_hex_art(slicer_type, "mining_grinder")
+	slicer_type.energy_draw = SLICER_DRAW
 	types.append(slicer_type)
 
 	types.append_array(_grapple_types())
@@ -381,6 +438,7 @@ static func _grapple_types() -> Array[ModuleType]:
 		0.0, 0.0, winch_scene, true)
 	mk1.muzzle_offset_cells = Vector2(0.0, -0.518)
 	FactionArtImporter.apply_hex_art(mk1, "grapple_mk1")
+	mk1.energy_draw = GRAPPLE_DRAW
 	grapples.append(mk1)
 
 	var mk2: ModuleType = _make(GRAPPLE_MK2_TYPE_ID, "Grapple Mk2", plate, LINE_2_CELLS,
@@ -389,6 +447,7 @@ static func _grapple_types() -> Array[ModuleType]:
 		0.0, 0.0, winch_scene, true)
 	mk2.muzzle_offset_cells = Vector2(0.0, -0.064)
 	FactionArtImporter.apply_hex_art(mk2, "grapple_mk2")
+	mk2.energy_draw = GRAPPLE_DRAW
 	grapples.append(mk2)
 
 	var mk3: ModuleType = _make(GRAPPLE_MK3_TYPE_ID, "Grapple Mk3", plate, TRIANGLE_3_CELLS,
@@ -397,6 +456,7 @@ static func _grapple_types() -> Array[ModuleType]:
 		0.0, 0.0, winch_scene, true)
 	mk3.muzzle_offset_cells = Vector2(0.0, -0.361)
 	FactionArtImporter.apply_hex_art(mk3, "grapple_mk3")
+	mk3.energy_draw = GRAPPLE_DRAW
 	grapples.append(mk3)
 
 	return grapples

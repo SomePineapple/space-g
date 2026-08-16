@@ -1,21 +1,24 @@
 class_name ShipSystems
 extends Node
 
-## Which of the ship's systems are switched on, what each one draws from the
-## reactor just by being ready, and what gets shut down first when the reactor
-## can't keep up.
+## Which of the ship's systems are switched on, and the always-on load the
+## modules behind them cost their circuits just by running.
 ##
-## Every system draws a small idle load whenever it's on, whether or not it's
-## being used — a ship with everything running can't sustain full thrust on
-## base power alone, so flying efficiently means switching off what you aren't
-## using. Actually *using* a system (firing, grinding, pulling) still costs its
-## own energy on top, through the same Ship.spend_energy every consumer already
-## goes through.
+## Switching a system off is how the player stops paying for hardware they aren't
+## using. Actually *using* it (firing, cutting, pulling) costs its own energy on
+## top, through the same Ship.spend_energy every consumer goes through.
 ##
-## Idle draw is counted per live module: two weapon hardpoints idle at twice
-## one's cost, and a destroyed or never-built module costs nothing. A system
-## with no live module at all is "unavailable" — still listed on the HUD, but
-## inert and free.
+## **The load itself lives on the modules, not here** (ModuleType.energy_idle_draw).
+## This used to hold a per-system constant multiplied by a live module count,
+## which meant a module's running cost was written in a table of categories
+## somewhere else entirely; now a radar's 1/s is a property of radars. What this
+## class still owns is the *switch*, which is a player-facing thing and belongs
+## with the rest of the player-facing power management.
+##
+## There is deliberately no brownout auto-shutdown any more. It existed to stop
+## one flat ship-wide pool from stripping every system at once; a circuit running
+## dry now does that job, scoped to the modules the player actually put on it,
+## and two systems shutting things down in competition is worse than either.
 ##
 ## Consumers pull their gate state each frame (Ship.is_system_enabled /
 ## has_radar / has_scanner / is_slicer_active), the same pull model as
@@ -23,10 +26,6 @@ extends Node
 ## the current state without anything having to re-push it.
 
 signal systems_changed
-## A system was cut by the brownout handler rather than by the player — the HUD
-## says so, since silently losing a system is exactly the confusing case the
-## feature is meant to avoid.
-signal system_auto_disabled(system_id: StringName)
 
 const CONTROL: StringName = &"control"
 const THRUSTERS: StringName = &"thrusters"
@@ -35,8 +34,7 @@ const SENSORS: StringName = &"sensors"
 const TRACTOR: StringName = &"tractor"
 const SALVAGER: StringName = &"salvager"
 
-## Power priority, most essential first. Brownout shutdown walks it backwards,
-## so utility goes before weapons and the helm is never cut.
+## Display order, most essential first — what the HUD lists top to bottom.
 const ORDER: Array[StringName] = [CONTROL, THRUSTERS, WEAPONS, SENSORS, TRACTOR, SALVAGER]
 
 ## Everything else is essential and deliberately has no switch — losing the
@@ -62,18 +60,6 @@ const HOTKEY_HINTS: Dictionary = {
 	SALVAGER: "G",
 }
 
-## Cockpit and control: a flat cost, since a layout has exactly one Core.
-@export var control_idle_draw: float = 0.5
-@export var thruster_idle_draw_per_module: float = 0.5
-@export var weapon_idle_draw_per_module: float = 0.4
-@export var sensor_idle_draw_per_module: float = 0.3
-@export var tractor_idle_draw_per_module: float = 0.8
-@export var salvager_idle_draw_per_module: float = 0.6
-## Minimum gap between brownout shutdowns, so one flat pool doesn't strip every
-## system in a single frame — the player gets one system back off at a time and
-## can see each one go.
-@export var auto_shutdown_interval: float = 1.5
-
 ## The salvager starts off because its beam damages whatever it touches; the
 ## rest start on so a fresh ship simply works.
 var _switched_on: Dictionary = {
@@ -87,12 +73,6 @@ var _switched_on: Dictionary = {
 
 ## system id -> number of live (mounted, not destroyed) modules backing it.
 var _live_counts: Dictionary = {}
-var _energy: ShipEnergy
-var _shutdown_cooldown: float = 0.0
-
-
-func configure(energy: ShipEnergy) -> void:
-	_energy = energy
 
 
 ## Recounts the modules behind each system. Called on every layout apply and
@@ -164,60 +144,69 @@ func toggle(system_id: StringName) -> void:
 	set_switched_on(system_id, not is_switched_on(system_id))
 
 
-## Energy/second this system is costing right now — zero while it's off or has
-## no live module behind it.
-func get_idle_draw(system_id: StringName) -> float:
-	if not is_active(system_id):
-		return 0.0
-	match system_id:
-		CONTROL:
-			return control_idle_draw
-		THRUSTERS:
-			return thruster_idle_draw_per_module * get_module_count(THRUSTERS)
-		WEAPONS:
-			return weapon_idle_draw_per_module * get_module_count(WEAPONS)
-		SENSORS:
-			return sensor_idle_draw_per_module * get_module_count(SENSORS)
-		TRACTOR:
-			return tractor_idle_draw_per_module * get_module_count(TRACTOR)
-		SALVAGER:
-			return salvager_idle_draw_per_module * get_module_count(SALVAGER)
-	return 0.0
+## Which system a module belongs to, or an empty name for plain structure.
+##
+## Derived from what the module *does* rather than from a list of ids, so a new
+## weapon tier or a second radar type is picked up with no change here — the same
+## reasoning as ShipLayout._get_hardpoint_placements matching on category.
+static func system_for(module_type: ModuleType, is_core: bool) -> StringName:
+	if module_type == null:
+		return &""
+	if is_core:
+		return CONTROL
+	if module_type.thrust_contribution > 0.0:
+		return THRUSTERS
+	match module_type.hardpoint_category:
+		"weapon", "missile":
+			return WEAPONS
+		"radar", "scanner":
+			return SENSORS
+		"tractor":
+			return TRACTOR
+		"salvager":
+			return SALVAGER
+	return &""
 
 
-func total_idle_draw() -> float:
+## Energy/second the ship is paying just to have things switched on, summed
+## across every live module. For the HUD only — the actual charging below is per
+## module against per circuit, and never against this total.
+func total_idle_draw(ship: Ship, layout: ShipLayout) -> float:
 	var total: float = 0.0
-	for system_id in ORDER:
-		total += get_idle_draw(system_id)
+	if layout == null:
+		return total
+	for placement in layout.placements:
+		total += _idle_draw_of(ship, layout, placement)
 	return total
 
 
-## Called once per physics frame by Ship, after regeneration.
-func process(delta: float) -> void:
-	_shutdown_cooldown = maxf(_shutdown_cooldown - delta, 0.0)
-	if _energy == null:
+## Called once per physics frame by Ship, after regeneration. Charges each
+## always-on module's own draw to its own circuit.
+##
+## A circuit that cannot cover it simply runs dry, and everything on that circuit
+## stops working until its reactor catches up. Nothing is switched off on the
+## player's behalf: the shortage is now local to a circuit they built, and
+## recovering from it is their decision to make.
+func process(delta: float, ship: Ship, layout: ShipLayout) -> void:
+	if layout == null:
 		return
-	var unpaid: float = _energy.drain(total_idle_draw() * delta)
-	if unpaid > 0.0:
-		_handle_shortage()
+	for placement in layout.placements:
+		var draw: float = _idle_draw_of(ship, layout, placement)
+		if draw > 0.0:
+			ship.drain_energy(draw * delta, placement.placement_id)
 
 
-## The pool ran dry with systems still drawing. Cut the least essential one
-## that's actually running and let the player decide what to bring back —
-## automatically re-enabling it the moment power recovered would just flap the
-## same system on and off.
-func _handle_shortage() -> void:
-	if _shutdown_cooldown > 0.0:
-		return
-	for i in range(ORDER.size() - 1, -1, -1):
-		var system_id: StringName = ORDER[i]
-		if not is_toggleable(system_id) or not is_active(system_id):
-			continue
-		_switched_on[system_id] = false
-		_shutdown_cooldown = auto_shutdown_interval
-		system_auto_disabled.emit(system_id)
-		systems_changed.emit()
-		return
+func _idle_draw_of(ship: Ship, layout: ShipLayout, placement: ModulePlacement) -> float:
+	if ship.is_module_destroyed(placement.placement_id):
+		return 0.0
+	var module_type: ModuleType = ModuleCatalog.get_by_id(placement.module_type_id)
+	if module_type == null or module_type.energy_idle_draw <= 0.0:
+		return 0.0
+	var system_id: StringName = system_for(
+		module_type, placement.placement_id == layout.core_placement_id)
+	if not system_id.is_empty() and not is_active(system_id):
+		return 0.0
+	return module_type.energy_idle_draw
 
 
 ## Switch positions only — module counts are re-derived from the layout on the

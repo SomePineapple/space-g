@@ -83,7 +83,7 @@ func _ready() -> void:
 	_vitals.set_energy(ship.get_energy(), ship.get_max_energy())
 
 	ship.energy_usage_changed.connect(_vitals.set_power_load)
-	ship.get_systems().system_auto_disabled.connect(_on_system_auto_disabled)
+	ship.circuit_depleted.connect(_on_circuit_depleted)
 
 
 func _update_credits_label(amount: int) -> void:
@@ -101,11 +101,13 @@ func _on_storage_full() -> void:
 	_storage_full_tween.tween_property(_storage_full_label, "modulate:a", 0.0, storage_full_fade_duration)
 
 
-## The ship browned out and cut a system by itself (see ShipSystems) — said
-## out loud, because a system going quiet with no explanation is exactly the
-## confusion power management is supposed to avoid.
-func _on_system_auto_disabled(system_id: StringName) -> void:
-	_power_warning_label.text = "POWER SHORTAGE — %s OFFLINE" % ShipSystems.DISPLAY_NAMES[system_id]
+## One of the ship's circuits ran dry, so every module on it has stopped — said
+## out loud, because hardware going quiet with no explanation is exactly the
+## confusion power management is supposed to avoid. Phase 2 replaces this line
+## with a per-circuit bar; until then it is the only in-flight signal that a
+## circuit, rather than the ship, is the thing that failed.
+func _on_circuit_depleted(circuit_index: int) -> void:
+	_power_warning_label.text = "CIRCUIT %d DRY" % (circuit_index + 1)
 	if _power_warning_tween:
 		_power_warning_tween.kill()
 	_power_warning_label.modulate.a = 1.0

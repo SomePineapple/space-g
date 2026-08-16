@@ -228,7 +228,7 @@ func _physics_process(delta: float) -> void:
 		_retract(delta)
 		return
 
-	if not _shooter.spend_energy(energy_cost_per_second * delta):
+	if not _shooter.spend_energy(energy_cost_per_second * delta, source_placement_id):
 		_retract(delta)
 		return
 

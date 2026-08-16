@@ -85,12 +85,32 @@ func _physics_process(delta: float) -> void:
 		_cancel()
 		return
 
+	# A scan runs on the scanner module's own circuit. Losing that circuit
+	# mid-pulse ends the sweep exactly as switching Sensors off does — the pulse
+	# is powered equipment, not a fired-and-forgotten projectile.
+	if not _spend_scan_energy(delta):
+		_cancel()
+		return
+
 	_elapsed += delta
 	_resolve_arrivals()
 
 	if get_reach() >= scan_range:
 		_is_scanning = false
 		scan_completed.emit(_hits)
+
+
+## Charges this frame of the sweep to whichever circuit the scanner module sits
+## on. Returns false if that circuit could not cover it.
+func _spend_scan_energy(delta: float) -> bool:
+	var placement_id: String = _ship.get_scanner_placement_id()
+	if placement_id.is_empty():
+		return false
+	var module_type: ModuleType = ModuleCatalog.get_by_id(
+		_ship.ship_layout.get_placement_by_id(placement_id).module_type_id)
+	if module_type == null or module_type.energy_draw <= 0.0:
+		return true
+	return _ship.spend_energy(module_type.energy_draw * delta, placement_id)
 
 
 ## Bound to the "scan" input action via ShipIntent. Returns false (silently, as

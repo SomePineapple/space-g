@@ -43,7 +43,7 @@ func _release_charge() -> void:
 
 
 func _resolve_beam() -> void:
-	if _shooter == null or not _shooter.spend_energy(energy_cost):
+	if _shooter == null or not _shooter.spend_energy(energy_cost, source_placement_id):
 		return
 
 	var from_point: Vector2 = _muzzle.global_position

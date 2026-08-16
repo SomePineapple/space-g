@@ -1127,10 +1127,26 @@ the survivors pick up the orphans at an overload penalty. The build decision is
 specialise (split thrust and guns so you can always run or fight) versus
 redundancy (duplicate essentials so nothing is a single point of failure).
 
-The Command Core is never on a circuit, is always powered, and generates a
-meagre trickle of its own — so losing every reactor leaves the ship limping
-rather than drifting, and so a hull of Core + thrusters already flies badly
-before a reactor is ever bolted on, which is how the system teaches itself.
+The Command Core generates a meagre trickle of its own (`ModuleCatalog.
+CORE_GENERATION`, 4/s against a Reactor Mk1's 15) and owns a circuit the player
+can never assign to. That circuit is the ship's **floor**, not one of its
+circuits: modules land on it only when there is no working reactor at all, and
+are pulled straight back off the moment one exists (`ShipLayout.
+is_fallback_circuit`). It is why a hull of Core + Thruster Block already flies —
+badly, in stutters — before the first reactor is bolted on, and why losing every
+reactor mid-fight leaves you limping instead of drifting.
+
+**Phase 1 (landed):** `ModulePlacement.circuit_id`; per-circuit generation /
+capacity / draw / headroom on `ShipLayout`, derived lazily beside `_cell_index`;
+headroom-based auto-assignment that also serves as the migration for the 17
+authored `.tres` layouts (none of which needed hand-editing); `ShipEnergy`
+rebuilt as one pool per circuit; every consumer spending against its own
+module's circuit; per-thruster thrust so a dead circuit costs you that much
+thrust and no more; the builder's circuit card, coloured hexes, click-a-reactor-
+then-click-modules assignment, and a SPLIT BY ROLE preset.
+
+**Not yet:** reactor loss, the battery grace period, fail-over and the overload
+penalty are Phase 2; in-flight reassignment is Phase 3.
 
 The adjacency/conduit model that preceded this was deleted, not disabled — see
 `docs/rejected/power-conduits.md`.

@@ -143,7 +143,7 @@ func _find_nearest_valid_target() -> Node2D:
 ## Muzzle and retries every frame until capacity frees up, out of range, or
 ## out of energy — same "hold and retry" shape as a real tractor beam.
 func _pull_target(delta: float) -> void:
-	if not _shooter.spend_energy(energy_cost_per_second * delta):
+	if not _shooter.spend_energy(energy_cost_per_second * delta, source_placement_id):
 		# Out of energy just drops the target from the beam (same as being out
 		# of range) rather than a hard block — the beam visibly cuts out.
 		_release_target()

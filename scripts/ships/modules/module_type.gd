@@ -60,10 +60,33 @@ extends Resource
 ## Material id -> amount required to place this module in the ship builder.
 @export var build_costs: Dictionary = {}
 
-## Energy/second this module adds to the ship's regeneration rate (reactors).
+## Energy/second this module generates for its own circuit. Non-zero makes this
+## module a circuit *source*: a reactor, or the Command Core (see ShipLayout's
+## circuit functions).
 @export var energy_generation: float = 0.0
-## Energy capacity this module adds to the ship's energy pool (batteries).
+## Energy capacity this module adds to whichever circuit it is assigned to
+## (batteries). Capacity is a circuit's buffer for bursts and, once its reactor
+## dies, the grace period before its members go dark.
 @export var energy_capacity_contribution: float = 0.0
+
+## Energy/second this module burns *while it is doing its job* — a thruster
+## pushing, a tractor beam holding, a slicer cutting. Charged by whichever script
+## owns that behaviour, since only it knows when the module is working.
+@export var energy_draw: float = 0.0
+## Energy/second this module burns simply for being switched on, used or not.
+##
+## Deliberately separate from energy_draw. A radar has no "in use" state at all —
+## it is a sensor that is either running or not — and that constant, unavoidable
+## trickle is real pressure on a build ("my sensors are quietly eating my
+## reserve") and a good reason to put sensors on a circuit of their own. Folding
+## it into energy_draw would leave nothing to charge it against.
+##
+## This replaced ShipSystems' per-system idle-draw constants: the number belongs
+## to the module, not to a table of module categories somewhere else.
+@export var energy_idle_draw: float = 0.0
+## Energy consumed per discrete use — one shot, one launch. Checked before the
+## use is committed, so a weapon either fires at full strength or does not fire.
+@export var energy_cost_per_use: float = 0.0
 ## Cargo capacity this module adds to the ship's material storage (see
 ## ShipLayout.total_cargo_capacity/Ship._refresh_layout_stats).
 @export var cargo_capacity_contribution: float = 0.0

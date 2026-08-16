@@ -1,12 +1,16 @@
 extends Control
 
-## Top-left power-management list: every ship system, its switch state and what
-## it's costing per second. Sits directly under the vitals readout, which shows
-## the total of this list as its load bar.
+## Top-left power-management list: every ship system, its switch state and how
+## many live modules are behind it. Sits directly under the vitals readout.
+##
+## The last column used to be a per-second idle cost. That number now lives on
+## the modules themselves (ModuleType.energy_idle_draw) and is zero for almost
+## all of them — what a system costs is mostly paid when it is *used*, against
+## its own circuit. The module count is what is left that this list can usefully
+## say: how much hardware a switch is actually controlling.
 ##
 ## Essential systems (control, thrusters) are listed too, without a key hint —
-## seeing that simply being ready to fly costs power is the point of showing
-## them, and they deliberately can't be switched off.
+## they deliberately can't be switched off.
 ##
 ## Built in code like the other HUD widgets, and driven entirely by
 ## ShipSystems.systems_changed — nothing here polls per frame.
@@ -122,7 +126,7 @@ func _refresh() -> void:
 		# "OFF" would imply a switch that would do something.
 		var state_text: String = ("ON" if on else "OFF") if available else "--"
 		labels[2].text = state_text
-		labels[3].text = ("%.1f/s" % _systems.get_idle_draw(system_id)) if (available and on) else ""
+		labels[3].text = ("x%d" % _systems.get_module_count(system_id)) if available else ""
 
 		var color: Color = HudPalette.CYAN if (available and on) else HudPalette.TEXT_DIM
 		if not available:

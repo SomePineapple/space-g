@@ -20,7 +20,7 @@ var _charge_remaining: float = 0.0
 func fire() -> Projectile:
 	if _charging or _cooldown_remaining > 0.0 or _shooter == null:
 		return null
-	if not _shooter.has_energy(energy_cost):
+	if not _shooter.has_energy(energy_cost, source_placement_id):
 		return null
 
 	_cooldown_remaining = _shot_cooldown()
@@ -53,7 +53,7 @@ func _process(delta: float) -> void:
 ## fires a normal projectile through HardpointGun's shared spawn/recoil path;
 ## HardpointPhaseLance overrides this to resolve a beam instead.
 func _release_charge() -> void:
-	if _shooter != null and _shooter.spend_energy(energy_cost):
+	if _shooter != null and _shooter.spend_energy(energy_cost, source_placement_id):
 		_execute_fire()
 
 

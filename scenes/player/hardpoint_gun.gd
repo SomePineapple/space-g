@@ -19,6 +19,10 @@ extends Node2D
 @export var projectile_lifetime: float = 2.0
 @export var projectile_lifetime_variance: float = 0.2
 @export var barrel_color: Color = Color(0.5, 0.85, 1.0, 1.0)
+## Per-shot energy, charged to whichever circuit this hardpoint's module is on.
+## Overwritten from ModuleType.energy_cost_per_use when the bank mounts this gun
+## (see HardpointBank._mount_gun); the value here is only what an unmounted gun
+## scene opened on its own would use.
 @export var energy_cost: float = 4.0
 ## A single fixed shot sound. Left null on the plain gun, which picks from
 ## fire_sounds instead; kept for a weapon that should always sound the same.
@@ -283,7 +287,7 @@ func _shot_cooldown() -> float:
 func fire() -> Projectile:
 	if _cooldown_remaining > 0.0 or _shooter == null:
 		return null
-	if not _shooter.spend_energy(energy_cost):
+	if not _shooter.spend_energy(energy_cost, source_placement_id):
 		return null
 	_cooldown_remaining = _shot_cooldown()
 	if malfunction_chance > 0.0 and GameRng.stream("malfunction").randf() < malfunction_chance:

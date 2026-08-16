@@ -1,108 +1,222 @@
 class_name ShipEnergy
 extends Node
 
-## The ship's energy pool: the capacity/regeneration derived from installed
-## Reactor and Battery modules on top of a baseline, and the spend-or-refuse
-## decision every consumer (thrust, weapons, tractor beam, salvager, winch)
-## routes through.
+## The ship's energy, held as one pool per circuit rather than one pool per ship.
 ##
-## Split out of ship.gd, which owned the pool, its regeneration, its signal and
-## the layout-derived totals inline. Ship keeps the public
-## spend_energy()/has_energy() API and relays energy_changed, so nothing
-## outside the ship reaches in here.
+## Every generating module (a reactor, or the Command Core) owns a circuit; every
+## module that draws power belongs to exactly one, chosen by the player in the
+## builder (see ShipLayout's circuit functions). A consumer spends against *its
+## own* circuit and can only be refused by that circuit, which is the whole
+## mechanic: run your guns dry and your engines still push.
+##
+## Circuits are keyed by their source's `placement_id`, so a reactor being shot
+## off the hull removes exactly one pool and leaves the rest untouched.
+##
+## Ship keeps the public spend_energy()/has_energy() API and relays
+## energy_changed, so nothing outside the ship reaches in here.
 
+## Ship-wide totals, for readouts that want one number (the HUD's vitals bar).
+## The per-circuit HUD is Phase 2; until then these keep the existing readout
+## honest by summing what the circuits actually hold.
 signal energy_changed(current: float, maximum: float)
 ## Smoothed energy/second currently being drawn, alongside the rate the ship
 ## regenerates at — the HUD's load bar reads "usage against what the reactor
 ## can sustain", so both halves travel together.
 signal usage_changed(usage_per_second: float, generation_per_second: float)
+## A circuit just hit empty, by its position in ShipLayout.get_circuit_ids().
+##
+## Said out loud because everything on a dry circuit stops working, and hardware
+## going quiet with no explanation is the exact confusion power management exists
+## to avoid. Edge-triggered and rate-limited (see DEPLETION_NOTICE_INTERVAL) —
+## a circuit sitting at zero under continuous load would otherwise re-announce
+## itself every frame.
+signal circuit_depleted(circuit_index: int)
 
-## Available even with no Reactor/Battery modules installed, so existing ship
-## layouts (pirates, the starter ship) keep working now that weapons/thrusters/
-## tractor beam actually spend energy — reactor and battery modules add on top
-## of these baselines.
-@export var base_generation: float = 10.0
-@export var base_capacity: float = 50.0
+## Minimum gap between one circuit's depletion notices, so a circuit held at
+## empty says so once and then leaves the player alone to deal with it.
+const DEPLETION_NOTICE_INTERVAL: float = 4.0
+## How empty a circuit has to be before a refused spend counts as "this circuit
+## is dry" rather than "that was too big a burst for the reserve you had". A full
+## circuit refusing one railgun shot is the player overreaching; a near-empty one
+## refusing everything is the thing they need told about.
+const DEPLETION_NOTICE_FRACTION: float = 0.2
+
 ## How fast the displayed usage rate chases the instantaneous one. A raw
 ## per-frame rate is unreadable — a gun firing on one frame in twenty reads as
 ## a huge spike — so the HUD sees an exponentially smoothed value instead.
 @export var usage_smoothing: float = 6.0
 
-var current: float = 0.0
-var maximum: float = 0.0
-var generation_rate: float = 0.0
-## Smoothed energy/second being drawn (see usage_changed).
-var usage_rate: float = 0.0
+## A circuit with no battery on it still has to be able to spend what it makes,
+## or a reactor with nothing attached would be worth nothing at all. Its working
+## buffer is therefore at least this many seconds of its own generation: a
+## continuous draw inside its rate is sustainable indefinitely, and a burst above
+## it simply is not affordable. Adding a battery is what buys the burst.
+const MINIMUM_BUFFER_SECONDS: float = 1.0
+
+
+## One circuit's live state. Plain data on purpose — there is one of these per
+## reactor and they are rebuilt on every refit, so they are not nodes.
+class Circuit extends RefCounted:
+	var id: String = ""
+	var charge: float = 0.0
+	var capacity: float = 0.0
+	var generation: float = 0.0
+	## Seconds until this circuit may announce being empty again.
+	var notice_cooldown: float = 0.0
+
+	## What this circuit can actually hold (see MINIMUM_BUFFER_SECONDS).
+	func buffer() -> float:
+		return maxf(capacity, generation * MINIMUM_BUFFER_SECONDS)
+
+	func fill_fraction() -> float:
+		var limit: float = buffer()
+		return (charge / limit) if limit > 0.0 else 0.0
+
+
+var _circuits: Dictionary = {}   # String (circuit_id) -> Circuit
+var _order: Array[String] = []
 
 ## Energy spent since the last tick(), converted into usage_rate there.
 var _spent_since_tick: float = 0.0
-## Last usage_rate actually emitted, so the signal only fires on a change the
-## HUD could draw differently.
+## Last values actually emitted, so the signals only fire on a change the HUD
+## could draw differently.
 var _emitted_usage: float = -1.0
+var _emitted_charge: float = -1.0
+var _usage_rate: float = 0.0
 
 
-## A new maximum keeps the same fraction full rather than resetting to full or
-## to the old absolute amount, so refitting a ship (builder, upgrades) doesn't
-## grant or destroy energy out of nowhere.
-func configure(layout_capacity: float, layout_generation: float) -> void:
-	var previous_fraction: float = (current / maximum) if maximum > 0.0 else 1.0
-	maximum = base_capacity + layout_capacity
-	generation_rate = base_generation + layout_generation
-	current = maximum * previous_fraction
-	energy_changed.emit(current, maximum)
-	# A refit changes the sustainable limit the load bar is measured against,
-	# so the HUD needs the new generation rate even if usage hasn't moved.
-	_emitted_usage = usage_rate
-	usage_changed.emit(usage_rate, generation_rate)
+## Rebuilds the circuits from a layout. A circuit that survives the refit keeps
+## the same *fraction* of its buffer rather than the same absolute charge or a
+## free top-up, so changing a ship at the workbench neither grants nor destroys
+## energy. A circuit that is new to this layout starts full — a reactor you just
+## bolted on has been running.
+func configure(layout: ShipLayout) -> void:
+	var previous: Dictionary = _circuits
+	_circuits = {}
+	_order.clear()
+
+	if layout != null:
+		for circuit_id in layout.get_circuit_ids():
+			var circuit := Circuit.new()
+			circuit.id = circuit_id
+			circuit.capacity = layout.circuit_capacity(circuit_id)
+			circuit.generation = layout.circuit_generation(circuit_id)
+			var carried: Circuit = previous.get(circuit_id)
+			circuit.charge = circuit.buffer() * (carried.fill_fraction() if carried != null else 1.0)
+			_circuits[circuit_id] = circuit
+			_order.append(circuit_id)
+
+	_emit_energy(true)
+	# A refit changes the sustainable limit the load bar is measured against, so
+	# the HUD needs the new generation rate even if usage hasn't moved.
+	_emitted_usage = _usage_rate
+	usage_changed.emit(_usage_rate, total_generation())
 
 
-func has(amount: float) -> bool:
-	return current >= amount
+func get_circuit_ids() -> Array[String]:
+	return _order.duplicate()
 
 
-func spend(amount: float) -> bool:
-	if current < amount:
+func get_circuit(circuit_id: String) -> Circuit:
+	return _circuits.get(circuit_id)
+
+
+func has(amount: float, circuit_id: String) -> bool:
+	var circuit: Circuit = _circuits.get(circuit_id)
+	return circuit != null and circuit.charge >= amount
+
+
+## All of it or none of it. A weapon must never half-fire and a circuit must
+## never go negative, so affordability is settled before anything is committed.
+func spend(amount: float, circuit_id: String) -> bool:
+	var circuit: Circuit = _circuits.get(circuit_id)
+	if circuit == null:
 		return false
-	current -= amount
+	if circuit.charge < amount:
+		_announce_depleted(circuit)
+		return false
+	circuit.charge -= amount
 	_spent_since_tick += amount
-	energy_changed.emit(current, maximum)
+	_emit_energy(true)
 	return true
 
 
-## Continuous background load (see ShipSystems): unlike spend(), this pays as
-## much as the pool can afford instead of refusing outright, and returns the
-## shortfall. A ship that can't cover its own idle draw browns out — the caller
-## turns something off — rather than silently running its systems for free.
-func drain(amount: float) -> float:
+## Continuous load: unlike spend(), this pays as much as the circuit can afford
+## instead of refusing outright, and returns the shortfall. Used by anything
+## whose draw is a rate rather than an event, where partial delivery is
+## meaningful — a thruster that can only be half fed pushes half as hard.
+func drain(amount: float, circuit_id: String) -> float:
 	if amount <= 0.0:
 		return 0.0
-	var paid: float = minf(amount, current)
-	if paid <= 0.0:
+	var circuit: Circuit = _circuits.get(circuit_id)
+	if circuit == null:
 		return amount
-	var previous: float = current
-	current -= paid
+	var paid: float = minf(amount, circuit.charge)
+	if paid <= 0.0:
+		_announce_depleted(circuit)
+		return amount
+	circuit.charge -= paid
 	_spent_since_tick += paid
-	# Same "only when the displayed whole number could have changed" guard as
-	# regenerate() — this runs every physics frame.
-	if current <= 0.0 or floorf(current) < floorf(previous):
-		energy_changed.emit(current, maximum)
+	if paid < amount:
+		_announce_depleted(circuit)
+	_emit_energy(false)
 	return amount - paid
 
 
-## Regen used to emit every single physics frame while the pool was below full,
-## which meant the HUD reformatted and rewrote its energy Label ~60 times a
-## second for a readout that only displays whole numbers. Only emitting once the
-## displayed value can actually have changed (or the pool tops out) keeps the
-## readout identical while cutting the signal traffic.
 func tick(delta: float) -> void:
 	_update_usage_rate(delta)
 
-	if current >= maximum:
+	for circuit_id in _order:
+		var circuit: Circuit = _circuits[circuit_id]
+		circuit.notice_cooldown = maxf(circuit.notice_cooldown - delta, 0.0)
+		var limit: float = circuit.buffer()
+		if circuit.charge < limit:
+			circuit.charge = minf(circuit.charge + circuit.generation * delta, limit)
+	_emit_energy(false)
+
+
+func _announce_depleted(circuit: Circuit) -> void:
+	if circuit.notice_cooldown > 0.0:
 		return
-	var previous: float = current
-	current = minf(current + generation_rate * delta, maximum)
-	if current >= maximum or floorf(current) > floorf(previous):
-		energy_changed.emit(current, maximum)
+	var limit: float = circuit.buffer()
+	if limit > 0.0 and circuit.charge > limit * DEPLETION_NOTICE_FRACTION:
+		return
+	circuit.notice_cooldown = DEPLETION_NOTICE_INTERVAL
+	circuit_depleted.emit(_order.find(circuit.id))
+
+
+func total_charge() -> float:
+	var total: float = 0.0
+	for circuit_id in _order:
+		total += _circuits[circuit_id].charge
+	return total
+
+
+func total_buffer() -> float:
+	var total: float = 0.0
+	for circuit_id in _order:
+		total += _circuits[circuit_id].buffer()
+	return total
+
+
+func total_generation() -> float:
+	var total: float = 0.0
+	for circuit_id in _order:
+		total += _circuits[circuit_id].generation
+	return total
+
+
+## `force` is for discrete spends, which the player caused and should see land.
+## Everything continuous (regen, idle drain) goes through the whole-number guard:
+## these run every physics frame for every circuit, and the readout only displays
+## whole numbers, so emitting per frame would have the HUD reformat its label
+## sixty times a second to draw the same characters.
+func _emit_energy(force: bool) -> void:
+	var current: float = total_charge()
+	if not force and floorf(current) == floorf(_emitted_charge):
+		return
+	_emitted_charge = current
+	energy_changed.emit(current, total_buffer())
 
 
 ## Turns everything spent since the previous tick into a smoothed per-second
@@ -114,8 +228,8 @@ func _update_usage_rate(delta: float) -> void:
 		return
 	var instantaneous: float = _spent_since_tick / delta
 	_spent_since_tick = 0.0
-	usage_rate = lerpf(usage_rate, instantaneous, clampf(usage_smoothing * delta, 0.0, 1.0))
-	if absf(usage_rate - _emitted_usage) < 0.05:
+	_usage_rate = lerpf(_usage_rate, instantaneous, clampf(usage_smoothing * delta, 0.0, 1.0))
+	if absf(_usage_rate - _emitted_usage) < 0.05:
 		return
-	_emitted_usage = usage_rate
-	usage_changed.emit(usage_rate, generation_rate)
+	_emitted_usage = _usage_rate
+	usage_changed.emit(_usage_rate, total_generation())

@@ -74,6 +74,29 @@ const DASH_GAP: float = 4.0
 ## Fraction of the field's short side left as padding when fitting the grid.
 const FIT_MARGIN: float = 0.04
 
+# --- Circuits -----------------------------------------------------------------
+
+## How strongly a circuit's colour washes over the plate it marks. Low, because
+## the plate still has to read as the part it is and as the faction it came off;
+## the outline is what actually carries the grouping.
+const CIRCUIT_WASH_ALPHA: float = 0.10
+const CIRCUIT_WASH_FOCUSED_ALPHA: float = 0.24
+const CIRCUIT_OUTLINE_WIDTH: float = 1.2
+const CIRCUIT_OUTLINE_FOCUSED_WIDTH: float = 2.2
+
+## The circuit the player is currently editing — its modules are drawn brighter,
+## and clicking another module while this is set moves that module onto it.
+var circuit_focus_id: String = "":
+	set(value):
+		if circuit_focus_id == value:
+			return
+		circuit_focus_id = value
+		queue_redraw()
+
+## layout.get_circuit_ids() for this redraw pass, so per-hex colour lookups don't
+## each rebuild it. Cleared by refresh(), the same way the socket cache is.
+var _circuit_order: Array[String] = []
+
 var _center: Vector2
 ## Empty in-bounds cells directly against the hull, and the subset of those the
 ## currently selected module could actually be placed over. Both are recomputed
@@ -315,6 +338,7 @@ func _draw_placements() -> void:
 			draw_colored_polygon(corners,
 				(module_type.color * tint) if module_type != null else BuilderTheme.INPUT_DARK)
 
+		_draw_circuit_mark(corners, placement)
 		_collect_joint_edges(hex_coord, corners, placement, occupant_by_cell,
 			seam_points, weld_points, weld_bolt_points)
 
@@ -327,6 +351,44 @@ func _draw_placements() -> void:
 		draw_multiline(weld_points, WELD_COLOR, WELD_WIDTH)
 	if not weld_bolt_points.is_empty():
 		draw_multiline(weld_bolt_points, WELD_BOLT_COLOR, WELD_BOLT_WIDTH)
+
+
+## Which circuit this module is on, drawn as a wash over the plate plus an
+## outline. Only on modules that are actually *on* a circuit — plain structure
+## carries no mark at all, because tinting armour would drown the handful of
+## hexes the player is deciding about in a hull mostly made of plating.
+##
+## A wash rather than a replacement fill: the plate underneath still has to read
+## as the part it is (and as the faction it was cut from), so the circuit colour
+## sits over it at low alpha and does its real work through the outline.
+func _draw_circuit_mark(corners: PackedVector2Array, placement: ModulePlacement) -> void:
+	if layout == null:
+		return
+	var on_circuit: bool = not placement.circuit_id.is_empty()
+	if not on_circuit and not layout.needs_circuit(placement):
+		return
+
+	# A module that wants power and has none is marked in the dead colour rather
+	# than left unmarked: "nothing feeds this" is the answer the overlay exists to
+	# give, and an absence is not an answer the player can see.
+	var tint: Color = CircuitPalette.DEAD_COLOR
+	if on_circuit:
+		tint = CircuitPalette.color_for(_circuit_index(placement.circuit_id))
+
+	var focused: bool = not circuit_focus_id.is_empty() and placement.circuit_id == circuit_focus_id
+	var wash_alpha: float = CIRCUIT_WASH_FOCUSED_ALPHA if focused else CIRCUIT_WASH_ALPHA
+	draw_colored_polygon(corners, BuilderTheme.with_alpha(tint, wash_alpha))
+	_stroke_polygon(corners, BuilderTheme.with_alpha(tint, 0.9 if focused else 0.55),
+		CIRCUIT_OUTLINE_FOCUSED_WIDTH if focused else CIRCUIT_OUTLINE_WIDTH)
+
+
+## Position of a circuit in the layout's own ordering, which is what
+## CircuitPalette colours by. Cached per redraw pass rather than recomputed per
+## hex — _draw runs every frame while anything pulses.
+func _circuit_index(circuit_id: String) -> int:
+	if _circuit_order.is_empty():
+		_circuit_order = layout.get_circuit_ids()
+	return _circuit_order.find(circuit_id)
 
 
 func _shifted(corners: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
@@ -524,6 +586,9 @@ func clear_preview() -> void:
 
 func refresh() -> void:
 	_recompute_sockets()
+	# A part placed or removed can open or close a circuit, which shifts every
+	# later circuit's colour index.
+	_circuit_order.clear()
 	queue_redraw()
 
 
