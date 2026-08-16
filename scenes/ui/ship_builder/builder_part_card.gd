@@ -110,6 +110,7 @@ func show_instance(instance: ModuleInstance, module_type_id: String = "") -> voi
 	_add_stat("Condition", "%d%%" % roundi(instance.condition_fraction * 100.0),
 		_condition_color(instance.condition_fraction))
 	_add_integrity(instance)
+	_add_mount(instance)
 	_add_efficiency(instance)
 	_add_stat("Kills", str(instance.kill_count))
 	_add_weapon_stats(instance)
@@ -131,6 +132,30 @@ func _add_integrity(instance: ModuleInstance) -> void:
 		_condition_color(instance.integrity))
 
 
+## How this part is bolted on, shown only when that is costing it something.
+##
+## Two different states, and the difference between them is the whole mechanic:
+## a live field rig is recoverable — fly home, unbolt, bolt it back on — while
+## the cap it leaves behind is not. The first says what to do about it; the
+## second is there so the player can see, on a part that is already back at full
+## condition, why it still is not pulling its full weight.
+##
+## Sits directly above Efficiency, which is where the two halves of that number
+## (wear, mount) are already listed in the order they are explained.
+func _add_mount(instance: ModuleInstance) -> void:
+	if instance.field_attached:
+		_add_stat("Mount", "FIELD RIG · %d%%" % roundi(instance.mount_efficiency() * 100.0),
+			BuilderTheme.WARN)
+		_add_note("Jury-rigged in open space. A dock will get it back to %d%% — no further."
+			% roundi(instance.mount_efficiency_ceiling() * 100.0), BuilderTheme.WARN)
+		return
+	if instance.ever_field_attached:
+		_add_stat("Mount", "REFITTED · %d%%" % roundi(instance.mount_efficiency() * 100.0),
+			BuilderTheme.AMBER)
+		_add_note("Cut on in the field once. The mounting points never came back true.",
+			BuilderTheme.AMBER)
+
+
 ## Condition says how beaten up a part is; efficiency says what that costs. They
 ## are not the same number (see ModuleInstance.efficiency — light wear costs
 ## nothing at all), and showing only the first left the player to guess the
@@ -142,8 +167,15 @@ func _add_efficiency(instance: ModuleInstance) -> void:
 	var efficiency: float = instance.efficiency()
 	if efficiency >= 1.0:
 		return
-	_add_stat("Efficiency", "%d%%" % roundi(efficiency * 100.0),
-		_condition_color(instance.condition_fraction))
+	# Coloured by condition, not by the number itself, so the row keeps meaning
+	# "how hurt is this part" — except when a mount is dragging it down, which is
+	# worth flagging regardless of how clean the part underneath is.
+	var color: Color = _condition_color(instance.condition_fraction)
+	if instance.field_attached:
+		color = BuilderTheme.WARN
+	elif instance.ever_field_attached:
+		color = BuilderTheme.AMBER
+	_add_stat("Efficiency", "%d%%" % roundi(efficiency * 100.0), color)
 
 
 func _show_type_only(module_type_id: String) -> void:
@@ -178,12 +210,13 @@ func _add_weapon_stats(instance: ModuleInstance) -> void:
 
 	if fire_rate <= 0.0:
 		return
-	# Wear costs damage and rate of fire together (see HardpointGun._shot_cooldown),
-	# so it lands on DPS twice — which is the point. A gun at 60% efficiency is not
-	# a 60% gun.
+	# DPS is efficiency applied once and nothing else, so the headline number on
+	# this card and the number in the fight are the same claim. Rate of fire takes
+	# the gentler share of that (HardpointGun.FIRE_RATE_WEAR_SHARE) and damage
+	# makes up the difference, which is why the two rows do not scale together.
 	var efficiency: float = instance.efficiency()
-	_add_stat("DPS", "%.1f" % (damage * efficiency * fire_rate * efficiency))
-	_add_stat("Fire rate", "%.2f/s" % (fire_rate * efficiency))
+	_add_stat("DPS", "%.1f" % (damage * fire_rate * efficiency))
+	_add_stat("Fire rate", "%.2f/s" % (fire_rate * HardpointGun.fire_rate_factor(efficiency)))
 	_add_note(PERFORMANCE_NOTE if efficiency < 1.0 else PERFORMANCE_NOTE_INTACT)
 
 

@@ -30,6 +30,20 @@ extends Resource
 ## Empty (or an empty entry for a given cell/faction) falls back to
 ## get_hex_texture() for that cell, same texture repeated in every hex.
 @export var faction_hex_textures_per_cell: Array[Dictionary] = []
+## The closed-up version of this module's plate, drawn out in the world instead of
+## faction_hex_textures while the ordinary plate is a cutaway kept for the ship
+## builder.
+##
+## Only the Conduit has one so far, and the split exists for a specific reason:
+## its tile art is an open junction box showing the hub and all 18 clamp holes,
+## because the builder is where you inspect how a hull is wired. Flying past at
+## speed that same tile reads as a panel someone left off. The cover is the same
+## hex bolted shut.
+##
+## Empty for every other module, which simply means "the same plate on both
+## screens". Filled in automatically by FactionArtImporter.apply_hex_art from
+## whatever "<base_name>_cover" files exist — see FactionArtImporter.COVER_SUFFIX.
+@export var faction_hex_cover_textures: Dictionary = {}
 ## The emissive half of a module's art: the lit windows, indicator strips and
 ## emitter rings, authored as a separate layer over a transparent background and
 ## drawn additively on top of the base plate (see ShipLayoutRenderer's glow
@@ -140,6 +154,19 @@ func get_hex_texture_for_cell(faction_id: String, cell_index: int) -> Texture2D:
 		if texture != null:
 			return texture
 	return get_hex_texture(faction_id)
+
+
+## The plate to draw out in the world: the closed-up cover if this module has one,
+## otherwise the same art the builder shows (see faction_hex_cover_textures).
+##
+## A cover is a single image for the whole module rather than one per cell — no
+## multi-hex module has needed one, and inventing the per-cell shape before there
+## is art for it would only be guessing at how it would be sliced.
+func get_flight_hex_texture_for_cell(faction_id: String, cell_index: int) -> Texture2D:
+	var cover: Texture2D = faction_hex_cover_textures.get(faction_id, null)
+	if cover != null:
+		return cover
+	return get_hex_texture_for_cell(faction_id, cell_index)
 
 
 ## The second-layer texture to draw on top of get_hex_texture(), if any —

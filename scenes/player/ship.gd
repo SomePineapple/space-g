@@ -288,6 +288,11 @@ const STARTER_PART_TYPE_IDS: Array[String] = [
 	# run.
 	ModuleCatalog.SALVAGER_HARDPOINT_TYPE_ID,
 	ModuleCatalog.GRAPPLE_MK1_TYPE_ID,
+	# Two conduits, so the opening hull can actually run a circuit out to
+	# something rather than only ever bolting parts against the reactor. One
+	# would teach nothing — a single conduit is indistinguishable from a plate.
+	ModuleCatalog.CONDUIT_TYPE_ID,
+	ModuleCatalog.CONDUIT_TYPE_ID,
 ]
 
 

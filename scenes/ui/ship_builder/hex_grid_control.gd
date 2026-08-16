@@ -74,6 +74,71 @@ const DASH_GAP: float = 4.0
 ## Fraction of the field's short side left as padding when fitting the grid.
 const FIT_MARGIN: float = 0.04
 
+# --- Power paths (docs/spaceg-phase-4-spec-rev3.md §5) ------------------------
+#
+# Drawn as four stacked passes per line — a dark underlay, a wide soft halo, the
+# body, and a bright core — which is the same trick the grapple chain uses to get
+# a cable that glows without a shader (see grapple_chain.gd). Widths and alphas
+# fall as brightness rises, so the line reads as light coming off a filament
+# rather than as four lines.
+#
+# **Colour is deliberately the builder's own cyan, not a new hue.** §5 names the
+# collision as the real constraint here: plating already carries faction origin,
+# and a second fill colour fights it until the player reads neither. So the
+# contrast comes from dimming the hull instead (POWER_SCRIM) and from the cyan
+# already established everywhere else on this screen as "UI, not ship".
+const POWER_UNDERLAY_WIDTH: float = 7.0
+const POWER_HALO_WIDTH: float = 5.0
+const POWER_BODY_WIDTH: float = 2.6
+const POWER_CORE_WIDTH: float = 1.1
+const POWER_UNDERLAY_COLOR: Color = Color(0.02, 0.05, 0.07, 0.55)
+const POWER_HALO_ALPHA: float = 0.16
+const POWER_BODY_ALPHA: float = 0.5
+const POWER_CORE_ALPHA: float = 0.95
+
+## Laid over the hull while the overlay is up, so the lines have something to
+## read against. Dim-everything-else, per §5 — not a tint on the paths.
+const POWER_SCRIM: Color = Color(0.0392, 0.0510, 0.0706, 0.45)
+
+## A charge running reactor -> part, which is the only thing that says which end
+## is the source. Two are in flight at once, half a cycle apart, so a long limb
+## never looks static.
+const POWER_PULSE_PERIOD: float = 1.6
+const POWER_PULSE_RADIUS: float = 2.6
+const POWER_PULSE_TRAIL: float = 0.16
+
+## A part with no route home. Marked rather than merely left un-lined: "nothing
+## feeds this" is the answer the overlay exists to give, and an absence is not an
+## answer the player can see.
+const POWER_DEAD_COLOR: Color = Color(0.85, 0.35, 0.28, 0.5)
+const POWER_DEAD_WIDTH: float = 1.6
+
+# --- Conduit wiring (docs/design_handoff_conduits/) ---------------------------
+
+## Half-length of the clamp tick, in cable widths.
+const CLAMP_TICK_SPAN: float = 0.75
+## The handoff's 2.6-3.4s "powered" loop, one period per circuit so the three
+## never breathe in step.
+const WIRE_PULSE_PERIODS: Array[float] = [2.6, 3.0, 3.4]
+const WIRE_PULSE_MIN_ALPHA: float = 0.35
+
+var _wire_time: float = 0.0
+
+## Whether the supply lines are up. Toggled from the builder's bottom bar.
+var show_power_paths: bool = false:
+	set(value):
+		if show_power_paths == value:
+			return
+		show_power_paths = value
+		_power_solution = {}
+		queue_redraw()
+
+## PowerGrid.solve()'s result, recomputed on refresh() rather than in _draw():
+## _draw runs every frame while anything pulses, and walking the hull graph there
+## would be the same waste the socket cache exists to avoid.
+var _power_solution: Dictionary = {}
+var _power_time: float = 0.0
+
 var _center: Vector2
 ## Empty in-bounds cells directly against the hull, and the subset of those the
 ## currently selected module could actually be placed over. Both are recomputed
@@ -151,6 +216,10 @@ func _make_radial_texture(inner: Color, outer: Color, inner_offset: float) -> Gr
 
 func _process(delta: float) -> void:
 	_pulse_time = fposmod(_pulse_time + delta, PULSE_PERIOD)
+	_power_time = fposmod(_power_time + delta, POWER_PULSE_PERIOD)
+	# Not wrapped to one period: the three circuits have different ones, and each
+	# folds this down itself (see _wire_pulse).
+	_wire_time = fposmod(_wire_time + delta, 1000.0)
 	queue_redraw()
 
 
@@ -159,9 +228,153 @@ func _draw() -> void:
 	_draw_frame()
 	_draw_sockets()
 	_draw_placements()
+	# Between the plating and the hardpoint art: the cable is bedded into the
+	# conduit's channel, so it sits over the tile, but a turret bolted on top of a
+	# hex is above its own wiring.
+	_draw_conduit_wires()
 	_draw_hardpoint_overlays()
+	# Over the plating and the hardpoint art — a supply line runs through the hull,
+	# so anything it passes under would read as the hull being in front of it — but
+	# under the vignette and the placement preview, which are the screen's frame and
+	# the player's current action respectively and outrank an inspection overlay.
+	_draw_power_paths()
 	_draw_vignette()
 	_draw_preview()
+
+
+## The wire actually laid into the hull: one spoke per live face of every conduit
+## and the reactor, in its circuit's colour, in its own lane.
+##
+## Always drawn, unlike the POWER PATHS overlay — this is the ship's own cabling,
+## not an inspection mode. A player should be able to look at a hull and see which
+## way the red circuit runs without pressing anything.
+##
+## Four stacked strokes per spoke, per the handoff: a dark recessed channel, the
+## cable bedded in it, a clamp tick across the midpoint, and a thin highlight core
+## whose opacity breathes to read as powered.
+func _draw_conduit_wires() -> void:
+	if layout == null:
+		return
+	if _power_solution.is_empty():
+		_power_solution = PowerGrid.solve(layout)
+	var wire: Array = _power_solution["wire"]
+	if wire.is_empty():
+		return
+
+	var channel_width: float = PowerGrid.wire_width(PowerGrid.WIRE_CHANNEL_WIDTH, cell_size)
+	var cable_width: float = PowerGrid.wire_width(PowerGrid.WIRE_CABLE_WIDTH, cell_size)
+	var highlight_width: float = PowerGrid.wire_width(PowerGrid.WIRE_HIGHLIGHT_WIDTH, cell_size)
+
+	for segment: PowerGrid.Segment in wire:
+		# One straight stroke per run, clamp to clamp, rather than a half from each
+		# hex meeting at the seam: the reactor and the conduit clamp their lanes at
+		# different widths, so two straight halves still met at an angle.
+		var from_part: ModulePlacement = layout.get_placement_at(segment.from_cell)
+		var ends: PackedVector2Array = PowerGrid.segment_ends(segment,
+			_axial_to_pixel(segment.from_cell), _axial_to_pixel(segment.to_cell), cell_size)
+		# Each end rides the nudge of whichever plate it is bolted to (see
+		# _draw_placements): the clamp is a hole painted on that plate, so a cable
+		# laid on the un-nudged grid stops a few pixels beside the hole it is aimed
+		# at — which is the whole size of the offset.
+		var start: Vector2 = _jittered(ends[0], from_part)
+		var end: Vector2 = _jittered(ends[1], layout.get_placement_at(segment.to_cell) \
+			if segment.to_hardware else from_part)
+		draw_line(start, end, PowerGrid.WIRE_CHANNEL_COLOR, channel_width, true)
+		draw_line(start, end, PowerGrid.CIRCUIT_CABLE[segment.circuit], cable_width, true)
+		_draw_clamp_tick(start, end, cable_width)
+		draw_line(start, end, BuilderTheme.with_alpha(
+			PowerGrid.CIRCUIT_HIGHLIGHT[segment.circuit], _wire_pulse(segment.circuit)),
+			highlight_width, true)
+
+
+## A point moved onto the plate as that plate is actually drawn (see
+## _draw_placements for the nudge itself).
+func _jittered(point: Vector2, placement: ModulePlacement) -> Vector2:
+	if placement == null:
+		return point
+	return HullPaint.jittered_point(point,
+		_center + HullPaint.part_centroid(layout, placement, cell_size),
+		HullPaint.part_offset(placement.instance, cell_size),
+		HullPaint.part_rotation(placement.instance))
+
+
+## The small perpendicular clamp holding a cable into its channel, at the midpoint
+## of the run.
+func _draw_clamp_tick(start: Vector2, end: Vector2, cable_width: float) -> void:
+	var along: Vector2 = end - start
+	if along.is_zero_approx():
+		return
+	var across: Vector2 = along.normalized().orthogonal() * cable_width * CLAMP_TICK_SPAN
+	var middle: Vector2 = start.lerp(end, 0.5)
+	draw_line(middle - across, middle + across, PowerGrid.WIRE_CHANNEL_COLOR,
+		maxf(cable_width * 0.35, 1.0), true)
+
+
+## "Powered" breathing, staggered per circuit so the three never pulse in unison —
+## a hull whose whole loom brightens at once reads as one flashing object rather
+## than as three separate circuits.
+func _wire_pulse(circuit: int) -> float:
+	var period: float = WIRE_PULSE_PERIODS[circuit]
+	var phase: float = fposmod(_wire_time, period) / period
+	return lerpf(WIRE_PULSE_MIN_ALPHA, 1.0, 0.5 + 0.5 * sin(phase * TAU))
+
+
+## The supply lines, reactor outward. See the POWER_* constants for why it is
+## four passes and why the contrast comes from dimming the hull rather than from
+## a second hue.
+func _draw_power_paths() -> void:
+	if not show_power_paths or layout == null:
+		return
+	if _power_solution.is_empty():
+		_power_solution = PowerGrid.solve(layout)
+
+	draw_rect(Rect2(Vector2.ZERO, size), POWER_SCRIM)
+	_draw_dead_parts()
+
+	for route: PowerGrid.Route in _power_solution["routes"]:
+		var points := PackedVector2Array()
+		for cell in route.cells:
+			points.append(_axial_to_pixel(cell))
+		var line: PackedVector2Array = PowerGrid.smooth(points)
+		if line.size() < 2:
+			continue
+
+		draw_polyline(line, POWER_UNDERLAY_COLOR, POWER_UNDERLAY_WIDTH, true)
+		draw_polyline(line, BuilderTheme.with_alpha(BuilderTheme.CYAN, POWER_HALO_ALPHA),
+			POWER_HALO_WIDTH, true)
+		draw_polyline(line, BuilderTheme.with_alpha(BuilderTheme.CYAN, POWER_BODY_ALPHA),
+			POWER_BODY_WIDTH, true)
+		draw_polyline(line, BuilderTheme.with_alpha(BuilderTheme.CYAN_BRIGHT, POWER_CORE_ALPHA),
+			POWER_CORE_WIDTH, true)
+		_draw_power_pulses(line)
+
+
+## Two charges per line, half a cycle apart, each with a short fading trail behind
+## it. The trail is what gives the pulse a direction at a glance; a bare dot
+## travelling a curve reads as ambiguous at this size.
+func _draw_power_pulses(line: PackedVector2Array) -> void:
+	var phase: float = _power_time / POWER_PULSE_PERIOD
+	for offset in [0.0, 0.5]:
+		var head: float = fposmod(phase + offset, 1.0)
+		for step in 4:
+			var trail: float = head - POWER_PULSE_TRAIL * (float(step) / 4.0)
+			if trail < 0.0:
+				continue
+			var fade: float = 1.0 - float(step) / 4.0
+			draw_circle(PowerGrid.point_at(line, trail),
+				POWER_PULSE_RADIUS * fade,
+				BuilderTheme.with_alpha(BuilderTheme.CYAN_BRIGHT, 0.9 * fade * fade))
+
+
+## Parts with no route back to a reactor, outlined rather than filled — a fill
+## would fight the plating the outline is meant to leave readable.
+func _draw_dead_parts() -> void:
+	for placement in layout.placements:
+		if not _power_solution["unpowered_ids"].has(placement.placement_id):
+			continue
+		for cell in layout.get_occupied_cells(placement):
+			_stroke_polygon(_hex_corners(_axial_to_pixel(cell)),
+				POWER_DEAD_COLOR, POWER_DEAD_WIDTH)
 
 
 func _draw_field_glow() -> void:
@@ -524,6 +737,9 @@ func clear_preview() -> void:
 
 func refresh() -> void:
 	_recompute_sockets()
+	# Every reason to refresh is also a reason the supply lines may have moved:
+	# a part placed, removed or rotated changes what conducts and what is fed.
+	_power_solution = {}
 	queue_redraw()
 
 

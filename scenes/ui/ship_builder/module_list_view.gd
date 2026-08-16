@@ -260,6 +260,11 @@ func _build_row(key: String) -> Control:
 
 func _detail_text(instance: ModuleInstance) -> String:
 	var text: String = "%s · %d%%" % [instance.serial, roundi(instance.condition_fraction * 100.0)]
+	# The condition figure alone would show a permanently capped part as pristine,
+	# which is exactly the mistake this row is read to avoid — picking a part out
+	# of the hold expecting full output from it.
+	if instance.ever_field_attached:
+		text += " · refitted %d%%" % roundi(ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)
 	if instance.kill_count > 0:
 		text += " · %d kills" % instance.kill_count
 	return text

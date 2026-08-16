@@ -245,17 +245,39 @@ func _efficiency() -> float:
 	return _shooter.get_module_efficiency(source_placement_id)
 
 
+## How much of an efficiency shortfall lands on rate of fire; damage carries the
+## rest. At 0.5, a gun down to 60% efficiency cycles at 80% of its rated rate.
+##
+## Rate of fire is deliberately the *gentler* of the two. A worn gun should read
+## as one that still cycles roughly normally but hits soft, rather than one that
+## has gone quiet — a weapon whose rate collapses stops feeling like a weapon,
+## and at these efficiencies the gaps between shots would be long enough to look
+## like a jam.
+const FIRE_RATE_WEAR_SHARE: float = 0.5
+
+
+## What rate of fire an efficiency leaves. Static so the ship builder's part card
+## can quote the same figure the gun will actually cycle at without reproducing
+## the rule (see BuilderPartCard._add_weapon_stats).
+static func fire_rate_factor(efficiency: float) -> float:
+	return 1.0 - (1.0 - efficiency) * FIRE_RATE_WEAR_SHARE
+
+
 ## Damage this shot actually lands, after wear.
+##
+## Derived from the other two rather than declared: DPS is damage x rate, and DPS
+## is the number the player is given, so damage is whatever makes that product
+## come out at exactly the efficiency on the card. A part reported at 50% does 50%
+## of its rated damage per second — no interpretation, no second curve to learn.
 func _effective_damage() -> float:
-	return projectile_damage * _efficiency()
+	var rate: float = fire_rate_factor(_efficiency())
+	return projectile_damage * (_efficiency() / rate if rate > 0.001 else _efficiency())
 
 
 ## The gap until this gun may fire again, after wear. A beaten-up gun cycles
-## slower, so wear costs rate of fire and damage together rather than either
-## alone — halving one is a stat change, halving both is the part visibly
-## struggling.
+## slower as well as hitting softer — see FIRE_RATE_WEAR_SHARE for the split.
 func _shot_cooldown() -> float:
-	return 1.0 / maxf(fire_rate * _efficiency(), 0.001)
+	return 1.0 / maxf(fire_rate * fire_rate_factor(_efficiency()), 0.001)
 
 
 func fire() -> Projectile:

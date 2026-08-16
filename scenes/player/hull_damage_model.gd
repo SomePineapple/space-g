@@ -200,6 +200,11 @@ func _set_condition(placement: ModulePlacement, value: float) -> void:
 	# permanently left.
 	placement.instance.condition_fraction = clampf(value / max_condition, 0.0,
 		placement.instance.integrity) if max_condition > 0.0 else 0.0
+	# The high-water mark the hull's scars are drawn from. Recorded here because
+	# this is the one place condition is written, and never lowered: repairing a
+	# part fixes what it can do, not what has happened to it.
+	placement.instance.worst_condition_fraction = minf(
+		placement.instance.worst_condition_fraction, placement.instance.condition_fraction)
 
 	# The hull only redraws when its layout changes, but the cut-ready marker and
 	# the scar tier both depend on condition — without this they would not appear

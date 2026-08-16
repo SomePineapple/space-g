@@ -72,6 +72,16 @@ const NICKNAMES: Array[String] = [
 ## integrity is the scar.
 @export var integrity: float = 1.0
 
+## The worst this part's condition has ever been. Only ever falls, and nothing —
+## repair, regrowth, being unbolted and refitted — puts it back.
+##
+## This is what the hull's visible damage is drawn from (HullPaint.scar_tier), so
+## a breach stays a breach. Keyed off condition rather than integrity because the
+## question a scar answers is "how badly was this hit", not "how much life has it
+## lost": integrity moves a fraction as fast and bottoms out at MINIMUM_INTEGRITY,
+## so a part shot to the brink and patched up would otherwise look barely marked.
+@export var worst_condition_fraction: float = 1.0
+
 ## How far integrity is allowed to fall. Deliberately above
 ## HullPaint.CUTTABLE_CONDITION (0.30): a part worn past that point would sit
 ## permanently under the cut-ready threshold and wear the white slicer marker
@@ -93,6 +103,38 @@ const FULL_PERFORMANCE_CONDITION: float = 0.8
 ## hurting it, which is the trade.
 const MINIMUM_EFFICIENCY: float = 0.4
 
+## True when this part was bolted on away from a dock. A field refit is always
+## possible — that is the point, a part cut off a wreck should be usable there
+## and then — but it is always worse: no jig, no alignment, no proper power
+## coupling, so the mount itself costs FIELD_MOUNT_EFFICIENCY on top of whatever
+## the part's wear already costs (see efficiency()).
+##
+## A property of the current *mount*, not of the part: it is written on every
+## attach (ShipBuilderPanel) and cleared the moment the part comes off the hull
+## and re-enters the hold (Inventory.return_owned_module), so re-seating a
+## jury-rigged part at a station is what lifts it — as far as it goes, which is
+## not all the way back (see ever_field_attached).
+@export var field_attached: bool = false
+
+## Whether this part has *ever* been bolted on outside a dock. Only ever set,
+## never cleared: cutting a mount by hand deforms the mounting points, and no
+## amount of later work in a proper cradle makes them true again.
+##
+## This is what stops a field refit being a free option that a trip home undoes.
+## Bolting a part on out here is a real decision with a real price — the part is
+## permanently a REFITTED_MOUNT_EFFICIENCY part — weighed against carrying it
+## home instead, which costs hold space the whole way and leaves the slot on the
+## hull empty for the fight in between.
+@export var ever_field_attached: bool = false
+
+## What a field mount alone leaves the part delivering, and what the best
+## possible re-seat afterwards can get it back to. Deliberately hard round
+## numbers rather than curves: this is a decision the player makes at the moment
+## of attaching ("bolt it on now, or carry it home"), so both halves of it have
+## to be quotable before they commit.
+const FIELD_MOUNT_EFFICIENCY: float = 0.5
+const REFITTED_MOUNT_EFFICIENCY: float = 0.7
+
 ## Which faction's hull this part was cut off (see ShipPersonality.faction_id).
 ## Empty for a part that was fabricated rather than salvaged.
 @export var origin_faction_id: String = ""
@@ -104,6 +146,17 @@ const MINIMUM_EFFICIENCY: float = 0.4
 ## How many ships this specific part has killed. Credited to the gun that fired
 ## the fatal shot — see Ship.record_hardpoint_kill.
 @export var kill_count: int = 0
+
+## Whether this part currently has a power path back to a reactor.
+##
+## **Phase 4 prototype seam.** Nothing in the shipped game writes this — the only
+## writer is `scenes/prototypes/phase4_power_probe.gd`, the throwaway that tests
+## the Phase 4 bet before any of it is built for real (docs/spaceg-phase-4-spec-rev3.md
+## §6). It exists here rather than in the prototype because `is_cuttable` is a
+## static read on this object and the prototype cannot reach inside that.
+##
+## Delete this field with the prototype if the bet does not pay off.
+@export var powered: bool = true
 
 ## Nothing the player does can hurt this part: no weapon fire, no splash, and no
 ## Slicer cut. Set on scenery that exists to be *taken* rather than fought over —
@@ -147,18 +200,47 @@ static func _serial_prefix(type_id: String) -> String:
 	return type_id.substr(0, 2).to_upper()
 
 
-## How well a part still does its job, 0..1, derived from its wear. The one
-## place the curve lives — weapons, thrusters, reactors and batteries all read
-## this and then apply it to whatever "output" means for them.
+## How well a part still does its job, 0..1. The one place the curve lives —
+## weapons, thrusters, reactors and batteries all read this and then apply it to
+## whatever "output" means for them.
+##
+## Two independent things are multiplied together here, and deliberately so: how
+## beaten up the part is, and how well it is bolted on. A pristine part in a
+## jury-rigged mount and a worn part in a proper one are different problems with
+## different fixes (a dock visit; a new part), and stacking them means neither
+## hides the other.
 ##
 ## Deliberately derived rather than stored: condition is already the
 ## authoritative record of a part's damage, and a second field would be one more
 ## thing to keep in step with it across salvage, refit and repair.
 func efficiency() -> float:
+	return wear_efficiency() * mount_efficiency()
+
+
+## The wear half of efficiency() — what this part's condition alone costs it.
+func wear_efficiency() -> float:
 	if condition_fraction >= FULL_PERFORMANCE_CONDITION:
 		return 1.0
 	return lerpf(MINIMUM_EFFICIENCY, 1.0,
 		clampf(condition_fraction / FULL_PERFORMANCE_CONDITION, 0.0, 1.0))
+
+
+## The mount half of efficiency() — what the way it is bolted on costs it, and
+## what having once been bolted on badly still costs it.
+func mount_efficiency() -> float:
+	if field_attached:
+		return FIELD_MOUNT_EFFICIENCY
+	if ever_field_attached:
+		return REFITTED_MOUNT_EFFICIENCY
+	return 1.0
+
+
+## The best this part's mount can ever be again — 100% for one that has only been
+## fitted properly, REFITTED_MOUNT_EFFICIENCY for one that has been jury-rigged
+## at any point in its life. Quoted to the player *before* a field refit, since
+## that is the moment the ceiling drops.
+func mount_efficiency_ceiling() -> float:
+	return REFITTED_MOUNT_EFFICIENCY if ever_field_attached else 1.0
 
 
 ## What the builder calls this part: the type it is, plus which one it is.

@@ -322,9 +322,16 @@ func _ensure_stowed(instance: ModuleInstance) -> void:
 ## Returns an already-existing instance to the pool, its condition and origin
 ## intact — the ship builder's Remove action uses this instead of
 ## add_owned_module() so nothing tracked against that specific module is lost.
+##
+## The one thing that does *not* survive the trip is the field-mount penalty:
+## that describes a mount, and a part in the hold has none. Every way a part
+## comes off a hull ends here (unbolted in the builder, cut free and reeled in),
+## so this is the single place that has to say so.
 func return_owned_module(key: String, instance: ModuleInstance) -> void:
 	if not _owned_module_pool.has(key):
 		_owned_module_pool[key] = []
+	if instance != null:
+		instance.field_attached = false
 	_owned_module_pool[key].append(instance)
 	_ensure_stowed(instance)
 	owned_modules_changed.emit(get_all_owned_modules())

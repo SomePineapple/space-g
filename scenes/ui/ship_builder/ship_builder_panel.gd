@@ -14,11 +14,29 @@ const GRID_ROWS: int = 20
 
 const SAVE_DIRECTORY: String = "user://ships"
 
+## The two refits. Quoted as a percentage rather than as a name for the penalty,
+## because the number is the decision: a part on the hull at half output can
+## still be better than the same part in the hold doing nothing.
+##
+## Templates rather than finished strings — a `%` against another script's const
+## is not a constant expression, and the percentage is ModuleInstance's to state
+## (see _field_percent()), not this screen's to keep a second copy of.
+const DOCKED_PILL_TEXT: String = "DOCKED REFIT · FULL MOUNTS"
+const FIELD_PILL_FORMAT: String = "FIELD REFIT · %d%% NOW · %d%% CEILING"
+const FIELD_STATUS_FORMAT: String = \
+	"No dock in range — anything bolted on out here runs at %d%%, and a station can only ever bring it back to %d%%."
+
 ## There is no manufacturing on this screen. The list is the hold: every row is
 ## a part the player physically has, and building is putting those parts onto
 ## the hull. Parts come from combat, not from a button — see docs/direction.md
 ## §1. Inventory.research()/ModuleType.build_costs still exist and are simply
 ## unreached; nothing is deleted.
+
+## Forces this refit to count as a docked one wherever the ship happens to be.
+## Set by IntroDirector: the opening hands the player their first parts to bolt
+## on while adrift in a derelict, and starting the game with every module at half
+## output would teach the field penalty at the worst possible moment.
+@export var always_docked: bool = false
 
 var template_layout: ShipLayout
 var working_layout: ShipLayout
@@ -31,6 +49,15 @@ var _pending_rotation: int = 0
 var _has_hover: bool = false
 var _last_hover_hex: Vector2i = Vector2i.ZERO
 
+## Whether this refit counts as being done at a dock, and so whether parts bolted
+## on during it get a proper mount or a jury-rigged one.
+##
+## Snapshotted when the screen opens rather than tested per placement: the ship
+## keeps drifting while the builder is up, so a live check could silently flip
+## mid-refit and leave the player with two different classes of mount from one
+## session of clicking. One refit, one answer, stated on screen the whole time.
+var _docked: bool = false
+
 var _instruction_label: Label
 var _status_label: Label
 var _stat_strip: BuilderStatStrip
@@ -40,13 +67,21 @@ var _part_card: BuilderPartCard
 var _presets_card: BuilderPresetsCard
 var _save_name_edit: LineEdit
 var _cell_count_label: Label
+var _mount_pill: PanelContainer
+var _mount_label: Label
+var _power_button: Button
 
 
 func _init() -> void:
 	# Opening is handled below rather than by GamePanel's toggle_action, because
 	# this panel's own key also has to reach its in-panel hotkeys, and closing
 	# it applies the built layout.
-	requires_home_base = true
+	#
+	# No home-base gate: refitting out in the field is always allowed, because a
+	# part cut off a wreck is worth something *there*, not only after the trip
+	# home. Being near a dock no longer decides whether you can build — it decides
+	# how good the mount is (see _docked / ModuleInstance.field_attached).
+	requires_home_base = false
 	# The builder is a full-screen takeover with its own background and its own
 	# HP/MASS/EN/CARGO strip, so it has to sit above the gameplay HUD and the
 	# station prompt (both CanvasLayer 1) rather than letting them show through.
@@ -70,6 +105,8 @@ func _setup() -> void:
 ## it on close would wipe the ship's record of every fight it has been in, every
 ## time the player opened this screen.
 func _on_opened() -> void:
+	_docked = always_docked or is_near_home_base()
+	_refresh_mount_mode()
 	if ship == null or ship.ship_layout == null:
 		return
 	working_layout = ship.ship_layout.duplicate(true)
@@ -275,6 +312,7 @@ func _build_bottom_bar(root: Control) -> void:
 	bar.add_theme_constant_override("separation", 10)
 	root.add_child(bar)
 
+	bar.add_child(_build_mount_pill())
 	bar.add_child(_build_cell_count_pill())
 	bar.add_child(_make_action_button("ROTATE", BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
 		BuilderTheme.TEXT_BRIGHT, _on_rotate_pressed))
@@ -282,6 +320,7 @@ func _build_bottom_bar(root: Control) -> void:
 		BuilderTheme.WARN_TEXT_HOVER, _on_remove_pressed))
 	bar.add_child(_make_action_button("VALIDATE LAYOUT", BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
 		BuilderTheme.TEXT_BRIGHT, _on_validate_pressed))
+	bar.add_child(_build_power_button())
 
 	_status_label = BuilderTheme.mono_label(StationPrompt.PROMPT_TEXT, 12, BuilderTheme.TEXT_HINT)
 	_status_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -304,6 +343,80 @@ func _build_cell_count_pill() -> PanelContainer:
 	_cell_count_label = BuilderTheme.mono_label("0/0", 12, BuilderTheme.TEXT_BRIGHT)
 	pill.add_child(_cell_count_label)
 	return pill
+
+
+## Says which kind of refit this is, for as long as the screen is up. Sits at the
+## head of the bottom bar rather than in a transient message because the penalty
+## applies to every placement made this session, not to one of them — the player
+## should not have to remember a line that scrolled away three parts ago.
+func _build_mount_pill() -> PanelContainer:
+	_mount_pill = PanelContainer.new()
+	_mount_pill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_mount_label = BuilderTheme.mono_label("", 12, BuilderTheme.TEXT_BRIGHT)
+	_mount_pill.add_child(_mount_label)
+	_refresh_mount_mode()
+	return _mount_pill
+
+
+func _refresh_mount_mode() -> void:
+	if _mount_pill == null or _mount_label == null:
+		return
+
+	var tint: Color = BuilderTheme.CYAN if _docked else BuilderTheme.WARN
+	_mount_label.text = DOCKED_PILL_TEXT if _docked \
+		else FIELD_PILL_FORMAT % [_field_percent(), _refitted_percent()]
+	_mount_label.add_theme_color_override("font_color",
+		BuilderTheme.TEXT_BRIGHT if _docked else BuilderTheme.WARN_TEXT)
+	_mount_pill.add_theme_stylebox_override("panel", BuilderTheme.padded(
+		BuilderTheme.flat_style(BuilderTheme.with_alpha(tint, 0.14),
+			BuilderTheme.with_alpha(tint, 0.55), BuilderTheme.RADIUS_MEDIUM), 12.0, 8.0))
+
+	if _status_label != null:
+		_status_label.text = StationPrompt.PROMPT_TEXT if _docked \
+			else FIELD_STATUS_FORMAT % [_field_percent(), _refitted_percent()]
+		_status_label.add_theme_color_override("font_color",
+			BuilderTheme.TEXT_HINT if _docked else BuilderTheme.WARN_TEXT)
+
+
+static func _field_percent() -> int:
+	return roundi(ModuleInstance.FIELD_MOUNT_EFFICIENCY * 100.0)
+
+
+static func _refitted_percent() -> int:
+	return roundi(ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)
+
+
+## Toggles the supply-line overlay on the hull (see HexGridControl.show_power_paths).
+##
+## A toggle rather than a hold, and a separate button rather than a mode the
+## screen sits in: §5 of the Phase 4 spec asks for an overlay *inside* the build
+## screen, not a second destination, and the player needs both hands free to keep
+## placing parts while it is up.
+func _build_power_button() -> Button:
+	_power_button = Button.new()
+	_power_button.text = "POWER PATHS"
+	_power_button.toggle_mode = true
+	_power_button.focus_mode = Control.FOCUS_NONE
+	_power_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_power_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	BuilderTheme.style_button(_power_button, BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
+		BuilderTheme.TEXT_BRIGHT)
+	_power_button.toggled.connect(_on_power_toggled)
+	return _power_button
+
+
+func _on_power_toggled(pressed: bool) -> void:
+	_grid.show_power_paths = pressed
+	if not pressed:
+		_report("Power paths hidden.")
+		return
+	var solution: Dictionary = PowerGrid.solve(working_layout)
+	var cold: int = solution["unpowered_ids"].size()
+	if cold == 0:
+		_report("Power paths: every part is fed.")
+	else:
+		_report("Power paths: %d %s with no route to a reactor (outlined red)."
+			% [cold, "part" if cold == 1 else "parts"])
 
 
 func _make_action_button(text: String, tint: Color, text_color: Color, hover_color: Color,
@@ -415,11 +528,34 @@ func _update_preview() -> void:
 
 	_grid.set_preview(candidate_cells, reason == "", type_id, _pending_rotation)
 
-	var part_name: String = _selected_part().display_name()
-	if reason == "":
-		_report("Ready to bolt %s on here." % part_name)
-	else:
-		_report("Cannot place %s here: %s" % [part_name, reason])
+	var part: ModuleInstance = _selected_part()
+	if reason != "":
+		_report("Cannot place %s here: %s" % [part.display_name(), reason])
+		return
+	# Quoted before the click rather than after it: the whole point of the field
+	# penalty is that it is a choice — and the ceiling half of it is irreversible,
+	# so a number that only appears once the part is on the hull is no use at all.
+	var wear: float = part.wear_efficiency()
+	if _docked:
+		if part.ever_field_attached:
+			_report("Ready to bolt %s on here — %d%%, its mounts capped at %d%% by an old field rig."
+				% [part.display_name(),
+					roundi(wear * ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0),
+					roundi(ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)])
+		else:
+			_report("Ready to bolt %s on here — %d%%, mounted properly."
+				% [part.display_name(), roundi(wear * 100.0)])
+		return
+
+	var field_output: int = roundi(wear * ModuleInstance.FIELD_MOUNT_EFFICIENCY * 100.0)
+	if part.ever_field_attached:
+		_report("Ready to field-rig %s here — %d%% now, %d%% if you re-seat it at a dock."
+			% [part.display_name(), field_output,
+				roundi(wear * ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)])
+		return
+	_report("Ready to field-rig %s here — %d%% now, and never above %d%% again, dock refit or not."
+		% [part.display_name(), field_output,
+			roundi(ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)])
 
 
 func _on_hex_clicked(hex_coord: Vector2i) -> void:
@@ -460,7 +596,20 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 	# The placement takes the exact object out of the hold — same serial, same
 	# wear, same history — rather than a fresh one of its type.
 	placed.instance = inventory.take_owned_instance(part.instance_id)
-	_report("Bolted on %s (%s)." % [part.display_name(), part.serial])
+	# Written on every attach, not only on field ones, so bolting a jury-rigged
+	# part back on at a dock is what clears it. The permanent half is only ever
+	# set — a part that has been field-rigged once stays a field-rigged part.
+	placed.instance.field_attached = not _docked
+	if not _docked:
+		placed.instance.ever_field_attached = true
+	if _docked:
+		_report("Bolted on %s (%s) — %d%% of rated output."
+			% [part.display_name(), part.serial, roundi(placed.instance.efficiency() * 100.0)])
+	else:
+		_report("Field-rigged %s (%s) — running at %d%%, and never better than %d%% again."
+			% [part.display_name(), part.serial,
+				roundi(placed.instance.efficiency() * 100.0),
+				roundi(placed.instance.mount_efficiency_ceiling() * 100.0)])
 	_pending_rotation = 0
 	_clear_selection()
 	_refresh()

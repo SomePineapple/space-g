@@ -26,6 +26,19 @@ const EXPORTS_ROOT: String = "res://resources/exports/"
 ## drawn additively over the plate so they can be blown past white.
 const LIGHTS_SUFFIX: String = "_lights"
 
+## What a closed-up plate is called: the base art name with this on the end.
+## "corporate_conduit_cover.png".
+##
+## Only a module whose ordinary plate is a *cutaway* needs one. The conduit's
+## tile shows its junction hub and every hole in it, which is what the ship
+## builder is for — but on a flying hull that is an open inspection panel with the
+## wiring hanging out. The cover is the same hex with the panel bolted shut, and
+## it is what the world draws (see ModuleType.get_flight_hex_texture_for_cell).
+##
+## Optional and automatic, exactly like the light maps: a module with no cover
+## file simply draws the same plate on both screens, which is every module but one.
+const COVER_SUFFIX: String = "_cover"
+
 
 ## Claims every art layer for one module type, in one call.
 ##
@@ -38,6 +51,7 @@ const LIGHTS_SUFFIX: String = "_lights"
 ##   <faction>_grapple_mk3_<q>_<r>.png         one plate per cell
 ##   <faction>_grapple_mk3_lights.png          whole-footprint light map
 ##   <faction>_grapple_mk3_<q>_<r>_lights.png  one light map per cell
+##   <faction>_grapple_mk3_cover.png           closed-up plate for flight
 ##
 ## The per-cell footprint is read off the module type rather than passed in.
 ## Call sites used to repeat the footprint constant they had just built the
@@ -53,6 +67,7 @@ static func apply_hex_art(module_type: ModuleType, base_name: String,
 	var cells: Array[Vector2i] = module_type.footprint_cells
 	module_type.faction_hex_textures = load_faction_textures(base_name)
 	module_type.faction_hex_textures_per_cell = load_faction_textures_per_cell(base_name, cells)
+	module_type.faction_hex_cover_textures = load_faction_textures(base_name + COVER_SUFFIX)
 	module_type.faction_hex_glow_textures = load_faction_textures(base_name + LIGHTS_SUFFIX)
 	module_type.faction_hex_glow_textures_per_cell = load_faction_textures_per_cell(
 		base_name, cells, LIGHTS_SUFFIX)

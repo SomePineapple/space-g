@@ -214,10 +214,15 @@ func _open_builder() -> void:
 	if _builder == null:
 		_begin_opening()
 		return
-	# The builder normally refuses to open away from a home base. The opening is
-	# the one place that gate is wrong: the player is nowhere, and being handed
-	# their ship to configure is the first thing that happens.
+	# Belt and braces: the builder no longer gates on a home base at all (being
+	# away from one costs mount quality now, not access), but the opening depends
+	# on this screen coming up with the player nowhere near a dock, so it is not
+	# left to another screen's default.
 	_builder.requires_home_base = false
+	# The opening refit is the fitting-out of the ship, not a field repair — the
+	# player is being handed a hull, not making the choice the field penalty is
+	# there to pose. See ShipBuilderPanel.always_docked.
+	_builder.always_docked = true
 	_builder.open()
 	# Boot and build talk over the builder rather than gating it: the player is
 	# free to start bolting parts on while the ship is still introducing itself.
@@ -304,6 +309,10 @@ func _on_voice_finished() -> void:
 
 func _begin_opening() -> void:
 	_beat = Beat.OPENING
+	# The fitting-out is over. Every refit from here is wherever the ship is,
+	# which for the rest of this region means out in the field.
+	if _builder != null:
+		_builder.always_docked = false
 	# Interrupts: any build instructions still queued are about a screen the
 	# player has just closed.
 	_play(launch_lines, true)

@@ -25,6 +25,14 @@ where present, and the JSON/HTML) before touching
 **`docs/design_handoff_grapple/` and `docs/design_handoff_controls_tutorial/`
 are the same for the grapple line and the first-time control hints** — read
 them before touching `scenes/player/salvage/` or `scenes/ui/tutorial/`.
+**`docs/design_handoff_conduits/` governs the Conduit tile, the reactor's
+grommet ring and how circuit runs are drawn** — read it before touching
+`scripts/ships/layout/power_grid.gd`. Note that it and
+`docs/spaceg-phase-4-spec-rev3.md` **contradict each other**: the spec's §4 and
+§10 say power flows through plain hull and explicitly forbid reintroducing
+"power conduits", and the handoff (which is newer, and which the user then
+asked for) makes conduits the only conductor. The handoff won. One of the two
+documents should be amended; neither has been.
 **`docs/performance.md`
 is required reading before writing or changing any `_draw()` loop, starfield
 or particle emitter** — it records why the 2D canvas renderer's lack of
@@ -38,7 +46,171 @@ needed again; if you need it, it's in git history / this file's prior
 versions. Design-reference docs (`docs/aienemies.md`, `docs/region_design.md`)
 remain the source of truth for the systems they cover, not this file.
 
-## Most recent session (first-time control hints, and three fixes to the opening)
+**How to read this file across the freeze.** The session logs below are a
+*record of what happened*, and many of them describe systems that were
+switched off afterwards — trading, crafting, credits, research, the upgrade
+tree, asteroid mining — or rebuilt into something else (the Mining Grinder is
+now the Salvager). They are history, not instructions, and are deliberately
+left as written. **"Where things stand" is the only section that claims to
+describe the game as it is now**; sections there that document a frozen
+system are marked **FROZEN**. If a session log and that section disagree, the
+session log is the old one.
+
+## Most recent session (field-attach mounts, weapon wear made linear, and the Phase 4 power grid + conduits)
+
+One long session in three parts. The third is much the biggest.
+
+### Field attachment and mount quality
+
+`ModuleInstance` gained `field_attached` / `ever_field_attached` and two
+constants: `FIELD_MOUNT_EFFICIENCY` (0.5) while jury-rigged, and
+`REFITTED_MOUNT_EFFICIENCY` (0.7) permanently thereafter, even once re-seated
+at a dock. `efficiency()` is now `wear_efficiency() * mount_efficiency()` —
+**two independent multiplicative factors, deliberately**, so a part's history
+and its condition are separate numbers rather than one blended one.
+
+The 0.7 ceiling was the user's call and is the point of the mechanic: bolting
+a part on in the field is always possible and always costs you something
+permanent, so waiting for a dock is a real trade against efficiency, mass,
+thrust, turn rate and storage.
+
+- `Inventory.return_owned_module()` is the single choke point for a part
+  leaving a hull, and clears `field_attached` but never `ever_field_attached`.
+- `ShipBuilderPanel.requires_home_base` is gone; `always_docked` is the
+  override the scripted opening uses so the fitting-out isn't penalised.
+
+### Weapon wear made linear (user correction)
+
+DPS was splitting wear across damage and fire rate as a square root, which is
+defensible and unreadable. The user's objection was that a player should be
+able to look at a number and know what it means. Now `HardpointGun` has
+`FIRE_RATE_WEAR_SHARE` (0.5): fire rate takes half the wear, and damage is
+scaled by whatever is left so that **DPS falls exactly linearly with
+efficiency**. Don't reintroduce a curve here without re-reading that exchange.
+
+### The power grid (`docs/design_handoff_conduits/`, `docs/spaceg-phase-4-spec-rev3.md`)
+
+New `scripts/ships/layout/power_grid.gd` (`PowerGrid extends RefCounted`) —
+pure data, no nodes, no drawing, so the builder and anything later read the
+same answer from the same place. `solve(layout)` returns routes, powered ids,
+unpowered ids, reactor ids and per-edge wire segments.
+
+**The load-bearing idea, and the one thing not to undo:** power and attachment
+are measured over *different* graphs. Attachment is walked from the **core**
+(`ShipLayout.find_unreachable_from_core`); power is walked from the
+**reactors**. If everything conducted, "this gun has one power path" and "this
+gun hangs on by one cell" would be the same sentence, and cutting that cell
+would knock the gun into space rather than leave it dark and attached — which
+is a mechanic the game already has. Prising the two apart is the whole point.
+
+**Only the Conduit conducts** (`PowerGrid.CONDUCTING_TYPE_IDS`). This was a
+mid-session correction from the user: plating conducting for free meant wiring
+was never a decision, because a hull is made of plating by definition. Armour
+is now inert, and reach costs hexes — a compact ship is cheap to power, a limb
+needs a run out to it, and every cell of that run is a cell not spent on armour
+and a thinner line to cut. New `conduit` module type in `ModuleCatalog`
+(single-cell, mass 0.2, health 35, 4 Iron + 6 Copper): deliberately light
+structure as well as wire, so a run is partial hull rather than a pure tax.
+
+Two traps found while building it, both fixed by rewriting the rule rather
+than patching the symptom:
+- `_draws_power` was originally "isn't a conductor", which was the same test as
+  "is a module" only while plating conducted. The moment it stopped, every hull
+  plate reported itself as an unpowered consumer. It is now derived from what a
+  part *does* (core, hardpoint, thrust, or charge capacity).
+- A reactor carries `energy_capacity_contribution`, so it classed as something
+  needing to be fed and drew a supply line to itself. Reactors are now excluded
+  explicitly.
+
+### Drawing the circuits (builder only)
+
+`HexGridControl` draws two separate things: the hull's **own cabling**, always
+on, and the **POWER PATHS** overlay behind a toggle. The cabling is four
+stacked strokes per run (recessed channel, cable, clamp tick, pulsing
+highlight), per the handoff.
+
+**This is drawn on the build screen only.** An in-flight wire layer
+(`HullWireLayer`) was built and then deleted at the user's request — at flight
+zoom the cables were finer than the hull's own seams and read as speckle across
+the plating. `ShipLayoutRenderer` carries a comment where it used to hook in,
+so "the builder shows wires and the ship doesn't" doesn't read as an oversight.
+
+**The geometry constants were measured off the art programmatically, not
+eyeballed, and the two tiles genuinely disagree.** The reactor's grommet ring
+clamps at reach 0.6765R with lanes ±0.1093R; the conduit's hub is a small
+hexagon whose 18 holes sit on its own six edges at apothem 0.2462R with lanes
+±0.0861R. A single shared lane constant — which is what the handoff's `CD_SLOT`
+amounts to — cannot land in both rings. That is why a run is now **one straight
+stroke from clamp to clamp** rather than two halves meeting at the shared edge:
+each half was straight and they still kinked where they met.
+
+Also here: circuits are fixed by what a part does (weapons red, propulsion and
+the core green, utility blue) with no player assignment step; the lane
+perpendicular is folded to `face % 3` so a colour keeps one physical side of
+the ship across a seam (the art is painted to match); and wire endpoints ride
+each plate's own jitter via the new `HullPaint.jittered_point`, because the
+clamp is a hole painted on the plate.
+
+### Conduit art, and a flight/builder split
+
+`corporate_conduit.png` is an open junction box showing the hub and all 18
+holes — right for the builder, wrong for a hull flying past at speed. So
+`FactionArtImporter` gained a `_cover` layer that works exactly like `_lights`:
+any `<base>_cover.png` is picked up automatically into
+`ModuleType.faction_hex_cover_textures`, and `get_flight_hex_texture_for_cell()`
+prefers it. `ShipLayoutRenderer` and `WreckageSpawner` ask for the flight plate;
+the builder, the parts list and the hold keep the cutaway. No per-module code.
+
+### Verified
+
+Live, in the running game: the flight hull draws the cover and the builder the
+cutaway; a hull forcing the hard case (reactor → two conduits, red/green/blue
+sharing the first run, blue leaving at the first junction and green at the
+second) draws cables that start in the correct coloured grommets, run parallel
+and separate cleanly; the flight renderer's children are scar + glow only.
+`scenes/prototypes/phase4_power_probe.gd`/`.tscn` is a **throwaway** probe for
+the Phase 4 §6 bet — every shortcut in it is marked `CHEAT`.
+
+### A tooling trap that cost real time twice
+
+After deleting a `class_name` script, **the editor kept reporting parse errors
+against lines that no longer contained the symbol** — `HullWireLayer` at
+`ship_layout_renderer.gd:80/114/116`, long after the file was clean. A
+filesystem scan, a reimport, and rewriting the file through the editor's own
+API all failed to clear it; the stale copy is held in the editor's in-memory
+`GDScript`, not in `.godot` (grep found nothing there). **The on-disk truth is
+a headless run** (`--headless --quit-after`), which was clean throughout, and
+the game itself came up live every time. If `project_run` reports `not_live`
+with these errors attached, check `editor_state` before believing it — the
+3-second helper window is often just too short, and the errors are noise.
+Restarting the editor is the only thing that clears them. This belongs in
+`docs/gotchas.md` and is not there yet.
+
+### An unresolved art report
+
+The user reported the new hexes shimmering in motion on the flying hull.
+Ruled out with evidence: `mipmaps/generate=true` is set on all three new
+`.import` files **and** the loaded textures were confirmed to carry real mip
+chains at runtime; every hex-drawing surface sets
+`TEXTURE_FILTER_LINEAR_WITH_MIPMAPS`; source edge antialiasing is identical
+(~2px) across every export. The one structural oddity is that the three new
+files are 666×768 where every other hex tile is 222×256.
+
+`process/size_limit=256` was set on `corporate_conduit_cover.png.import` so the
+flight tile imports at the house size (it is never drawn large — the builder
+uses the cutaway). **The same limit was tried on the reactor and reverted**,
+because an eight-frame sub-pixel sweep measuring per-pixel temporal variance
+could not show the change helping: the conduit bands moved +1.2%, the reactor
+−0.1%, and the control — untouched hull plates — moved +17.7%, which
+invalidates the test. **So the shimmer is not fixed and the cause is not
+established.** The standing hypothesis is content, not filtering: the cover
+carries three saturated indicator dots and a hard bar that are sub-pixel at
+flight scale. If so the in-architecture fix is to move those dots into a
+`corporate_conduit_cover_lights.png` so `HullGlowLayer` blooms them instead —
+the importer would pick it up with no code change — but that needs the art
+re-authored and was not done.
+
+## Session before that (first-time control hints, and three fixes to the opening)
 
 ### The control-hint panel (`docs/design_handoff_controls_tutorial/`)
 
@@ -114,7 +286,7 @@ health at 305 unchanged; a scripted cut still severed the prize; the freed
 piece came out with `lifetime 0` and survived being aged to 500s;
 `_power_down()` flipped the real system off.
 
-## Session before that (grapple rebuilt as a simulated chain; hull light maps and glow; the three laser bolt sprites)
+## Earlier session (grapple rebuilt as a simulated chain; hull light maps and glow; the three laser bolt sprites)
 
 Several related art/feel passes. `docs/design_handoff_grapple/` is the source
 of truth for the grapple, and `images_uploaded/Corporate Turret Lasers v2.dc
@@ -946,68 +1118,113 @@ what's below is what still matters for picking related work back up.
 
 ## Where things stand
 
-The vertical slice is well past the original milestone list: flight
-movement, camera, asteroids, a bounded explorable region with a home base, a
-working ship builder (save/load, build costs, energy stats), a resource-
-driven raw-material economy (Iron / Copper / Nickel / Titanium, see below),
-an energy system (reactors/batteries, thrust and weapon energy costs), a
-4-archetype pirate AI (Raider/Gunship/Missile Boat/Scout) with an
-Idle→Suspicious→Alert state machine, real per-module ship damage with wing
-detachment, data-driven world regions, asteroid size tiers/splitting, better
-AI navigation, a sweep-reveal radar paired with a long-range list scanner,
-four basic points of interest (pirate camp, distress signal, abandoned
-wreck, scenic formation), a single-target tractor beam that draws its
-target all the way to the beam itself, cargo storage capacity with a
-placeable Storage module, and a toggleable Mining Grinder that damages
-asteroids and breaks off collectible ore fragments of the asteroid's own
-material. **Version 0.1–0.4 of `Roadmap v.2-v.9.md` are done; Version 0.5
-(reverse engineering + Manufacturers) has real substance but
-Corporate/Ancient enemy ships are an explicitly deferred gap; Version 0.6
-(trading, station, warp gates, new locations, nebula) is essentially
-complete.** Radar (2.1), Scanner (2.2) and Points of Interest (2.3) are all
-implemented from a user-supplied "Phase 2" spec that isn't part of either
-tracked roadmap file; Tractor Beam (3.1), Storage capacity/module (3.2/3.3),
-the Mining Grinder (4.1), and Raw Materials (4.2) are from a separate, later
-user-supplied spec series (not either tracked roadmap file either) — see the
-sessions above for their current shape; Radar/Scanner numbers were revised
-multiple times in-session and are current, not first-draft. **Tractor Beam,
-Radar, Scanner and the Mining Grinder are hex modules** rather than fixed
-ship/HUD components — losing the hex disables the capability, and the
-starter ship carries one of each so default play is unaffected. **Cargo
-capacity is likewise a hex module** (Storage Container) but stacks
-additively on top of a baseline rather than gating a capability on/off —
-losing it just shrinks the cargo hold, it doesn't zero it out. The **Mining
-Grinder is a single-hex module** that's still both a spawned world node
-(like Tractor Beam) and player-toggled (**G**) rather than always-on — the
-only hardpoint with either property alone, let alone both. **The old Steel
-Alloy/Electronics/Reactor Components material set no longer exists anywhere
-in the project** — it was fully replaced by Iron/Copper/Nickel/Titanium
-(Phase 4.2), remapped across every build/upgrade/trade cost.
-**Self-collecting salvage (no Tractor Beam) now requires actually touching
-the Command Core, not just any hull hex** — a piece resting on an outer
-module stays uncollected until it drifts further in. **Phase 5 (Crafting &
-Construction Economy) is now implemented in full** — a user-supplied spec
-series, not part of either tracked roadmap file, same as the Phase 2/3/4
-specs before it: a crafting framework turning raw materials into 6
-intermediate components (5.1), ship-builder module placement reworked from
-"spend materials directly" to "own a built instance, place it for free"
-(5.2), and combat/wreck salvage that can hand out raw materials, crafted
-components, or damaged modules needing repair before use, instead of only
-ever raw materials (5.3). See the sessions above for full detail; **the old
-"spend build_costs at placement time" ship-builder model no longer
-exists** — `ModuleType.build_costs` is now a construction cost spent only
-when a module is *built* (crafted into owned stock), never at placement.
-**Module upgrades are ship-wide**, built against
-`docs/design_handoff_upgrade_tree/` and opened with the **U** key: seven
-system trees (Hull, Propulsion, Weapons, Power, Storage, Sensors, Mining),
-89 nodes, unlocks stored by id per category in `GameState`. The earlier
-per-`ModuleInstance` upgrade system (Phase 8.1) and the ship-wide
-`UpgradeManager`/`UpgradeCatalog` before it **both no longer exist anywhere in
-the project**. **No upgrade changes ship behaviour yet** — the handoff authors
-no stat modifiers, so unlocking spends resources and records the id and stops
-there; the effects pass is the next piece of work and the user is writing the
-upgrade list for it. See the Module upgrades section below for the wiring
-points.
+**This section describes the game after the Phase 0 freeze and the Phase 1
+work that followed. `docs/direction.md` is the authority; where anything
+below disagrees with it, it is wrong and should be fixed.** The subsections
+further down still document frozen systems in full detail — that is
+deliberate (the code is all still in the repo and Phase 5 decides what
+returns), but each is now marked, and a **FROZEN** subsection describes
+something the player currently cannot reach.
+
+### The loop as it actually is
+
+Killing things is the only source of anything. A fight leaves a wreck; the
+Salvager cuts a specific part off it; the Winch reels that part in; it goes
+into a hold of named objects; the ship builder bolts that same object onto
+the hull. That is the whole economy — there is no currency, no market, no
+crafting chain, and no research. Six of the seven Phase 0 freezes are what
+removed the alternatives, and they are not to be flipped back to unblock a
+task (`docs/direction.md` §3).
+
+Underneath that loop, unchanged by the freeze and still current: flight
+movement, camera, asteroids, bounded data-driven regions with a home base,
+a 4-archetype pirate AI (Raider/Gunship/Missile Boat/Scout) with an
+Idle→Suspicious→Alert state machine, per-module hex damage with wing
+severance, a sweep-reveal radar paired with the directional A-scope scanner,
+four points of interest, a single-target tractor beam, and the scripted
+opening in `intro_region.tscn`.
+
+### Phase 1 — where it got to
+
+`docs/direction.md` §4 lists six steps. Five are done:
+
+1. **Part instances — done.** `ModuleInstance` carries `instance_id`,
+   nickname/serial, origin faction + description, `kill_count`,
+   `condition_fraction`, `integrity`, `worst_condition_fraction`,
+   `field_attached`/`ever_field_attached` and `damage_immune`. Still pure
+   exported-primitive data, per the multiplayer rule.
+2. **Condition on the instance — done.** `HullDamageModel` converts to and
+   from absolute points at the boundary and is the only writer while a part
+   is mounted; condition survives a refit, a warp and the ship builder.
+3. **Wrecks persist — NOT done.** This is the one open step, and the biggest
+   gap in the plan. Slicer-cut parts no longer age out
+   (`CapturedTechPart.make_permanent()`), but the hulls themselves still go
+   away; persistent hulks are Phase 2.1 work that has not started.
+4. **Cutting — done.** `HardpointSlicer` ("Salvager"), a real 3.6s cut on a
+   part already damaged below `HullPaint.CUTTABLE_CONDITION` (0.30).
+5. **Cargo triage — done.** `ShipHold` (`scripts/ships/hold/ship_hold.gd`) is
+   a hold of named objects in bays, drawn with the parts' real hex art.
+6. **Mount it — done.** The builder places the exact recovered object, wear
+   and history intact.
+
+Built on top of Phase 1 since:
+
+- **Visible damage.** `HullScarLayer`/`HullScarPattern` draw append-only scar
+  tiers onto the plating from `worst_condition_fraction`, so a breach is
+  permanent even after the part is repaired.
+- **Field attachment.** A part can be bolted on anywhere, but away from a
+  dock it is jury-rigged: `ModuleInstance.FIELD_MOUNT_EFFICIENCY` (0.5) while
+  field-rigged, and `REFITTED_MOUNT_EFFICIENCY` (0.7) permanently thereafter
+  even once re-seated at a station. Stacks on top of wear rather than
+  replacing it.
+- **A power grid that is drawn but not yet wired to anything** — see its own
+  subsection below before assuming it does something.
+
+### The power grid (conduits) — **COSMETIC ONLY, nothing reads it**
+
+This is the most likely thing in the repo to be mistaken for a working system.
+It is modelled, drawn and reported on, and **no gameplay depends on it.**
+
+- `PowerGrid.solve()` is called from exactly three places, all off to one side:
+  `HexGridControl` (draws the cables and the POWER PATHS overlay),
+  `ShipBuilderPanel._on_power_toggled` (the overlay's status line), and the
+  throwaway probe scene. `Ship`, `HullDamageModel` and `HardpointBank` never
+  mention it. **A gun wired to nothing still fires at full rate.**
+- The one gameplay hook that exists is inert by design.
+  `HullPaint.is_cuttable()` makes an unpowered part cuttable at any condition —
+  the actual Phase 4 bet, "cut the supply line and take a 95% gun instead of
+  shooting it down to 12%". But `ModuleInstance.powered` defaults to `true` and
+  only `scenes/prototypes/phase4_power_probe.gd` ever writes `false`, so the
+  branch never fires in the shipped game. It is marked in-file as a prototype
+  seam; that is deliberate, not an unfinished edit.
+- **There are two disagreeing notions of "power" in the codebase.** The live
+  one is `ShipLayout.total_energy_generation()`: a single pool summing every
+  reactor, scaled per part by `_core_distance_energy_multiplier` — distance
+  from the **core**. That is what feeds the HUD and energy regen today.
+  `PowerGrid` measures connectivity to a **reactor**. Making power load-bearing
+  means reconciling these, not just calling `solve()` in flight.
+- **No authored layout contains a conduit.** Zero references across all 17
+  files in `resources/ships/`, and conduits are now the only conductor, so only
+  parts bolted directly onto a reactor cell are fed. An earlier count this
+  session put it at 58 of 91 consumers dark (worst: `warlord` 7/9; `lancer` and
+  `fang` entirely; `bastion` 6/8), and the starter hull reads 1/1 dark.
+  **Turning power on today would leave almost every ship in the game inert.**
+  Authoring conduit runs is the larger half of this job.
+
+### What no longer exists (don't go looking for it)
+
+- **The Mining Grinder module is gone.** It became the Salvager — same art
+  (`mining_grinder` sprite), a cutting tool instead of a rock-breaker. There
+  is no `HardpointGrinder` class any more, which means
+  `docs/frozen_systems.md`'s `HardpointGrinder.ORE_OUTPUT_FROZEN` row and the
+  matching row in `docs/direction.md` §3 both name a flag that no longer
+  exists. **Asteroids are now purely spatial** — scenery and obstacles.
+- **`Inventory.repair_module()` / `_captured_tech_totals` are gone.** They
+  were the identity leak Phase 1 existed to close: a captured part was a
+  per-type count, and "repairing" it built a brand-new instance. A recovered
+  part is now the same object throughout.
+- Steel Alloy / Electronics / Reactor Components — replaced by
+  Iron/Copper/Nickel/Titanium long before the freeze.
 
 ### Ship building (done, wired into the flyable ship)
 - Hex-grid (axial coordinates) layout data model under `scripts/ships/...`:
@@ -1028,26 +1245,38 @@ points.
   `ship_input.gd` polling. The placement preview renders the actual module
   texture at the real placement rotation under a pulsing dashed cyan/red
   valid-invalid outline.
-- **Phase 5.2 ownership model**: each module row is now **Craft** (spends
-  `ModuleType.build_costs` — materials and/or crafted components, see
-  Crafting below — to craft one owned-but-unplaced instance) plus
-  **Select/Place** (free; disabled until at least one instance is owned;
-  consumes one owned instance per placement). Removing a placed module
-  returns it to owned stock, not a raw-material refund. Owned counts live on
-  `Inventory` (`_owned_module_totals`, keyed by
-  `Inventory.owned_module_key(module_type_id, manufacturer_id)`), not on
-  `ShipLayout`/`ModulePlacement`. A fresh player ship is seeded with one
-  owned instance of every starter-loadout module type
+- **Ownership model (Phase 1.3, superseding Phase 5.2's craft-then-place).**
+  **There is no manufacturing on this screen.** Every row in the list is a
+  *specific part the player physically has* — the list is the hold — and
+  building is putting those objects onto the hull. Placing takes the exact
+  instance out of the pool (`Inventory.take_owned_instance`); unbolting
+  returns that same object to it (`return_owned_module`), serial, wear and
+  history intact. The pool lives on `Inventory` keyed by
+  `Inventory.owned_module_key(module_type_id, manufacturer_id)`. A fresh
+  player ship is seeded with one instance of every starter-loadout type
   (`Ship._seed_starter_owned_modules()`, first region of a session only) so
   stripping the starter ship down can never soft-lock rebuilding it.
-  Research (permanently unlocks a locked type) and Repair (converts one
-  captured/damaged part into an owned instance, see Salvage collection
-  below) are two buttons in the selected row's expansion strip — a locked type can
-  be researched without ever being repaired, and vice versa. Saving/loading
-  custom ships to disk works (saves the placement layout only, not owned
-  inventory).
+  `ModuleType.build_costs` and `Inventory.research()` still exist and are
+  simply unreached — nothing is deleted. Saving/loading custom ships to disk
+  works, with the known hole that a saved layout carries its own instances
+  (see `_load_current_name`).
+- **The builder opens anywhere.** Its home-base gate is gone: being near a
+  dock no longer decides whether you can build, it decides mount quality (see
+  Field attachment above). `ShipBuilderPanel.always_docked` is the override
+  the opening uses so the fitting-out is not penalised.
+- **INVENTORY tab** — the hold's bays, drawn as the parts' real hex plates,
+  plus whatever is on the end of the grapple. A towed part is picked up and
+  then placed into a bay, mirroring how the hull half works.
 
-### Economy / energy / cargo
+### Economy / energy / cargo — **partly FROZEN**
+
+> Materials and components still drop from kills and still fill the hold, but
+> **nothing spends them**: the trade market (`TradeMarketPanel.frozen`),
+> credits (`Hud.CREDITS_FROZEN`) and crafting are all frozen, and asteroid ore
+> is gone. Treat the material economy below as plumbing that currently runs
+> into a wall — do not build on it, and do not "fix" the fact that the hold
+> fills with things that have no use. Energy and cargo capacity are live and
+> unaffected.
 - **Raw materials (Phase 4.2)**: `scripts/economy/material_type.gd`
   (`MaterialType extends Resource` — id/display_name/color/icon [unused
   placeholder]/sell_price/buy_price/yield_multiplier) +
@@ -1086,7 +1315,13 @@ points.
   transient "STORAGE FULL" flash. Ship builder blocks removing a Storage
   module if current cargo would exceed the reduced capacity.
 
-### Crafting & construction economy (Phase 5)
+### Crafting & construction economy (Phase 5) — **FROZEN**
+
+> **Frozen Phase 0a** (`CraftingPanel.frozen`). The **K** key opens nothing.
+> Crafting chains turn objects into bulk material, which the thesis rules out
+> on principle (`docs/direction.md` §1). Components still drop from kills and
+> still occupy cargo; nothing consumes them. Kept below because the code is
+> untouched and Phase 5 decides what returns.
 - **Raw materials now include Glass** (`MaterialCatalog.GLASS`, 5th
   material) alongside Iron/Copper/Nickel/Titanium — no asteroid variant
   claims it as a primary, so it's only ever the existing uniform-random
@@ -1111,7 +1346,14 @@ points.
 - **Repair**: see the Salvage collection section below — converts a
   captured/damaged module part into a placeable owned instance.
 
-### Module upgrades (ship-wide trees)
+### Module upgrades (ship-wide trees) — **FROZEN**
+
+> **Frozen Phase 0a** (`UpgradeMenu.frozen`). The **U** key opens nothing and
+> "U: Upgrades" is gone from `StationPrompt.PROMPT_TEXT`. Not one of the 89
+> nodes has a stat effect, so it failed the scope test outright — it is the
+> largest piece of build that ran ahead of validation, and the cautionary
+> example the whole freeze exists around. **Wiring stat effects to it is no
+> longer the next piece of work; do not start it.**
 
 Source of truth: `docs/design_handoff_upgrade_tree/` (README + LAYOUT_SPEC +
 `upgrade_data.json`). Read the whole folder before changing this screen.
@@ -1161,37 +1403,36 @@ Source of truth: `docs/design_handoff_upgrade_tree/` (README + LAYOUT_SPEC +
   fixed node on `ship.tscn`). Sensors effects will need a pull-at-point-of-use
   mechanism, not the push-at-spawn one everything else uses.
 
-### Mining (Phase 4.1 Basic grinder, Phase 4.2 raw materials)
-- `scenes/player/hardpoint_grinder.gd`/`.tscn`: a **single-cell** hex module
-  (`hardpoint_category="grinder"`, `ModuleCatalog.SINGLE_CELL`),
-  **player-toggled** via `Ship.toggle_grinder()`/`is_grinder_active()`
-  (**G** — `ship_input.gd`), unlike every other passive hardpoint. While
-  toggled on and an `Asteroid` is within `contact_range` (55, from the
-  asteroid's own surface) of the Muzzle: drains `energy_cost_per_second` (7)
-  from the shared pool, applies `damage_per_second` (14) via plain
-  `Asteroid.take_damage()` (not `take_damage_at()` — no knockback while
-  held), and breaks off one `Salvage` ore fragment every `fragment_interval`
-  (1.0s) carrying whichever material `Asteroid.roll_ore_material()` rolls
-  for that specific rock (see Raw materials below) at
-  `fragment_yield_multiplier` (0.5 — deliberately *less* than a plain
-  kill-drop per fragment; tuned down from an initial 1.5 after live feedback
-  that mining filled cargo far too fast, see most recent session). Fragments
-  are ordinary `Salvage` nodes — the Tractor Beam, self-collection, and
-  cargo capacity all apply with zero extra code. Weapons aren't nerfed; the
-  grinder's edge is the fragments accumulating throughout a grind on top of
-  the asteroid's own final kill-drop, not any single fragment outsizing one.
-  The Muzzle exits from a **hex vertex, not the hex's face centre** —
-  `set_cell_size()` offsets it `cell_size * 1.15` at `-90°` off the module's
-  own face-normal rotation, matching the ship builder's placement-facing
-  arrow for the same `rotation_steps`. Starter ship carries one grinder at
-  hex `(2,1)`/`rotation_steps=1`.
-- **Raw materials (Phase 4.2)**: each `Asteroid` variant has one primary
-  material (`VARIANT_PRIMARY_MATERIAL`: Rocky→Iron, Rusty→Copper, Icy→Nickel,
-  Crystalline→Titanium), rolled `primary_material_chance` (0.8) of the time
-  by the public `roll_ore_material()` (used by both the grinder's fragments
-  and the asteroid's own on-death kill-drop, so a mined rock stays
-  materially consistent with itself); otherwise a uniform-random pick among
-  the other three.
+### Cutting parts free (the Salvager — what the Mining Grinder became)
+
+**`HardpointGrinder` no longer exists.** The module was rebuilt as
+`scenes/player/hardpoint_slicer.gd`/`.tscn` (`HardpointSlicer`, "Salvager",
+`hardpoint_category="salvager"`), keeping the `mining_grinder` hex art. The
+old mining behaviour is described in the compressed sessions above and is
+history, not instructions.
+
+- **A cut is a duration, not a damage rate.** `cut_duration` 3.6s of held
+  beam consumes the whole cuttable band, after a fixed 2.4s lock/spool ramp —
+  so every part takes the same wall-clock time regardless of its health pool.
+  `beam_range` 420 (10 hexes), 9 energy/sec.
+- **It can only open a seam damage has already started.** A part at or above
+  `HullPaint.CUTTABLE_CONDITION` (0.30) reports `"intact"` and the beam gives
+  its "cannot be opened" feedback. Guns are what make a part cuttable; the
+  Salvager is what takes it off. That is the intended division of labour.
+- **You cut the connector, not the prize.** The cut part is destroyed and
+  becomes debris; anything that loses its path to the core as a result is
+  severed *intact* at its current condition, with no capture roll
+  (`_clean_cut_active` → `WreckageSpawner.spawn_severed_piece(clean_cut)`).
+  Blowing a ship apart instead multiplies the recovered part's integrity by
+  `explosive_recovery_integrity` (0.6) — same prize, permanently worse.
+- Cut parts never age out, and a completed cut switches the system off.
+
+**Asteroids are scenery now.** `Asteroid.MINING_FROZEN` is true, so rocks
+drop nothing; `roll_ore_material()` and the per-variant primary-material
+table still exist behind the flag. Region asteroid densities in
+`resources/regions/*.tres` were tuned as a yield curve that no longer
+exists — that mismatch is deliberate, recorded in `docs/frozen_systems.md`,
+and re-tuning them back to the old spec would re-break the freeze.
 
 ### Salvage collection (Phase 3.1 Tractor Beam, Phase 3.2 capacity, Phase 4.1/4.2 mining + collection rework)
 - `scenes/player/hardpoint_tractor_beam.gd`/`.tscn`: a hex module
@@ -1223,14 +1464,17 @@ Source of truth: `docs/design_handoff_upgrade_tree/` (README + LAYOUT_SPEC +
   parallel path to the material versions. Asteroid mining/`HardpointGrinder`
   fragments never set `kind`, so mining stays material-only by
   construction; components are combat/wreck-exclusive — see Combat below.
-- **Damaged modules (Phase 5.3)**: a severed wing that survives with enough
-  condition and passes `ModuleType.capture_chance` becomes a
-  `CapturedTechPart` (pre-Phase-5 mechanic, `Inventory._captured_tech_totals`).
-  It's structurally never placeable on its own — only
-  `Inventory.repair_module()` (half the module's build cost, rounded up)
-  converts one into a real owned instance; `research()` is the other, older
-  way to spend one (permanently unlocks a locked type instead). Both draw
-  from the same pool but are otherwise independent.
+- **Recovered parts (Phase 1.3, superseding the Phase 5.3 description).** A
+  severed module becomes a `CapturedTechPart` **carrying the actual
+  `ModuleInstance` that was on the hull a frame ago**, and that object goes
+  into the owned pool unchanged — directly placeable, damage and origin and
+  kill count and all. `Inventory._captured_tech_totals` (a per-type count) and
+  `Inventory.repair_module()` (which built a brand-new instance) were the two
+  identity leaks `docs/direction.md` §4 named, and both are **deleted, not
+  frozen** — removing them was the fix. `ModuleListView`'s repair button
+  remains in the widget, permanently textless and therefore hidden.
+- Whether a shot-off part survives at all is still `ModuleType.capture_chance`
+  against `capture_health_fraction`; a Slicer cut skips that roll entirely.
 
 ### Combat
 - `hardpoint_gun.gd`/`hardpoint_missile_launcher.gd` + `missile.gd`:
@@ -1321,8 +1565,12 @@ ship's overall `Health` pool.
   gate themselves on `Ship.has_radar()`/`has_scanner()` every frame. The
   scanner panel covers the radar dial while open; that's the known cost of
   fitting a 388×568 instrument on a 1152×648 HUD.
-- `CreditsLabel` (top-right), plus the pre-existing damage vignette and
-  STORAGE FULL cue.
+- `CreditsLabel` (top-right) — **hidden**, `Hud.CREDITS_FROZEN`. The HUD
+  therefore no longer matches element 4 of `docs/HUD-1d-Godot-spec.md`; that
+  is a recorded consequence of the freeze, not a bug to fix. The control-hint
+  panel occupies that corner only because the readout is gone — if credits
+  ever return, `ControlHint.TOP_MARGIN` has to drop below y 42.
+- Plus the pre-existing damage vignette and STORAGE FULL cue.
 - `HudPalette` (`scenes/ui/hud_palette.gd`) is the one place HUD colours
   live — **except material dot colours, which come from
   `MaterialCatalog.color()` on purpose.**
@@ -1591,14 +1839,56 @@ ship's overall `Health` pool.
 
 ## Not yet started (no explicit user request yet — don't start without one)
 
+**Several entries in this list predate the freeze and assume systems that are
+now switched off.** Anything below that depends on trading, crafting, credits,
+research, upgrade effects or asteroid mining is *not* a gap to be filled — it
+is downstream of a deliberate decision (`docs/direction.md` §1). Those entries
+are kept for the Phase 5 review of the freeze list, not as work.
+
+The live gaps, in the order they matter:
+
+- **Persistent wrecks (Phase 1 step 3, the one unfinished step).** Hulls still
+  disappear; only cut parts persist. This is the biggest open item in the plan.
+- **Severed parts and the ship-builder grid draw no scars.** `DriftingHexPiece`
+  and the builder's hex grid each draw their own hexes and never call
+  `HullScarLayer`, so a battered part looks factory-fresh the moment it comes
+  off the hull — exactly where its history should be most visible.
+- **A dock as a real place.** "Docked" is currently proximity to the
+  `home_base`-group marker within 300 units. The station the field-attach
+  penalty is written against does not exist yet; building it means joining that
+  group, nothing more.
+- **Removing a part in the field is unpenalised.** The field-attach design says
+  a dock is also where things come off *cleanly*; only the attach half was
+  built. Deliberate — the success criteria covered attaching — but it is a
+  known asymmetry, not an oversight.
+- **`FIELD_MOUNT_EFFICIENCY` (0.5) and `REFITTED_MOUNT_EFFICIENCY` (0.7) are
+  unplayed numbers**, as is the mass-scaled turn-rate falloff
+  (`Ship.handling_mass_falloff`).
+- **Conduit runs on the 17 authored layouts.** None has one, so power cannot be
+  switched on without every enemy going dark. This gates the whole Phase 4 bet
+  and is a content job, not a code one.
+- **Power isn't wired to anything.** See the power-grid subsection above: the
+  flight game never solves the grid, `ModuleInstance.powered` is never written
+  false, and `PowerGrid` disagrees with the pooled `total_energy_generation()`
+  model that is actually live.
+- **The conduit hub's 18 grommet holes don't fill with circuit colour.** The
+  handoff §2 asks for a live hole to take its circuit's colour; the cables are
+  drawn but the holes underneath them are still painted as drilled metal.
+- **The new hexes shimmer in motion on the flying hull and it is unexplained.**
+  Mipmaps and filtering were ruled out with runtime evidence; the resolution
+  fix could not be shown to help. See the session log for the measurement and
+  the light-map hypothesis.
+
+Pre-freeze entries, retained for the Phase 5 review:
+
 - **Corporate or Ancient enemy ships.** Explicitly deferred by the user
   ("we can do the enemy ships later") — every enemy in `scenes/enemies/` is
   currently a Pirate variant or the generic missile cruiser, so faction
   identity never actually shows up in combat for the other two factions.
 - Faction-specific/unique salvage — materials are fully generic across all
   three factions.
-- Buying from a known manufacturer once discovered — the trading system
-  exists now (Version 0.6) but nothing wires manufacturer purchase into it.
+- ~~Buying from a known manufacturer once discovered~~ — **ruled out.** A
+  buy/sell market is excluded on principle, not deferred (`direction.md` §1).
 - Severability audit for `pirate_light_two`/`pirate_heavy_one` — only
   `pirate_light_one` was fixed for the "zero severable points" blob issue.
 - Reactor/Battery/other non-engine/weapon modules have no mechanical effect
@@ -1675,9 +1965,9 @@ ship's overall `Health` pool.
 - Component drops for the other 6 of `derelict_station.tscn`'s 9 salvage
   nodes, and for `PirateCamp`/other POIs that still only drop material —
   only 3 of the 9 got hand-authored component overrides this session.
-- **Stat effects for any upgrade** — all 89 nodes cost resources and unlock,
-  and none of them change ship behaviour. This is the next planned piece and
-  the user is authoring the upgrade list for it.
+- ~~**Stat effects for any upgrade**~~ — **no longer the next piece of work.**
+  The tree is frozen precisely *because* no node has an effect; adding effects
+  now would be unfreezing it by the back door. Phase 5 decides its fate.
 - Sensors effects specifically need a pull-at-point-of-use mechanism first —
   see "Decisions made" above for why Radar/Scanner are different from every
   other hardpoint, not just an oversight.
@@ -1698,12 +1988,38 @@ ship's overall `Health` pool.
 ## Suggested next step
 
 No specific next item has been chosen yet. Candidates on the table, most
-relevant first:
-- **Play the opening end to end.** It is now the most-changed and
-  least-played path in the game: five of the six control hints have never been
-  seen firing, the Salvager's power-down on a completed cut changes how cutting
-  feels, and the salvage target is newly invulnerable. One run answers all
-  three.
+relevant first.
+
+**`docs/direction.md` §4 "Step 0: play the game for ten minutes" is still the
+standing instruction, and it has not been done.** The loop is much thinner
+than the last version anyone played, and several systems below have been
+verified only by scripted `game_eval` checks. Building further on an unfelt
+loop is how the upgrade tree happened.
+
+- **Play the opening end to end.** It is the most-changed and least-played
+  path in the game: five of the six control hints have never been seen firing,
+  the Salvager's power-down on a completed cut changes how cutting feels, the
+  salvage target is newly invulnerable, and the whole cut → tow → stow → bolt
+  chain now runs through the field-attach penalty.
+- **Decide what the power grid is for, before building more of it.** It is
+  fully drawn and reads on nothing (see "The power grid" under "Where things
+  stand"). The two live questions are whether `PowerGrid` replaces or coexists
+  with the pooled `total_energy_generation()` model, and who writes
+  `ModuleInstance.powered` in flight — it has to re-solve when `HullDamageModel`
+  severs a conduit, which is the entire mechanic. Authoring conduit runs across
+  the 17 layouts has to land in the same stretch or every enemy goes dark.
+- **Finish Phase 1 step 3: persistent wrecks.** The one incomplete step of the
+  phase, and the thing every "wrecks are world objects" note in
+  `direction.md` §2 is written against.
+- **Reconcile the conduits handoff with the Phase 4 spec.** They contradict
+  each other on whether conduits should exist at all (see the top of this
+  file). Cheap, and it will cost a future session real time if left.
+- **Scar the parts that aren't on a hull.** Severed pieces and the builder
+  grid draw their own hexes and show no damage, which undercuts the one system
+  built specifically to make a part's history visible.
+- **Play the field-attach trade-off.** 50% now / 70% forever are reasoned
+  numbers with no play behind them; the same goes for the heavier turn-rate
+  falloff on big hulls.
 - **Build the pause/escape menu with the "tooltips" switch**, which is what the
   control-hint statics were written for — `ControlHint.set_enabled()` and
   `reset_seen()` are waiting. The user asked for this to be tied in
@@ -1712,10 +2028,6 @@ relevant first:
   longer expire at all; a player who cuts a lot and collects nothing will
   accumulate them for the session. A long timer instead of none is the obvious
   alternative if it becomes clutter.
-- **Wire stat effects to the upgrade trees.** The user is authoring the
-  upgrade list; hooking it up is the agreed next task. Wiring points are in
-  the Module upgrades section above. Until it's done, unlocking is a
-  resource sink with no gameplay payoff.
 - **Look at the rebuilt screens and the HUD in motion.** The ship builder,
   the upgrade screen, the scanner instrument and the HUD were all verified by
   `game_eval` plus screenshots, but nobody has clicked or dragged through any
@@ -1729,34 +2041,9 @@ relevant first:
   while it's up.
 - **A real human playtest of the refactor** — four tranches reshaped the ship's
   internals and every input path, verified only by scripted checks. Fly it,
-  fight something, mine, build a ship, warp. This outranks everything below.
+  fight something, cut a part off, build a ship, warp.
 - **Commit tranche 4** if it is still uncommitted, and decide whether the
   deferred `LootTable` Resource (see tranche 3) is worth doing now.
-- **Playtest the upgrade screen once effects exist** — the tree's costs and
-  branch structure come straight from the design handoff and have never been
-  balanced against the game's actual material economy.
-- **A real human playtest of the whole Phase 5 crafting/construction/salvage
-  economy** — recipe ratios, the 4 rewritten module construction costs,
-  repair's half-cost rule, and every per-archetype drop chance are all
-  first-pass numbers reached by design reasoning (see "Still open from this
-  session" above), not a single minute of human play.
-- **A real human playtest of the whole Phase 4.2 economy + collection
-  rework** — raw material yield rates (`MaterialType.yield_multiplier`),
-  the retuned Grinder fragment yield (0.5x), the Tractor-Beam-pulls-to-
-  Muzzle change, and the Core-touch-required self-collection change were
-  all verified via scripted `game_eval` checks this session (numeric
-  before/after comparisons, distance checks), not flown by a human. Worth
-  confirming mining pacing feels right now, and that requiring the Core
-  specifically for un-beamed pickup doesn't feel punishing in practice.
-- Playtest the Mining Grinder for real feel — `contact_range` (55),
-  `damage_per_second` (14), and `energy_cost_per_second` (7) are still
-  first-pass numbers (only `fragment_yield_multiplier`/`fragment_interval`
-  were touched this session). Also worth deciding whether "one generic
-  mining speed (upgradable?)" should get an actual upgrade tier now that
-  the base tool exists.
-- Material sell/buy prices and `yield_multiplier` values (Iron/Copper/
-  Nickel/Titanium) are first-pass, not tuned against real trading play —
-  worth a pass once the base collection rates above feel right.
 - A real playtest pass on Radar (1800) / Scanner (3000) range and the
   scanner's beam-width / 6s-cooldown / 5-result-cap feel, now that both have
   been corrected several times by feel rather than tuned in one deliberate
@@ -1785,9 +2072,10 @@ relevant first:
   session).
 - Playtest cargo capacity/Storage module for real feel — 160 starting
   capacity, 60/module, 100 base were first-pass numbers, not tuned against
-  actual play (how fast salvage fills a hold on a real run, whether hitting
-  "STORAGE FULL" happens often enough to matter). Also exercise the ship
-  builder's Storage removal-block and Cargo/used stats readout through the
-  actual UI — verified by code review this session, not clicked through.
+  actual play. Note the caveat: with trading and crafting frozen, material
+  cargo has nowhere to go, so "does the hold fill too fast" is a question
+  about the *parts* hold (`ShipHold`) now, not the material one.
 
-Do not start any of these without the user confirming which first.
+Do not start any of these without the user confirming which first. **And
+check any candidate against `docs/direction.md` before starting it** — this
+list has outlived one change of direction already.

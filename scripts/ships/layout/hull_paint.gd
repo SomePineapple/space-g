@@ -74,14 +74,22 @@ const CUT_READY_DASH_SPANS: Array[float] = [0.06, 0.30, 0.40, 0.60, 0.70, 0.94]
 const SCAR_TIER_CONDITIONS: Array[float] = [0.85, 0.6, 0.35, 0.15]
 
 
-## Which scar tier a mounted part is showing, 0 for none. Derived from condition
-## rather than stored, so it cannot disagree with the damage model.
+## Which scar tier a mounted part is showing, 0 for none.
+##
+## Read from the *worst* condition the part has ever been in, not its current
+## one, so damage is permanent: a hull patched back to full still wears every
+## breach it has taken, and the marks travel with the part when it is cut off and
+## bolted onto something else. Current condition is folded in as well so a part
+## damaged by a path that writes condition directly — a wreck spawned pre-broken,
+## a part cut free — scars immediately rather than waiting for the damage model
+## to touch it.
 static func scar_tier(instance: ModuleInstance) -> int:
 	if instance == null:
 		return 0
+	var worst: float = minf(instance.condition_fraction, instance.worst_condition_fraction)
 	var tier: int = 0
 	for threshold in SCAR_TIER_CONDITIONS:
-		if instance.condition_fraction <= threshold:
+		if worst <= threshold:
 			tier += 1
 	return tier
 
@@ -89,6 +97,12 @@ static func scar_tier(instance: ModuleInstance) -> int:
 static func is_cuttable(instance: ModuleInstance) -> bool:
 	if instance == null or instance.damage_immune:
 		return false
+	# Phase 4 prototype seam: a part with no power path back to a reactor is cold
+	# and can be opened up whatever its condition — that is the entire bet being
+	# tested (cut the path, take a 95% gun, instead of shooting it down to 12%).
+	# Nothing in the shipped game sets `powered` false; see ModuleInstance.powered.
+	if not instance.powered:
+		return true
 	return instance.condition_fraction < CUTTABLE_CONDITION
 
 
@@ -244,8 +258,18 @@ static func jittered_corners(corners: PackedVector2Array, centroid: Vector2,
 	var moved := PackedVector2Array()
 	moved.resize(corners.size())
 	for i in corners.size():
-		moved[i] = centroid + (corners[i] - centroid).rotated(rotation) + offset
+		moved[i] = jittered_point(corners[i], centroid, offset, rotation)
 	return moved
+
+
+## One point carried by a part's nudge, for anything drawn *onto* a plate rather
+## than around it — the circuit clamps the builder's cabling runs between (see
+## PowerGrid.hub_point). A hole painted on the plate moves with the plate, so a
+## cable placed off the un-nudged grid ends a few pixels beside the socket it is
+## supposed to enter, which is exactly the size this jitter is.
+static func jittered_point(point: Vector2, centroid: Vector2,
+		offset: Vector2, rotation: float) -> Vector2:
+	return centroid + (point - centroid).rotated(rotation) + offset
 
 
 # --- Welds --------------------------------------------------------------------
