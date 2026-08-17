@@ -106,8 +106,24 @@ func _on_storage_full() -> void:
 ## confusion power management is supposed to avoid. Phase 2 replaces this line
 ## with a per-circuit bar; until then it is the only in-flight signal that a
 ## circuit, rather than the ship, is the thing that failed.
-func _on_circuit_depleted(circuit_index: int) -> void:
-	_power_warning_label.text = "CIRCUIT %d DRY" % (circuit_index + 1)
+##
+## The name comes from ShipLayout so it matches the label the ship builder put on
+## the same circuit — see ShipLayout.circuit_display_name. Keeps the "POWER
+## SHORTAGE — X" shape the brownout warning used, because "OFFLINE" says what has
+## actually happened to the hardware, where "DRY" only describes the battery.
+##
+## The core is worded differently on purpose: its generation never stops, so
+## "CORE OFFLINE" would read as the ship being dead when in fact it has only
+## spent its small reserve faster than it makes it back.
+func _on_circuit_depleted(circuit_id: String) -> void:
+	var ship: Ship = PlayerContext.get_ship()
+	var layout: ShipLayout = ship.ship_layout if ship != null else null
+	if layout == null:
+		return
+	var name_text: String = layout.circuit_display_name(circuit_id)
+	_power_warning_label.text = "POWER SHORTAGE — CORE RESERVE EMPTY" \
+		if circuit_id == layout.core_circuit_id() \
+		else "POWER SHORTAGE — %s OFFLINE" % name_text
 	if _power_warning_tween:
 		_power_warning_tween.kill()
 	_power_warning_label.modulate.a = 1.0

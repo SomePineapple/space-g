@@ -41,6 +41,11 @@ const HULL_WEDGE_TYPE_ID: String = "hull_wedge"
 const GUN_MK1_TYPE_ID: String = "gun_mk1"
 const REACTOR_PAIR_TYPE_ID: String = "reactor_pair"
 const THRUSTER_BLOCK_TYPE_ID: String = "thruster_block"
+## Single-hex reactor. Legacy in the sense that the builder does not offer it for
+## manufacture, but it is what the authored enemy layouts use and what the player
+## is handed two of at the start (see Ship.STARTER_PART_TYPE_IDS), so it is
+## named rather than referenced as a bare string.
+const REACTOR_MK1_TYPE_ID: String = "reactor_mk1"
 
 # --- Energy tuning -----------------------------------------------------------
 # First pass at the reactor-circuit economy. Every number here is a knob; what
@@ -281,10 +286,24 @@ static func get_all() -> Array[ModuleType]:
 	missile_t3.is_capturable_tech = true
 	types.append(missile_t3)
 
-	var reactor_type: ModuleType = _make("reactor_mk1", "Reactor Mk1", Color(1.0, 0.75, 0.2), SINGLE_CELL,
+	# Carries a buffer of its own as well as generation, for the same reason the
+	# Reactor Pair does: a circuit with no battery on it can only ever spend at
+	# exactly its generation rate (see ShipEnergy.MINIMUM_BUFFER_SECONDS), so a
+	# reactor with nothing else attached could never get a burst away.
+	#
+	# This used to be 0, which was survivable only while ShipEnergy still had a
+	# ship-wide base_capacity to fall back on. That baseline is gone now that all
+	# power comes from modules, and without this every one of the 14 authored
+	# layouts that mounts a Reactor Mk1 had no reserve at all.
+	#
+	# Two of these are deliberately worth exactly one Reactor Pair — 15+15
+	# generation, 20+20 capacity, and the same total mass and health — so the
+	# opening kit can hand the player two circuits instead of one without
+	# changing how much power the starting hull has.
+	var reactor_type: ModuleType = _make(REACTOR_MK1_TYPE_ID, "Reactor Mk1", Color(1.0, 0.75, 0.2), SINGLE_CELL,
 		0.35, 25.0, 0.0, null, "", 1,
 		{MaterialCatalog.IRON: 15, MaterialCatalog.COPPER: 15, MaterialCatalog.NICKEL: 10},
-		15.0, 0.0)
+		15.0, 20.0)
 	FactionArtImporter.apply_hex_art(reactor_type, "reactor_mk1")
 	reactor_type.is_capturable_tech = true
 	types.append(reactor_type)

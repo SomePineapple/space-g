@@ -84,6 +84,17 @@ const CIRCUIT_WASH_FOCUSED_ALPHA: float = 0.24
 const CIRCUIT_OUTLINE_WIDTH: float = 1.2
 const CIRCUIT_OUTLINE_FOCUSED_WIDTH: float = 2.2
 
+## Whether the builder is in circuit-editing mode. Off by default: while the
+## player is shaping a hull, colour on every powered hex competes with the plating
+## and the faction art it is drawn over, and says nothing they are currently
+## asking. Toggled from the bottom bar's ENERGY button.
+var show_circuits: bool = false:
+	set(value):
+		if show_circuits == value:
+			return
+		show_circuits = value
+		queue_redraw()
+
 ## The circuit the player is currently editing — its modules are drawn brighter,
 ## and clicking another module while this is set moves that module onto it.
 var circuit_focus_id: String = "":
@@ -362,7 +373,7 @@ func _draw_placements() -> void:
 ## as the part it is (and as the faction it was cut from), so the circuit colour
 ## sits over it at low alpha and does its real work through the outline.
 func _draw_circuit_mark(corners: PackedVector2Array, placement: ModulePlacement) -> void:
-	if layout == null:
+	if not show_circuits or layout == null:
 		return
 	var on_circuit: bool = not placement.circuit_id.is_empty()
 	if not on_circuit and not layout.needs_circuit(placement):

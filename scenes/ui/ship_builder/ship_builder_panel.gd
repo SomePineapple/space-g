@@ -21,6 +21,14 @@ const SAVE_DIRECTORY: String = "user://ships"
 ## Templates rather than finished strings — a `%` against another script's const
 ## is not a constant expression, and the percentage is ModuleInstance's to state
 ## (see _field_percent()), not this screen's to keep a second copy of.
+## The screen's standing instruction, one per mode (see _refresh_instruction).
+## The energy one names the whole interaction rather than just the first step:
+## "click a reactor" alone leaves the player armed and with no idea what for,
+## which is how a mode becomes a dead end.
+const BUILD_INSTRUCTION: String = "Select a module type, then click an adjacent cell."
+const ENERGY_INSTRUCTION: String = \
+	"Click a reactor to pick its circuit, then click modules to move them onto it."
+
 const DOCKED_PILL_TEXT: String = "DOCKED REFIT · FULL MOUNTS"
 const FIELD_PILL_FORMAT: String = "FIELD REFIT · %d%% NOW · %d%% CEILING"
 const FIELD_STATUS_FORMAT: String = \
@@ -70,6 +78,7 @@ var _save_name_edit: LineEdit
 var _cell_count_label: Label
 var _mount_pill: PanelContainer
 var _mount_label: Label
+var _energy_button: Button
 
 
 func _init() -> void:
@@ -189,8 +198,7 @@ func _build_top_hud(root: Control) -> void:
 	column.add_theme_constant_override("separation", 8)
 	root.add_child(column)
 
-	_instruction_label = BuilderTheme.mono_label(
-		"Select a module type, then click an adjacent cell.", 13, BuilderTheme.TEXT_BODY)
+	_instruction_label = BuilderTheme.mono_label(BUILD_INSTRUCTION, 13, BuilderTheme.TEXT_BODY)
 	column.add_child(_instruction_label)
 
 	_stat_strip = BuilderStatStrip.new()
@@ -241,7 +249,9 @@ func _build_field(root: Control) -> void:
 	card_holder.add_child(_part_card)
 
 	_circuit_card = BuilderCircuitCard.new()
+	_circuit_card.visible = false
 	card_holder.add_child(_circuit_card)
+	_circuit_card.split_by_role_requested.connect(_on_split_by_role_pressed)
 
 
 func _build_right_column(root: Control) -> void:
@@ -328,8 +338,7 @@ func _build_bottom_bar(root: Control) -> void:
 		BuilderTheme.WARN_TEXT_HOVER, _on_remove_pressed))
 	bar.add_child(_make_action_button("VALIDATE LAYOUT", BuilderTheme.CYAN, BuilderTheme.TEXT_MUTED,
 		BuilderTheme.TEXT_BRIGHT, _on_validate_pressed))
-	bar.add_child(_make_action_button("SPLIT BY ROLE", BuilderTheme.AMBER, BuilderTheme.TEXT_MUTED,
-		BuilderTheme.TEXT_BRIGHT, _on_split_by_role_pressed))
+	bar.add_child(_build_energy_button())
 
 	_status_label = BuilderTheme.mono_label(StationPrompt.PROMPT_TEXT, 12, BuilderTheme.TEXT_HINT)
 	_status_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -393,6 +402,65 @@ static func _field_percent() -> int:
 
 static func _refitted_percent() -> int:
 	return roundi(ModuleInstance.REFITTED_MOUNT_EFFICIENCY * 100.0)
+
+
+## Enters and leaves circuit-editing mode.
+##
+## A mode rather than always-on state, because wiring and shaping are two
+## different jobs. While the player is deciding what parts go where, circuit
+## colour on every powered hex is noise competing with the plating and the
+## faction art for the same pixels; while they are deciding what runs off what,
+## it is the only thing on screen that matters. The card, the hex colours, the
+## SPLIT BY ROLE preset and the click-to-assign interaction all arrive and leave
+## together, so there is no state where half the mechanic is showing.
+##
+## Amber to match CircuitPalette's first reactor colour and the stat strip's EN
+## dot, rather than the screen's cyan — cyan is "UI chrome" everywhere else here,
+## and this button turns on something about the ship.
+func _build_energy_button() -> Button:
+	_energy_button = Button.new()
+	_energy_button.text = "ENERGY"
+	_energy_button.toggle_mode = true
+	_energy_button.focus_mode = Control.FOCUS_NONE
+	_energy_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_energy_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	BuilderTheme.style_button(_energy_button, BuilderTheme.AMBER, BuilderTheme.TEXT_MUTED,
+		BuilderTheme.TEXT_BRIGHT)
+	_energy_button.toggled.connect(_on_energy_toggled)
+	return _energy_button
+
+
+func _on_energy_toggled(pressed: bool) -> void:
+	_grid.show_circuits = pressed
+	# Leaving the mode has to disarm whatever was armed. An armed circuit the
+	# player can no longer see would rewire the next module they clicked, which is
+	# the same hazard clicking bare grid guards against.
+	if not pressed:
+		_grid.circuit_focus_id = ""
+	_refresh_instruction()
+	_report(_circuit_overview() if pressed else "Energy view off.")
+	_refresh()
+
+
+## One line summarising every circuit, for the moment the mode opens — the card
+## says the same thing in columns, but the player's eyes are on the button they
+## just pressed, and this is where the screen already talks to them.
+func _circuit_overview() -> String:
+	if working_layout.get_assignable_circuit_ids().is_empty():
+		return "No reactor on this hull — everything powered is running off the core. Bolt a reactor on."
+	var parts: PackedStringArray = PackedStringArray()
+	for circuit_id in working_layout.get_circuit_ids():
+		parts.append("%s %.0f/%.0f" % [working_layout.circuit_display_name(circuit_id),
+			working_layout.circuit_draw(circuit_id), working_layout.circuit_generation(circuit_id)])
+	return "Energy view: %s. Click a reactor to pick a circuit." % ", ".join(parts)
+
+
+## The screen's standing instruction, which changes with the mode. Kept in one
+## place so the two modes cannot both claim the line.
+func _refresh_instruction() -> void:
+	if _instruction_label == null:
+		return
+	_instruction_label.text = ENERGY_INSTRUCTION if _grid.show_circuits else BUILD_INSTRUCTION
 
 
 func _make_action_button(text: String, tint: Color, text_color: Color, hover_color: Color,
@@ -549,8 +617,12 @@ func _on_hex_clicked(hex_coord: Vector2i) -> void:
 
 	# Clicking bare grid drops the circuit being edited: the player has moved on
 	# to placing parts, and leaving a reactor armed would silently rewire the
-	# next module they touched.
-	_grid.circuit_focus_id = ""
+	# next module they touched. Refreshed here rather than relying on the
+	# placement paths below, several of which bail out early — the card's hint
+	# would otherwise still name a circuit that is no longer listening.
+	if not _grid.circuit_focus_id.is_empty():
+		_grid.circuit_focus_id = ""
+		_refresh()
 
 	var part: ModuleInstance = _selected_part()
 	if part == null:
@@ -695,6 +767,14 @@ func _on_remove_pressed() -> void:
 ## they did, so it is how they do it. Clicking the armed reactor again disarms
 ## it, and so does clicking bare grid.
 func _handle_circuit_click(placement: ModulePlacement) -> void:
+	# Outside the mode a click is only ever a selection. Arming circuits while the
+	# player cannot see them is how a build gets silently rewired.
+	if not _grid.show_circuits:
+		# Identity lives on the part card; the status line stays on what to do
+		# next, which is the one thing the card does not say.
+		_report("R to rotate, or Remove Selected to take it off.")
+		return
+
 	if working_layout.is_circuit_source(placement):
 		if not working_layout.circuit_accepts_members(placement.placement_id):
 			_report("The Command Core has its own circuit. Nothing can be moved onto it.")
@@ -804,14 +884,14 @@ func _on_validate_pressed() -> void:
 ## than discovering in a fight.
 func _circuit_warnings() -> Array[String]:
 	var warnings: Array[String] = []
-	var circuit_ids: Array[String] = working_layout.get_circuit_ids()
-	for index in circuit_ids.size():
-		var circuit_id: String = circuit_ids[index]
+	for circuit_id in working_layout.get_circuit_ids():
 		var draw: float = working_layout.circuit_draw(circuit_id)
 		var generation: float = working_layout.circuit_generation(circuit_id)
 		if draw > generation:
-			warnings.append("Circuit %d over-committed (%.0f draw vs %.0f generated)"
-				% [index, draw, generation])
+			# Named by the layout so this matches both the circuits card and what
+			# the HUD will call the same circuit in flight.
+			warnings.append("%s over-committed (%.0f draw vs %.0f generated)"
+				% [working_layout.circuit_display_name(circuit_id), draw, generation])
 	if working_layout.get_assignable_circuit_ids().is_empty():
 		warnings.append("No reactor — the hull runs on core power alone")
 	return warnings
@@ -839,7 +919,12 @@ func _refresh() -> void:
 		working_layout.total_energy_capacity(),
 		inventory.get_cargo_used() if inventory != null else 0,
 		_current_cargo_capacity())
-	_circuit_card.refresh(working_layout, _grid.circuit_focus_id)
+	# The card is the energy mode's readout, so it comes and goes with the mode
+	# rather than permanently occupying the field's top-left corner alongside the
+	# part card.
+	_circuit_card.visible = _grid.show_circuits
+	if _grid.show_circuits:
+		_circuit_card.refresh(working_layout, _grid.circuit_focus_id)
 
 	_cell_count_label.text = "%d/%d" % [_grid.used_cell_count(), _grid.total_cell_count()]
 	_refresh_hold()

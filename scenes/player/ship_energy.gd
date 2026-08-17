@@ -23,14 +23,17 @@ signal energy_changed(current: float, maximum: float)
 ## regenerates at — the HUD's load bar reads "usage against what the reactor
 ## can sustain", so both halves travel together.
 signal usage_changed(usage_per_second: float, generation_per_second: float)
-## A circuit just hit empty, by its position in ShipLayout.get_circuit_ids().
+## A circuit just hit empty. Carries the circuit's own id, not its position:
+## positions shift when a reactor dies, and a readout that renumbers the surviving
+## circuits mid-fight is worse than no readout. Callers resolve a name through
+## ShipLayout.circuit_display_name, which is the only place circuits are named.
 ##
 ## Said out loud because everything on a dry circuit stops working, and hardware
 ## going quiet with no explanation is the exact confusion power management exists
 ## to avoid. Edge-triggered and rate-limited (see DEPLETION_NOTICE_INTERVAL) —
 ## a circuit sitting at zero under continuous load would otherwise re-announce
 ## itself every frame.
-signal circuit_depleted(circuit_index: int)
+signal circuit_depleted(circuit_id: String)
 
 ## Minimum gap between one circuit's depletion notices, so a circuit held at
 ## empty says so once and then leaves the player alone to deal with it.
@@ -182,7 +185,7 @@ func _announce_depleted(circuit: Circuit) -> void:
 	if limit > 0.0 and circuit.charge > limit * DEPLETION_NOTICE_FRACTION:
 		return
 	circuit.notice_cooldown = DEPLETION_NOTICE_INTERVAL
-	circuit_depleted.emit(_order.find(circuit.id))
+	circuit_depleted.emit(circuit.id)
 
 
 func total_charge() -> float:

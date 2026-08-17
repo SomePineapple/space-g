@@ -203,6 +203,27 @@ func get_assignable_circuit_ids() -> Array[String]:
 	return ids
 
 
+## What to call this circuit on screen.
+##
+## **The single source of the name**, because the builder and the in-flight HUD
+## must agree: a circuit the player built as CIRCUIT 1 has to still be CIRCUIT 1
+## when it dies in a fight. They previously derived their own labels from the same
+## ordered list and disagreed by one, so the hull taught a mapping the fight then
+## contradicted — which is the same failure CircuitPalette exists to prevent, in
+## words rather than in colour.
+##
+## Reactors are numbered from 1 and the core is named rather than numbered,
+## because it is the ship's floor rather than one of the circuits the player
+## manages (see core_circuit_id).
+func circuit_display_name(circuit_id: String) -> String:
+	if circuit_id == core_circuit_id():
+		return "CORE"
+	var index: int = get_assignable_circuit_ids().find(circuit_id)
+	if index < 0:
+		return "UNASSIGNED"
+	return "CIRCUIT %d" % (index + 1)
+
+
 func circuit_members(circuit_id: String) -> Array[ModulePlacement]:
 	_ensure_index()
 	return _circuit_members.get(circuit_id, [] as Array[ModulePlacement])

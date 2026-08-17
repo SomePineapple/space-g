@@ -25,7 +25,7 @@ signal energy_changed(current: float, max_energy: float)
 signal energy_usage_changed(usage: float, generation: float)
 ## Relayed from ShipEnergy — one of this ship's circuits just ran dry, and
 ## everything on it has stopped working (see ShipEnergy.circuit_depleted).
-signal circuit_depleted(circuit_index: int)
+signal circuit_depleted(circuit_id: String)
 ## Relayed from the internal Health component (see its own signals of the same
 ## name) so external systems — ShipAI, the HUD, the trade panel — can react to
 ## this ship being hurt without reaching into its node hierarchy for $Health,
@@ -138,7 +138,7 @@ signal destroyed
 ## free, which is the opening of the game.
 ##
 ## Deliberately the same 4 cells a basic Cargo Container gives, so fitting one is
-## a doubling rather than a rounding error. The seven starter parts need 15 cells
+## a doubling rather than a rounding error. The eight starter parts need 15 cells
 ## between them and therefore do NOT all fit at the start — they are a crate of
 ## parts waiting to be bolted on, not cargo, and the builder lists them whether
 ## or not they have a cell (see Inventory.get_unstowed_instances). By the time
@@ -279,14 +279,26 @@ func _ready() -> void:
 ## what it makes possible is deliberate: the Command Core generates a meagre
 ## trickle of its own (see ModuleCatalog's core entry), so a hull of nothing but
 ## Core + Thruster Block already flies — badly, in stutters, running dry every
-## few seconds. Bolting the Reactor Pair on is what makes the same ship feel
+## few seconds. Bolting the first reactor on is what makes the same ship feel
 ## good. That contrast lands inside the first ninety seconds, with no tutorial
 ## text, and it is worth more than any explanation of what a reactor is for.
 const STARTER_PART_TYPE_IDS: Array[String] = [
 	ModuleCatalog.HULL_SPAR_TYPE_ID,
 	ModuleCatalog.HULL_WEDGE_TYPE_ID,
 	ModuleCatalog.GUN_MK1_TYPE_ID,
-	ModuleCatalog.REACTOR_PAIR_TYPE_ID,
+	# Two single-hex reactors rather than one two-hex Reactor Pair. Worth exactly
+	# the same power, mass and health between them (see ModuleCatalog's Reactor
+	# Mk1 entry) — what the split buys is *two circuits*, which is the difference
+	# between a starting hull that can demonstrate the mechanic and one that
+	# cannot. With one reactor there is only ever one circuit, so the whole
+	# specialise-versus-redundancy decision the builder is built around has
+	# nothing to act on until the player salvages a second one.
+	#
+	# It also makes the opening's first real choice a real one: two circuits on a
+	# hull this small cannot both be comfortable, so the player has to decide
+	# whether thrust and guns share a reactor or split across them.
+	ModuleCatalog.REACTOR_MK1_TYPE_ID,
+	ModuleCatalog.REACTOR_MK1_TYPE_ID,
 	ModuleCatalog.THRUSTER_BLOCK_TYPE_ID,
 	# The salvage loop's two halves. Both are starting equipment rather than
 	# something to find: cutting a part off an enemy and dragging it home is the
